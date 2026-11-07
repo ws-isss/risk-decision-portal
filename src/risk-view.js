@@ -27,7 +27,8 @@
       const value = stage(plan, id);
       return `<time datetime="${value.end}">${dateOnly(value.end, value.executionTimezone)}</time>`;
     };
-    const reviewStart = `<div class="risk-review-start"><span>${t.reviewDue}</span> <strong>${time(data.events.latestReviewStart.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong></div>`;
+    const reviewTask = view.records[person.id === "P03" ? "startQuality" : "startTechnical"];
+    const reviewStart = reviewTask ? `<div class="risk-review-start" data-task-key="${reviewTask.key}"><span>${t.reviewDue}</span> <strong>${time(reviewTask.timing.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong></div>` : "";
     const supportBoundary = copy(t.supportBoundary, { name: data.people.P05.name });
     const assumption = `<span class="data-tag assumption-tag">${text.common.assumption}</span>`;
 
@@ -39,9 +40,11 @@
 
     function reviewProgress() {
       const review = decision?.reviews[person.id === "P03" ? "quality" : "technical"];
-      if (!review || !decision.tasksCreated) return reviewStart;
+      if (!reviewTask) return "";
+      const status = reviewTask.status;
+      if (status === "briefPending" || status === "readyForReview") return `<div id="risk-review-progress" class="risk-review-progress" data-review-state="${status}"><span class="status">${t.reviewReadinessLabels[status]}</span><p>${t.reviewReadinessDescriptions[status]}</p></div>${reviewStart}`;
       const at = review.completedAt || review.startedAt;
-      return `<div class="risk-review-progress" data-review-state="${review.status}"><span class="status">${t.reviewStatuses[review.status]}</span>${at ? `<span>${time(at, person.timezone)} ${zoneLabel(person.timezone)}</span>` : ""}</div>${review.status === "notStarted" ? reviewStart : ""}`;
+      return `<div id="risk-review-progress" class="risk-review-progress" data-review-state="${review.status}"><span class="status">${t.reviewStatuses[review.status]}</span>${at ? `<span>${time(at, person.timezone)} ${zoneLabel(person.timezone)}</span>` : ""}</div>`;
     }
 
     function coverageStatus() {
@@ -95,7 +98,7 @@
       const evidence = data.risk.evidence;
       const report = data.reports[evidence.reportRef];
       const publisher = data.people[evidence.publisherId];
-      return `<section id="risk-evidence" class="section" aria-labelledby="risk-evidence-title"><div class="section-heading"><h2 id="risk-evidence-title">${t.evidence}</h2><button class="button button-secondary" data-report="${report.id}">${icon("report")}${t.reportAction}</button></div><div class="table-wrap"><table class="risk-evidence-table"><thead><tr><th scope="col">${t.method}</th><th scope="col">${t.measured}</th><th scope="col">${t.target}</th><th scope="col">${t.sample}</th><th scope="col">${t.report}</th><th scope="col">${t.version}</th></tr></thead><tbody><tr><td data-field="method" data-label="${escape(t.method)}">${t.methodValue}<small>${t.measurement}</small></td><td class="risk-measurement" data-field="measured" data-label="${escape(t.measured)}">${data.risk.hmwPct.toFixed(1)}%</td><td data-field="target" data-label="${escape(t.target)}">≤ ${data.risk.targetPct.toFixed(1)}%</td><td data-field="sample" data-label="${escape(t.sample)}">${t.sampleValue}</td><td data-field="report" data-label="${escape(t.report)}">${report.id}</td><td data-field="version" data-label="${escape(t.version)}">v${report.version}</td></tr></tbody></table></div><div class="risk-evidence-meta"><span>${t.source}</span><span>${copy(t.publishedBy, { name: publisher.name, role: text.roles[publisher.roleKey] })}</span>${info("evidenceVersion", t.evidenceAvailable, `<p>${time(data.events[evidence.availableAtEvent].at, baseZone)} ${city(baseZone)}</p>`)}</div></section>`;
+      return `<section id="risk-evidence" class="section" aria-labelledby="risk-evidence-title"><div class="section-heading"><h2 id="risk-evidence-title">${t.evidence}</h2><button class="button button-secondary" data-report="${report.id}">${icon("report")}${t.reportAction}</button><button class="button button-secondary" data-source-report="EXP-001">EXP-001 · v${data.reports["EXP-001"].version}</button></div><div class="table-wrap"><table class="risk-evidence-table"><thead><tr><th scope="col">${t.method}</th><th scope="col">${t.measured}</th><th scope="col">${t.target}</th><th scope="col">${t.sample}</th><th scope="col">${t.report}</th><th scope="col">${t.version}</th></tr></thead><tbody><tr><td data-field="method" data-label="${escape(t.method)}">${t.methodValue}<small>${t.measurement}</small></td><td class="risk-measurement" data-field="measured" data-label="${escape(t.measured)}">${data.risk.hmwPct.toFixed(1)}%</td><td data-field="target" data-label="${escape(t.target)}">≤ ${data.risk.targetPct.toFixed(1)}%</td><td data-field="sample" data-label="${escape(t.sample)}">${t.sampleValue}</td><td data-field="report" data-label="${escape(t.report)}">${report.id}</td><td data-field="version" data-label="${escape(t.version)}">v${report.version}</td></tr></tbody></table></div><div class="risk-evidence-meta"><span>${t.source}</span><span>${copy(t.publishedBy, { name: publisher.name, role: text.roles[publisher.roleKey] })}</span>${info("evidenceVersion", t.evidenceAvailable, `<p>${time(data.events[evidence.availableAtEvent].at, baseZone)} ${city(baseZone)}</p>`)}</div></section>`;
     }
 
     function assessment() {
@@ -118,12 +121,13 @@
       if (view.resourceConfirmed || view.resourceRejected) return `<section class="risk-update-strip" data-update-state="${view.resourceConfirmed ? "resourceRecorded" : "resourceRejected"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${t.resourceUpdateRecorded}</h2><strong>${time(resource.receipt.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span><p>${view.resourceRejected ? t.nextUpdateReassessment : t.holdStillConditional}</p></section>`;
       const authorized = Boolean(decision?.authorization);
       const selectedUpdate = authorized ? "resourceConfirmed" : publication?.nextUpdateEvent || data.risk.nextUpdateEvent;
-      const update = data.events[selectedUpdate];
+      const update = workflow.eventTiming(data, state, selectedUpdate) || data.events[selectedUpdate];
       const updated = view.reviewsComplete && selectedUpdate === "reviewsComplete";
       const resourcePlanned = selectedUpdate === "resourceConfirmed";
       const heading = updated ? t.reviewUpdateAvailable : t.nextUpdate;
       const explanation = resourcePlanned ? t.resourceUpdateExplanation : updated ? t.reviewUpdateExplanation : t.updateExplanation;
-      return `<section class="risk-update-strip" data-update-state="${resourcePlanned ? "resourcePlanned" : updated ? "reviewsRecorded" : "reviewsPlanned"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${heading}</h2><strong>${time(update.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span>${resourcePlanned ? `<span class="status">${t.plannedResponse}</span>` : ""}${info("riskNextUpdate", resourcePlanned ? t.resourceUpdatePurpose : t.updatePurpose, note(explanation))}</section>`;
+      const opinions = resourcePlanned ? "" : `<ul>${["technical", "quality"].map(kind => `<li data-review-opinion="${kind}">${t.reviewOpinionLabels[kind]}: ${view[kind + "Complete"] ? t.reviewOpinionRecorded : t.reviewOpinionPending}</li>`).join("")}</ul>`;
+      return `<section class="risk-update-strip" data-update-state="${resourcePlanned ? "resourcePlanned" : updated ? "reviewsRecorded" : "reviewsPlanned"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${heading}</h2><strong>${time(update.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span>${resourcePlanned ? `<span class="status">${t.plannedResponse}</span>` : ""}${info("riskNextUpdate", resourcePlanned ? t.resourceUpdatePurpose : t.updatePurpose, note(explanation) + opinions)}</section>`;
     }
 
     function timeline() {
@@ -135,7 +139,8 @@
         const event = entry.eventRef ? data.events[entry.eventRef] : null;
         const forecastStage = entry.planId ? stage(data.plans[entry.planId], entry.stageId) : null;
         const record = auditById.get(entry.eventRef);
-        const at = record ? record.at : event ? event.at : forecastStage[entry.endpoint];
+        const taskTiming = entry.eventRef ? workflow.eventTiming(data, state, entry.eventRef) : null;
+        const at = record ? record.at : taskTiming ? taskTiming.at : event ? event.at : forecastStage[entry.endpoint];
         const zone = entry.eventRef ? person.timezone : forecastStage.executionTimezone;
         // Advancing the clock never creates a business record.
         let status = entry.eventRef && view.occurred(entry.eventRef) ? "recorded" : entry.statusKey;
@@ -162,17 +167,21 @@
         const owners = entry.ownerIds.map(id => escape(data.people[id].name)).join(" / ");
         const isWuXi = entry.ownerIds.some(id => ["wuxiPM", "scheduling"].includes(data.people[id].roleKey));
         const shanghaiTime = at && isWuXi && zone !== baseZone ? `<small data-shanghai-time>${time(at, baseZone)} ${city(baseZone)}</small>` : "";
-        const when = `${time(at, zone, { year: "numeric", weekday: "short" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}`;
-        return `<tr data-risk-event="${entry.id}" data-event-status="${status}"><td data-field="time" data-label="${escape(t.timelineDate)}">${when}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
+        const eventTiming = entry.eventRef ? workflow.eventTiming(data, state, entry.eventRef) : null;
+        const taskKeys = entry.eventRef ? Object.values(view.records).filter(task => [task.timing, task.completionTiming].some(value => value?.eventRef === entry.eventRef)).map(task => task.key) : [];
+        const timingLabel = status !== "recorded" && eventTiming ? `<small data-task-timing-label>${text.portal.taskTimingLabels[eventTiming.kind]}</small>` : "";
+        const when = `${timingLabel}${time(at, zone, { year: "numeric", weekday: "short" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}`;
+        return `<tr data-risk-event="${entry.id}" data-event-status="${status}"${taskKeys.length ? ` data-task-keys="${taskKeys.join(" ")}"` : ""}><td data-field="time" data-label="${escape(t.timelineDate)}">${when}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
       }
       // Recorded actions stay above Now, even when their audit row was added later.
       const recorded = entries.filter(entry => entry.status === "recorded" && entry.at).sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
       const remaining = entries.filter(entry => entry.status !== "recorded");
-      const rows = recorded.map(renderEntry).join("") + now + remaining.map(renderEntry).join("");
+      const pendingBrief = view.evidencePublished && !view.tasksCreated ? `<tr data-risk-event="taskBriefPending" data-event-status="pending"><td colspan="4"><strong>${t.reviewReadinessLabels.briefPending}</strong> · ${escape(data.people.P01.name)}<p>${t.reviewReadinessDescriptions.briefPending}</p></td></tr>` : "";
+      const rows = recorded.map(renderEntry).join("") + now + pendingBrief + remaining.map(renderEntry).join("");
       const tableHead = `<thead><tr><th scope="col">${t.timelineDate}</th><th scope="col">${t.timelineEvent}</th><th scope="col">${t.timelineOwner}</th><th scope="col">${t.timelineStatus}</th></tr></thead>`;
       const exceptionEntries = view.nextTiming ? data.rescheduleTimeline.map(entry => {
         const record = view.occurred(entry.eventRef) ? auditById.get(entry.eventRef) : null;
-        const at = record?.at || data.events[entry.eventRef].at;
+        const at = record?.at || workflow.eventTiming(data, state, entry.eventRef)?.at || data.events[entry.eventRef].at;
         const status = record ? "recorded" : Date.parse(at) <= Date.parse(state.clock) ? "pending" : "planned";
         return { ...entry, id: entry.eventRef, at, zone: data.people[entry.ownerIds[0]].timezone, status, label: record ? t.recordedTimelineEvents[entry.eventRef] : t.timelineEvents[entry.eventRef] };
       }) : [];

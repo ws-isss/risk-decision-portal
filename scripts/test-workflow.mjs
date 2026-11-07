@@ -18,13 +18,18 @@ const plain = value => JSON.parse(JSON.stringify(value));
 // Initial notifications describe actionable needs, never completed handoffs.
 assert.deepEqual(plain(workflow.tasks(data, initial, 'P01').map(item => [item.key, item.owner, item.event, item.status])), [
   ['assignBen', 'P01', 'backupAssigned', 'pendingAssignment'],
-  ['startTechnical', 'P02', 'latestReviewStart', 'notStarted'],
-  ['startQuality', 'P03', 'latestReviewStart', 'notStarted'],
+  ['startTechnical', 'P02', 'latestReviewStart', 'briefPending'],
+  ['startQuality', 'P03', 'latestReviewStart', 'briefPending'],
   ['designateElena', 'P01', 'alternateAssigned', 'pendingDesignation']
 ]);
 assert.deepEqual(plain(workflow.notifications(data, initial, 'P01').map(item => item.kind)), ['leaveSupport', 'reviewReady', 'reviewReady', 'leaveApprover']);
 assert.equal(task(initial, 'P02', 'startTechnical').owner, 'P02');
 assert.equal(task(initial, 'P03', 'startQuality').owner, 'P03');
+assert.equal(workflow.project(data, initial).evidencePublished, true, 'Published evidence is available even before task briefs are confirmed');
+assert.equal(workflow.project(data, initial).reviewReadiness, 'briefPending');
+assert.equal(notification(initial, 'P02', 'startTechnical').at, data.events.customerPacketAvailable.at);
+assert.equal(notification(initial, 'P02', 'startTechnical').timing.at, data.events.latestReviewStart.at);
+assert.notEqual(notification(initial, 'P02', 'startTechnical').at, notification(initial, 'P02', 'startTechnical').timing.at, 'Sending time and the latest start time are distinct');
 assert.equal(task(initial, 'P04', 'budget').status, 'blocked');
 for (const viewer of ['P05', 'P06']) {
   assert.equal(workflow.tasks(data, initial, viewer).length, 0, 'Unassigned people must not acquire tasks by viewing their role');
@@ -34,6 +39,20 @@ assert.deepEqual(plain(workflow.tasks(data, initial, 'P07').map(item => item.sta
 assert.equal(task(initial, 'P08', 'schedule').status, 'nonbinding');
 
 function verifyLinks(state) {
+  const projection = workflow.project(data, state);
+  for (const record of Object.values(projection.records)) {
+    assert.ok(Object.isFrozen(record.timing), 'Task timing is an immutable projection');
+    assert.equal(record.timing.eventRef, record.event);
+    assert.equal(record.timing.at, data.events[record.timing.eventRef].at);
+    assert.deepEqual(plain(workflow.taskTiming(data, state, record.key)), plain(record.timing));
+    assert.deepEqual(plain(workflow.eventTiming(data, state, record.timing.eventRef)), plain(record.timing));
+    if (record.completionTiming) {
+      assert.ok(Object.isFrozen(record.completionTiming));
+      assert.equal(record.completionTiming.at, data.events[record.completionTiming.eventRef].at);
+      assert.deepEqual(plain(workflow.taskTiming(data, state, record.key, 'completion')), plain(record.completionTiming));
+      assert.deepEqual(plain(workflow.eventTiming(data, state, record.completionTiming.eventRef)), plain(record.completionTiming));
+    }
+  }
   for (const viewer of Object.keys(data.people)) {
     const tasks = workflow.tasks(data, state, viewer);
     const notices = workflow.notifications(data, state, viewer);
@@ -41,6 +60,8 @@ function verifyLinks(state) {
     assert.equal(new Set(notices.map(item => item.taskKey)).size, notices.length, 'Each task has at most one current state notification');
     for (const notice of notices) {
       assert.deepEqual(plain(notice.task), plain(tasks.find(item => item.key === notice.taskKey)), 'A notification must point to a visible task with the identical current state');
+      assert.equal(notice.timing, notice.task.timing, 'Notification timing comes directly from its task projection');
+      assert.equal(notice.completionTiming, notice.task.completionTiming, 'Completion timing cannot drift from the linked task');
       assert.ok(Date.parse(notice.at) <= Date.parse(state.clock), 'Future events cannot be notified as recorded');
     }
   }
@@ -50,7 +71,8 @@ verifyLinks(initial);
 // Passing a scheduled date is never an action or an approval.
 const clockOnly = { ...initial, clock: data.events.resourceConfirmed.at };
 assert.equal(task(clockOnly, 'P01', 'assignBen').status, 'pendingAssignment');
-assert.equal(task(clockOnly, 'P02', 'startTechnical').status, 'notStarted');
+assert.equal(task(clockOnly, 'P02', 'startTechnical').status, 'briefPending');
+assert.equal(workflow.project(data, clockOnly).reviewReadiness, 'briefPending', 'A later clock cannot distribute task briefs');
 assert.equal(workflow.tasks(data, clockOnly, 'P05').length, 0);
 assert.equal(workflow.tasks(data, clockOnly, 'P06').length, 0);
 assert.equal(task(clockOnly, 'P07', 'receipt').status, 'waiting');
@@ -84,16 +106,31 @@ for (const viewer of Object.keys(data.people)) {
 }
 
 session.selectPlan('A');
+const selected = session.getState();
+assert.equal(task(selected, 'P02', 'startTechnical').status, 'briefPending', 'Selecting a plan does not assign review tasks');
+assert.equal(notification(selected, 'P02', 'startTechnical').kind, 'taskBriefPending');
+assert.equal(notification(selected, 'P02', 'startTechnical').at, selected.decision.createdAt, 'Pending task brief notice uses its recorded request creation time');
+assert.equal(workflow.project(data, selected).reviewReadiness, 'briefPending');
+verifyLinks(selected);
 session.saveDrafts({ technical: 'Review SEC-001 v1', quality: 'Review SEC-001 v1 scope', budget: 'Review Q-001 v1 costs' });
+assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'briefPending', 'Generating or editing drafts is not distribution');
+const unrecordedAssignment = plain(session.getState());
+unrecordedAssignment.decision.tasksCreated = true;
+assert.equal(task(unrecordedAssignment, 'P02', 'startTechnical').status, 'briefPending', 'An assignment flag without its explicit event does not make a task ready');
 session.confirmTasks();
 let created = session.getState();
 assert.equal(notification(created, 'P02', 'startTechnical').kind, 'tasksAssigned');
+assert.equal(notification(created, 'P02', 'startTechnical').at, created.decision.tasksCreatedAt);
+assert.equal(task(created, 'P02', 'startTechnical').status, 'readyForReview');
+assert.equal(task(created, 'P03', 'startQuality').status, 'readyForReview');
+assert.equal(workflow.project(data, created).reviewReadiness, 'readyForReview');
 assert.equal(task(created, 'P01', 'budget').created, true);
 assert.equal(task(created, 'P04', 'budget').event, 'budgetStart');
 verifyLinks(created);
 session.setViewer('P02'); session.startReview('technical');
 assert.equal(notification(session.getState(), 'P02', 'startTechnical').kind, 'reviewStarted');
-assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'notStarted');
+assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'readyForReview');
+assert.equal(workflow.project(data, session.getState()).reviewReadiness, 'inProgress');
 session.setViewer('P03'); session.startReview('quality');
 session.advanceNext();
 assert.equal(task(session.getState(), 'P01', 'assignBen').status, 'pendingAssignment', 'Advancing to the handoff time does not assign Ben');
@@ -135,6 +172,7 @@ for (const [viewer, key] of [['P02', 'startTechnical'], ['P03', 'startQuality']]
   assert.equal(notification(reviewed, viewer, key).kind, 'reviewCompleted');
 }
 assert.equal(task(reviewed, 'P06', 'budget').status, 'readyForAuthorization');
+assert.equal(workflow.project(data, reviewed).reviewReadiness, 'taskCompleted');
 assert.equal(notification(reviewed, 'P06', 'budget').kind, 'reviewsCompleted');
 assert.equal(task(reviewed, 'P07', 'receipt').status, 'waiting');
 verifyLinks(reviewed);
@@ -167,9 +205,26 @@ const revisedData = plain(data);
 revisedData.reports['SEC-001'].version += 1;
 assert.notEqual(workflow.notifications(revisedData, initial, 'P02')[0].id, workflow.notifications(data, initial, 'P02')[0].id);
 session.reset('prepublication');
+assert.equal(workflow.project(data, session.getState()).evidencePublished, false);
 for (const viewer of ['P01', 'P02', 'P03', 'P04', 'P05', 'P06']) {
   assert.equal(workflow.notifications(data, session.getState(), viewer).length, 0, 'Unpublished risk must not leak into customer notifications');
 }
+assert.equal(workflow.taskTiming(data, initial, 'unknown'), null);
+assert.equal(workflow.eventTiming(data, initial, 'riskDiscovered'), null, 'Fact timestamps remain facts rather than fabricated task deadlines');
+assert.equal(workflow.taskTiming(data, initial, 'startTechnical', 'completion').eventRef, 'reviewsComplete');
+assert.equal(workflow.taskTiming(data, initial, 'budget', 'completion').eventRef, 'latestAuthorization');
+assert.equal(workflow.taskTiming(data, initial, 'receipt', 'completion').eventRef, 'resourceConfirmationDeadline');
+const timingData = plain(data);
+timingData.events.latestReviewStart.at = '2026-11-10T10:00:00-05:00';
+timingData.events.reviewsComplete.at = '2026-11-11T18:00:00-05:00';
+const timingView = workflow.project(timingData, initial);
+const timingNotice = workflow.notifications(timingData, initial, 'P02')[0];
+assert.equal(timingView.records.startTechnical.timing.at, timingData.events.latestReviewStart.at);
+assert.equal(timingView.records.startQuality.timing.at, timingData.events.latestReviewStart.at);
+assert.equal(timingNotice.timing.at, timingData.events.latestReviewStart.at, 'Notification latest start reads the shared event source');
+assert.equal(workflow.eventTiming(timingData, initial, 'latestReviewStart').at, timingNotice.timing.at, 'Timeline lookup reads the same task timing as notifications');
+assert.equal(timingNotice.completionTiming.at, timingData.events.reviewsComplete.at);
+assert.equal(timingNotice.at, data.events.customerPacketAvailable.at, 'Changing task timing cannot change recorded sending time');
 assert.equal(JSON.stringify(data), serializedData, 'Projection must never modify frozen demo facts, parameters or authority');
 assert.equal(JSON.stringify(initial), JSON.stringify(core.createSession(data).getState()), 'Projection must not mutate session state');
-console.log('Workflow checks passed: role-scoped tasks, pending leave coverage, recorded assignment and authorization projections, synchronized task links, future-event suppression, stable identities, no duplicates and no parameter mutations.');
+console.log('Workflow checks passed: evidence availability, pending briefs versus assigned reviews, shared task and notification timing, role-scoped records, leave coverage, authorization dependencies, future-event suppression, stable identities, no duplicates and no parameter mutations.');

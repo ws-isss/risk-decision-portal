@@ -77,11 +77,24 @@
     const evidenceAvailable = occurred("materialReady");
     const initialSnapshot = state.clock === data.initialClock;
     const tasksCreated = !!(d && d.tasksCreated && recorded("tasksCreated"));
-    const reviewStatus = kind => !tasksCreated ? d ? "draft" : "notStarted" : d.reviews[kind].status === "completed" ? "taskCompleted" : d.reviews[kind].status;
+    const reviewStatus = kind => !tasksCreated ? "briefPending" : d.reviews[kind].status === "completed" ? "taskCompleted" : d.reviews[kind].status === "notStarted" ? "readyForReview" : d.reviews[kind].status;
+    const evidencePublished = customerVisible && evidenceAvailable;
+    const reviewReadiness = !tasksCreated ? "briefPending" : reviewsComplete ? "taskCompleted" : ["technical", "quality"].some(kind => d.reviews[kind].status !== "notStarted") ? "inProgress" : "readyForReview";
+    const completionEvents = {
+      startTechnical: "reviewsComplete", startQuality: "reviewsComplete",
+      budget: "latestAuthorization", monitor: "resourceConfirmationDeadline",
+      receipt: "resourceConfirmationDeadline", schedule: "resourceConfirmationDeadline"
+    };
+    const timing = (eventRef, kind) => Object.freeze({ eventRef, at: data.events[eventRef].at, kind });
     const records = {};
     const roleKeys = Object.fromEntries(Object.keys(data.people).map(id => [id, []]));
     const add = (task, roles) => {
-      records[task.key] = Object.freeze(task);
+      const completionEvent = completionEvents[task.key];
+      records[task.key] = Object.freeze({
+        ...task,
+        timing: timing(task.event, task.timingKey || "startBy"),
+        ...(completionEvent ? { completionTiming: timing(completionEvent, "actionDue") } : {})
+      });
       roles.forEach(id => { if (!roleKeys[id].includes(task.key)) roleKeys[id].push(task.key); });
     };
     if (budgetNotified) add({ key: "assignBen", owner: "P01", event: "backupAssigned", day: initialSnapshot ? "today" : undefined, status: supportAssigned ? "taskCompleted" : "pendingAssignment", info: "support" }, ["P01"]);
@@ -109,12 +122,28 @@
       if (rescheduleDecisionCreated) add({ key: "rescheduleAuthorization", owner: "P06", event: data.rescheduleTiming.authorizationDueEvent, timingKey: "actionDue", status: rescheduleAuthorized ? "taskCompleted" : "readyForAuthorization", info: "rescheduleAuthorization", dependencyKeys: ["rescheduleDecision"] }, ["P01", "P06"]);
       if (rescheduleAuthorized) add({ key: "rescheduleConfirmation", owner: "P07", event: "rescheduleConfirmed", timingKey: "expectedReply", status: rescheduleConfirmed ? "taskCompleted" : "ready", info: "rescheduleConfirmation", dependencyKeys: ["rescheduleAuthorization"] }, ["P01", "P07"]);
     }
-    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, authorized, published, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, rescheduleQuoteReady, rescheduleQuoteReturned, rescheduleQuote, rescheduleDecisionCreated, rescheduleAuthorized, rescheduleConfirmed, rescheduleStage, nextTiming, rescheduleAuthorization: rescheduleAuthorized ? r.authorization : null, rescheduleConfirmation: rescheduleConfirmed ? r.confirmation : null, resourceFees, rescheduleFees, committedFees, forecastReassessmentRequired: resourceRejected || rescheduleRequested, customerRejected: false, tasksCreated };
+    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, authorized, published, evidencePublished, reviewReadiness, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, rescheduleQuoteReady, rescheduleQuoteReturned, rescheduleQuote, rescheduleDecisionCreated, rescheduleAuthorized, rescheduleConfirmed, rescheduleStage, nextTiming, rescheduleAuthorization: rescheduleAuthorized ? r.authorization : null, rescheduleConfirmation: rescheduleConfirmed ? r.confirmation : null, resourceFees, rescheduleFees, committedFees, forecastReassessmentRequired: resourceRejected || rescheduleRequested, customerRejected: false, tasksCreated };
   }
 
   function tasks(data, state, viewerId = state.viewer) {
     const view = project(data, state, viewerId);
     return Object.freeze((view.roleKeys[viewerId] || []).map(key => view.records[key]));
+  }
+
+  // All task surfaces read the same projection; event data remains the sole
+  // source of dates. Notification send time is a separate recorded event.
+  function taskTiming(data, state, taskKey, phase = "start", viewerId = state.viewer) {
+    const task = project(data, state, viewerId).records[taskKey];
+    return task ? task[phase === "completion" ? "completionTiming" : "timing"] || null : null;
+  }
+
+  function eventTiming(data, state, eventRef, viewerId = state.viewer) {
+    for (const task of Object.values(project(data, state, viewerId).records)) {
+      for (const value of [task.timing, task.completionTiming]) {
+        if (value && value.eventRef === eventRef) return value;
+      }
+    }
+    return null;
   }
 
   function confirmations(data, state) {
@@ -139,7 +168,7 @@
       const record = d && d.audit.find(item => item.id === eventId);
       const at = record ? record.at : data.events[eventId].at;
       const suffix = versioned ? `:${evidenceVersion}` : "";
-      items.push(Object.freeze({ id: `${eventId}:${task.key}:${kind}${suffix}`, taskKey: task.key, kind, at, timeStatus: record && record.timeStatus || "recorded", sequence: record && record.sequence || 0, task }));
+      items.push(Object.freeze({ id: `${eventId}:${task.key}:${kind}${suffix}`, taskKey: task.key, kind, at, timeStatus: record && record.timeStatus || "recorded", sequence: record && record.sequence || 0, timing: task.timing, completionTiming: task.completionTiming, task }));
     };
     for (const key of view.roleKeys[viewerId] || []) {
       const task = view.records[key];
@@ -153,6 +182,7 @@
           if (view.occurred(kind + "Completed")) add(task, "reviewCompleted", kind + "Completed", true);
           else if (view.occurred(kind + "Started")) add(task, "reviewStarted", kind + "Started", true);
           else if (view.tasksCreated) add(task, "tasksAssigned", "tasksCreated", true);
+          else if (d) add(task, "taskBriefPending", "decisionCreated", true);
           else add(task, "reviewReady", "customerPacketAvailable", true);
           break;
         }
@@ -214,5 +244,5 @@
     }));
   }
 
-  global.DEMO_WORKFLOW = Object.freeze({ project, tasks, confirmations, notifications });
+  global.DEMO_WORKFLOW = Object.freeze({ project, tasks, taskTiming, eventTiming, confirmations, notifications });
 })(globalThis);

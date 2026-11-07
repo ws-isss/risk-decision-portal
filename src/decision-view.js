@@ -5,7 +5,10 @@
     const {escape, interpolate, money, instant, zoneLabel, decisionStatus, feeStatement} = helpers;
     const recordText = helpers.recordText || (value => value);
     const d = state.decision;
-    const at = id => `<time datetime="${data.events[id].at}">${instant(data.events[id].at, data.baseline.timezone)} ${zoneLabel(data.baseline.timezone)}</time>`;
+    const at = id => {
+      const value = global.DEMO_WORKFLOW.eventTiming(data, state, id)?.at || data.events[id].at;
+      return `<time datetime="${value}">${instant(value, data.baseline.timezone)} ${zoneLabel(data.baseline.timezone)}</time>`;
+    };
     const total = d ? data.plans[d.planId].total + (d.fallbackSelected ? data.fees.fallbackCap : 0) : 0;
     const formValue = (key, fallback = "") => {
       const value = Object.hasOwn(formValues, key) ? formValues[key] : fallback;

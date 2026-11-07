@@ -58,7 +58,7 @@ async function assertTimelineBoundary(targetPage, expectedClock) {
   const boundary = rows.findIndex(row => row.now);
   assert.ok(boundary > 0 && boundary < rows.length - 1, 'Now separates recorded and upcoming rows');
   assert.ok(rows.slice(0, boundary).every(row => row.status === 'recorded'), 'Only recorded events precede Now');
-  assert.ok(rows.slice(boundary + 1).every(row => ['planned', 'deadline', 'conditionalForecast'].includes(row.status)), 'Future states stay after Now');
+  assert.ok(rows.slice(boundary + 1).every(row => ['pending', 'planned', 'deadline', 'conditionalForecast'].includes(row.status)), 'Pending and future states stay after Now');
 }
 async function assertShanghaiContext(targetPage, shanghaiViewer = false) {
   const dualTimeEvents = ['riskDiscovered', 'materialReady', 'resourceConfirmed', 'resourceConfirmationDeadline'];
@@ -101,7 +101,7 @@ async function assertNotificationsForTasks(targetPage, expectedTasks) {
   assert.deepEqual([...tasks].sort(), [...expectedTasks].sort(), 'Notifications use the current role’s task records');
   assert.equal(new Set(await links.evaluateAll(nodes => nodes.map(node => node.dataset.notificationId))).size, tasks.length, 'Notifications have stable unique identities');
   const clock = await targetPage.locator('#snapshot-time').getAttribute('datetime');
-  for (const at of await links.locator('time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))) {
+  for (const at of await links.locator('[data-notification-sent] time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))) {
     assert.ok(Date.parse(at) <= Date.parse(clock), 'Notifications cannot announce future events as already received');
   }
   assert.ok(!(await links.evaluateAll(nodes => nodes.map(node => node.dataset.notificationKind))).includes('authorizationReceived'), 'Customer authorization is not reported before it occurs');
@@ -169,7 +169,7 @@ try {
   ]);
   assert.match(await page.locator('[data-task="assignBen"]').innerText(), /Pending assignment/);
   assert.match(await page.locator('[data-task="designateElena"]').innerText(), /Pending designation/);
-  for (const task of ['startTechnical', 'startQuality']) assert.match(await page.locator(`[data-task="${task}"]`).innerText(), /Not started/);
+  for (const task of ['startTechnical', 'startQuality']) assert.equal(await page.locator(`[data-task="${task}"] [data-task-status]`).getAttribute('data-task-status'), 'briefPending');
   assert.match(await page.locator('.actions-table thead').innerText(), /Start by/);
   assert.equal(await page.locator('[data-role-action="P01"] time').getAttribute('datetime'), '2026-11-09T11:00:00-05:00');
   assert.equal(await page.locator('[data-info][open]').count(), 0, 'Explanatory text starts collapsed');
@@ -310,7 +310,7 @@ try {
   assert.equal(await page.locator('[data-risk-event="budgetAuthorized"]').getAttribute('data-event-status'), 'planned');
   assert.equal(await page.locator('[data-risk-event="resourceConfirmed"]').getAttribute('data-event-status'), 'planned');
   const timeline = await page.locator('[data-risk-event]').evaluateAll(nodes => nodes.map(node => ({
-    id: node.dataset.riskEvent, status: node.dataset.eventStatus, at: node.querySelector('time').getAttribute('datetime')
+    id: node.dataset.riskEvent, status: node.dataset.eventStatus, at: node.querySelector('time')?.getAttribute('datetime') || null
   })));
   assert.ok(timeline.some(event => event.status === 'recorded'), 'Timeline distinguishes recorded events');
   assert.ok(timeline.some(event => event.status === 'conditionalForecast'), 'Timeline distinguishes conditional forecasts');

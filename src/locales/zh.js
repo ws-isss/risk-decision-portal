@@ -78,9 +78,9 @@
         monitor: { title: "跟进报价对应的资源可用性", detail: "在现有报价范围内询问档期、评估可行性。客户授权前仅作非约束性准备，不收费、不预订产能、不承诺窗口。", status: "nonbinding" },
         receipt: { title: "准备资源确认回执", detail: "客户有效授权后，与排产协调并具名回传确认结果。客户点击授权本身不能确保生产窗口。", status: "waiting" },
         schedule: { title: "评估拟定窗口安排", detail: "先评估可行性，不承诺资源。付费预订和正式窗口确认必须处于有效授权范围内。", status: "nonbinding" },
-        support: { title: "准备预算审阅材料" },
-        supportPreparation: { title: "预算材料准备支持", detail: "准备并跟进审阅材料。本项分派不授予费用签批权限。" },
-        budgetReview: { title: "审阅授权材料", detail: "审阅技术与 QA 意见及最终报价，再在指定额度内授权费用。" }
+        support: { title: "准备预算授权资料" },
+        supportPreparation: { title: "预算材料准备支持", detail: "准备并跟进预算授权资料。本项分派不授予费用签批权限。" },
+        budgetReview: { title: "审阅预算授权资料", detail: "审阅技术与 QA 意见及最终报价，再在指定额度内授权费用。" }
       },
       noTasks: "当前场景没有已分派给此角色的行动。",
       backupNote: "Emma 尚需安排 Ben 准备材料。Ben 可以准备材料，但不能批准费用。",
@@ -160,14 +160,15 @@
     },
     notifications: {
       title: "通知", unreadCount: "{count} 条未读通知", markAll: "全部标为已读", empty: "当前角色暂无通知。",
-      owner: "任务负责人", status: "任务状态", openTask: "查看任务", read: "已读", unread: "未读",
+      owner: "任务负责人", status: "任务状态", sentAt: "发送于", openTask: "查看任务", read: "已读", unread: "未读",
       readBoundary: "阅读通知不代表任务完成或已获授权。",
       kinds: {
         leaveSupport: { title: "Olivia 休假中", body: "请安排 Ben 准备材料，转交尚未完成。" },
         leaveApprover: { title: "需要替代授权人", body: "请指定 Elena 审阅授权材料，目前尚未指定。" },
         leaveBudget: { title: "需要安排代办及授权人", body: "Emma 正在协调。Ben 可以准备材料；Elena 尚需被指定为授权人。" },
-        reviewReady: { title: "审阅材料已齐备", body: "证据已可查看。Emma 须确认任务说明后，才能开始已分派的审阅。" },
-        tasksAssigned: { title: "任务说明已确认", body: "Emma 已为 {owner} 创建任务。开始前请审阅说明及前置条件。" },
+        reviewReady: { title: "证据已发布", body: "SEC-001、EXP-001 已可查看。Emma 尚未确认审阅任务说明，审阅任务尚未分派。" },
+        taskBriefPending: { title: "任务说明待确认", body: "Emma 尚未确认审阅任务说明。任务分派后，Daniel 和 Nina 才可以开始审阅。" },
+        tasksAssigned: { title: "可以开始审阅", body: "Emma 已确认任务说明并分派审阅任务。{owner} 可以打开已分派的任务，开始审阅已发布的证据材料。" },
         reviewStarted: { title: "审阅已开始", body: "{owner} 已开始审阅，最终意见尚待提交。" },
         reviewCompleted: { title: "审阅意见已记录", body: "{owner} 已记录审阅意见，其他确认仍分别处理。" },
         supportAccepted: { title: "Ben 已接手材料准备", body: "Olivia 休假期间，Ben 已接手准备任务，但不能批准费用。" },

@@ -174,12 +174,12 @@
     return info(action.info, copy.title, note(copy.detail));
   }
   function actionDue(action, person, withLabel = false) {
-    if (!action.event) return escape(text.portal.notScheduled);
-    const at = data.events[action.event].at;
+    if (!action.timing) return escape(text.portal.notScheduled);
+    const { at, kind } = action.timing;
     const value = action.day && session.getState().clock === data.initialClock && person.timezone === data.baseline.timezone
       ? `${text.common[action.day]}, ${core.formatInstant(at, person.timezone, { month: undefined, day: undefined })}`
       : core.formatInstant(at, person.timezone, { weekday: "short" });
-    return `${withLabel ? `<span class="task-time-kind">${text.portal.taskTimingLabels[action.timingKey || "startBy"]}</span>` : ""}<time datetime="${at}" class="${action.day === "today" ? "due-today" : ""}">${escape(value)} <span>${zoneLabel(person.timezone)}</span></time>`;
+    return `${withLabel ? `<span class="task-time-kind">${text.portal.taskTimingLabels[kind]}</span>` : ""}<time datetime="${at}" class="${action.day === "today" ? "due-today" : ""}">${escape(value)} <span>${zoneLabel(person.timezone)}</span></time>`;
   }
   function renderActions(state, person) {
     const actions = workflow.tasks(data, state);
@@ -308,7 +308,8 @@
       const message = text.wuxi.notifications[item.kind] || t.kinds[item.kind];
       const owner = data.people[item.task.owner];
       const isRead = read.has(item.id);
-      return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div>${item.at ? `<time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time>` : `<span class="notification-sequence">${text.portal.sequenceOnly}</span>`}</a></li>`;
+      const timing = item.task.timing;
+      return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div>${item.at ? `<div class="notification-time" data-notification-sent><span>${t.sentAt}</span> <time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : `<span class="notification-sequence">${text.portal.sequenceOnly}</span>`}${timing ? `<div class="notification-time" data-notification-timing="${timing.kind}" data-timing-event="${timing.eventRef}"><span>${text.portal.taskTimingLabels[timing.kind]}</span> <time datetime="${timing.at}">${instant(timing.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : ""}</a></li>`;
     }).join("")}</ul>` : `<p class="notifications-empty">${t.empty}</p>`}<div class="notifications-footer"><span class="data-tag">${text.common.assumption}</span><p>${t.readBoundary}</p></div></section></div>`;
   }
   function updateNotifications(open, restoreFocus = false) {
@@ -353,7 +354,9 @@
     if (state.decision) return `<div class="role-next-action" data-role-action="${person.id}"><span><strong>${escape(person.name)}</strong><span class="role-action-divider">·</span>${nextActionCopy(state,person)}</span><a class="button button-secondary role-action-button" href="${state.decision.authorization ? "#wuxi" : "#decision"}">${state.decision.authorization ? text.portal.roleResources : text.decision.openTask}${icon("arrow")}</a></div>`;
     const eventKey = { P01: "backupAssigned", P02: "latestReviewStart", P03: "latestReviewStart" }[person.id];
     const action = eventKey ? workflow.tasks(data, state, person.id)[0] : null;
-    return `<div class="role-next-action" data-role-action="${person.id}"><span><strong>${escape(person.name)}</strong><span class="role-action-divider">·</span>${text.overview.roleInstructions[person.id]}${action ? ` ${text.overview.by} ${actionDue(action, person)}` : ""}</span><a class="button button-secondary role-action-button" href="#risk">${text.overview.roleButtons[person.id]}${icon("arrow")}</a></div>`;
+    const awaitingBrief = action?.status === "briefPending";
+    const instruction = awaitingBrief ? text.portal.statuses.briefPending : text.overview.roleInstructions[person.id];
+    return `<div class="role-next-action" data-role-action="${person.id}"><span><strong>${escape(person.name)}</strong><span class="role-action-divider">·</span>${instruction}${action ? ` · ${awaitingBrief ? text.portal.taskTimingLabels[action.timing.kind] : text.overview.by} ${actionDue(action, person)}` : ""}</span><a class="button button-secondary role-action-button" href="#risk">${text.overview.roleButtons[person.id]}${icon("arrow")}</a></div>`;
   }
 
   function nextActionCopy(state, person) {

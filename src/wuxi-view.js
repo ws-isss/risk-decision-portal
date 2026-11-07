@@ -65,7 +65,7 @@
       const actionReady = !actionEvent || reached(actionEvent);
       const actionZone = data.people[ownerIds[step] || "P07"].timezone;
       const timing = view.nextTiming;
-      const timingLine = timing ? `<p id="reschedule-next-timing" data-timing-kind="${timing.kind}"><strong>${f.timingLabels[timing.kind]}: ${time(data.events[timing.eventRef].at, timing.timezone)}</strong></p>` : "";
+      const timingLine = timing ? `<p id="reschedule-next-timing" data-timing-kind="${timing.kind}"><strong>${f.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : timing.kind]}: ${time(data.events[timing.eventRef].at, timing.timezone)}</strong></p>` : "";
       const actionHint = actionEvent && person.id === ownerIds[step] ? `<p class="decision-note" data-reschedule-action-event="${actionEvent}">${actionReady ? f.actionReady : f.actionScheduled}: ${time(data.events[actionEvent].at, actionZone)}${!actionReady ? ` · ${f.advanceTime}` : ""}</p>` : "";
       let action = "";
       if (!reschedule && person.id === "P07") action = `<button type="button" class="button button-primary" id="request-reschedule"${disabled(!actionReady)}>${t.reschedule}</button>`;

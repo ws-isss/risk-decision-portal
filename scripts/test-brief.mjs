@@ -67,6 +67,10 @@ assert.ok(updated.content.includes('33 days late'));
 assert.ok(updated.content.includes('Customer receiving site'));
 const modifiedData=plain(data);modifiedData.reports['SEC-001'].version++;
 assert.ok(briefModel.staleReasons(brief,{data:modifiedData,state:session.getState()}).includes('sources'));
+for(const eventId of ['resourceReviewStart','rescheduleDecisionDue','rescheduleAuthorizationDue']) {
+  const changedTiming=plain(data);changedTiming.events[eventId].at=data.events.resourceConfirmed.at;
+  assert.ok(briefModel.staleReasons(brief,{data:changedTiming,state:session.getState()}).includes('sources'),`Changing ${eventId} invalidates the captured timing source`);
+}
 assert.ok(briefModel.copyText(brief,text).includes('SEC-001 v1'));
 assert.equal(briefModel.copyText(brief,text).includes('SEC-001 v2'),false);
 
@@ -176,10 +180,10 @@ for (const [plan, withFallback] of [['A',false],['A',true],['B',false]]) {
     if ((mask & 3) === 3) {
       const expected = plan === 'B'
         ? /If authorized by Nov 13, 2026, 5:00 PM ET, Alex Lin’s resource assessment and rescheduling quote are expected Nov 17, 2026, 5:00 PM Shanghai; no window is guaranteed/
-        : /If authorized by Nov 12, 2026, 5:00 PM ET, Alex Lin’s resource assessment result is expected Nov 13, 2026, 5:00 PM Shanghai; a hold is not guaranteed/;
+        : /If authorized by Nov 13, 2026, 9:00 AM Shanghai \(Nov 12, 2026, 8:00 PM ET\), Alex Lin’s resource assessment result is expected Nov 13, 2026, 5:00 PM Shanghai; a hold is not guaranteed/;
       assert.match(currentBrief.content,expected);
       const responseEvent = plan === 'B' ? 'rescheduleQuoteReturned' : 'resourceConfirmed';
-      const authorizationEvent = plan === 'B' ? 'latestAuthorization' : 'budgetAuthorized';
+      const authorizationEvent = plan === 'B' ? 'latestAuthorization' : 'resourceReviewStart';
       assert.ok(Date.parse(data.events[responseEvent].at)>Date.parse(data.events[authorizationEvent].at),'The conditional resource reply follows the specified authorization time');
     }
     assert.deepEqual(plain(briefModel.staleReasons(currentBrief,{data,state:{...state,clock:data.events.latestAuthorization.at}})),[],'Clock advancement alone does not complete a prerequisite');
@@ -226,7 +230,9 @@ assert.equal(v1.requestKey,`main:${attachmentSession.getState().decision.created
 assert.equal(v1.version,1);
 assert.deepEqual(plain(v1.attachedBy),{id:'P01',name:data.people.P01.name});
 assert.equal(v1.attachedAt,attachmentSession.getState().clock);
-assert.equal(v1.attachedAtLabel,core.formatInstant(v1.attachedAt,data.baseline.timezone,{year:'numeric',timeZoneName:'short'}));
+assert.equal(v1.attachedAtLabel,`${core.formatInstant(v1.attachedAt,data.baseline.timezone,{year:'numeric'})} ${text.common.easternTime}`);
+assert.match(v1.attachedAtLabel,/ ET$/,'Attachment timestamps use the same ET display label as the rest of the portal');
+assert.doesNotMatch(v1.attachedAtLabel,/\bE[SD]T\b/);
 assert.equal(v1.brief.generatedAt,attachmentDraft.generatedAt,'Attachment keeps the captured data-as-of time');
 assert.equal(JSON.stringify(attachmentSession.getState()),beforeAttach,'Attaching changes no approvals, tasks, events, fees or clock');
 assert.equal(JSON.stringify(attachmentDraft),privateBeforeAttach,'Attaching leaves the private draft untouched');

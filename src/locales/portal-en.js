@@ -6,7 +6,7 @@
     notScheduled: "No pending action",
     sequenceOnly: "Recorded action",
     timing: "Timing",
-    timingLabels: { expectedResponse: "Expected WuXi response", customerActionDue: "Customer action due" },
+    timingLabels: { expectedResponse: "Expected WuXi response", customerActionDue: "Customer action due", technicalReassessment: "Technical reassessment status update" },
     taskTimingLabels: { startBy: "Start by", expectedReply: "Expected reply", actionDue: "Action due" },
     holdExpiry: "Original window held until",
     confirmedWindow: "Confirmed revised window · readiness pending",

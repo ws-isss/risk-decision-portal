@@ -596,6 +596,16 @@
         "caseDesignAssumption": true
       },
       "rescheduleDecisionCreated": {
+        "at": "2026-11-17T10:00:00-05:00",
+        "ref": "E05",
+        "actorIds": [
+          "P01"
+        ],
+        "executionTimezone": "America/New_York",
+        "timingKind": "plannedAction",
+        "caseDesignAssumption": true
+      },
+      "rescheduleDecisionDue": {
         "at": "2026-11-17T11:00:00-05:00",
         "ref": "E05",
         "actorIds": [
@@ -606,6 +616,16 @@
         "caseDesignAssumption": true
       },
       "rescheduleAuthorized": {
+        "at": "2026-11-18T15:00:00-05:00",
+        "ref": "E06",
+        "actorIds": [
+          "P06"
+        ],
+        "executionTimezone": "America/New_York",
+        "timingKind": "plannedAction",
+        "caseDesignAssumption": true
+      },
+      "rescheduleAuthorizationDue": {
         "at": "2026-11-19T17:00:00-05:00",
         "ref": "E06",
         "actorIds": [
@@ -1476,7 +1496,9 @@
       "quoteReturnEvent": "rescheduleQuoteReturned",
       "customerAvailableEvent": "rescheduleCustomerAvailable",
       "decisionEvent": "rescheduleDecisionCreated",
+      "decisionDueEvent": "rescheduleDecisionDue",
       "authorizationEvent": "rescheduleAuthorized",
+      "authorizationDueEvent": "rescheduleAuthorizationDue",
       "confirmationEvent": "rescheduleConfirmed",
       "nextUpdateEvent": "rescheduleNextUpdate",
       "refs": [
@@ -1492,9 +1514,9 @@
       "officeTurnaroundHours": {
         "quote": 14,
         "quoteReturn": 2,
-        "customerDecision": 2,
-        "authorization": 22,
-        "confirmation": 8,
+        "customerDecision": 1,
+        "authorization": 13,
+        "confirmation": 16,
         "nextUpdate": 8
       },
       "weekendDutyAssumed": false

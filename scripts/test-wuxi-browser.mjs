@@ -6,6 +6,7 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const exceptionOnly = process.argv.includes('--exception-only');
 const require = createRequire(import.meta.url);
 const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : require('playwright');
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath: process.env.BROWSER_EXECUTABLE } : {}) });
@@ -25,7 +26,8 @@ const chapterTimes = {
 };
 const exceptionTimes = {
   requested: '2026-11-16T09:00:00+08:00', quote: '2026-11-17T15:00:00+08:00', returned: '2026-11-17T17:00:00+08:00',
-  customerAvailable: '2026-11-17T09:00:00-05:00', decision: '2026-11-17T11:00:00-05:00', authorized: '2026-11-19T17:00:00-05:00',
+  decision: '2026-11-17T10:00:00-05:00', decisionDue: '2026-11-17T11:00:00-05:00',
+  authorized: '2026-11-18T15:00:00-05:00', authorizationDue: '2026-11-19T17:00:00-05:00',
   confirmed: '2026-11-20T17:00:00+08:00', nextUpdate: '2026-11-23T17:00:00+08:00'
 };
 const chapterRoles = { prepublication: 'P07', selection: 'P01', coverage: 'P01', authorization: 'P06', hold: 'P07', unavailable: 'P08' };
@@ -197,6 +199,7 @@ try {
   const frozen = await page.evaluate(() => JSON.stringify(globalThis.DEMO_DATA));
   assert.deepEqual(await page.locator('#chapter-select option').evaluateAll(nodes => nodes.map(node => node.value).filter(Boolean)), Object.keys(chapterTimes));
 
+  if (!exceptionOnly) {
   // Customers cannot bypass draft publication through role switching, hash
   // links, notifications, evidence controls or the task-drafting workspace.
   await chapter(page, 'prepublication');
@@ -313,6 +316,7 @@ try {
   assert.equal(await page.locator('[data-risk-event="resourceConfirmed"]').getAttribute('data-event-status'), 'recorded');
   assert.match(await page.locator('.risk-hold-line').innerText(), /held|confirmed/i);
   await capture(page, 'wuxi-hold-risk.png');
+  }
 
   // The exception chapter loads prerequisites, never a fabricated completed
   // rejection. Mei and Alex must still record their separate actions.
@@ -321,8 +325,8 @@ try {
   await incurred(page, 0);
   const response = page.locator('#resource-response-form');
   await response.locator('select[name="outcome"]').selectOption('unavailable');
-  const reason = 'The requested earlier laboratory slots and original-window hold cannot both be confirmed. Reassess the resource plan.';
-  await response.locator('textarea[name="reason"]').fill(reason);
+  const reason = await response.locator('textarea[name="reason"]').inputValue();
+  assert.match(reason, /Nov 17/);
   await response.locator('#confirm-resource-response').click();
   await resourceStatus(page, 'schedulingUnavailable');
   await incurred(page, 0);
@@ -385,16 +389,14 @@ try {
   await role(page, 'P01');
   await earlyAction(page, '#launch-reschedule-decision');
   assert.match(await page.locator('#decision-deadline').innerText(), /Customer action due/i);
-  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), exceptionTimes.decision);
-  await advanceTo(page, exceptionTimes.customerAvailable);
-  await earlyAction(page, '#launch-reschedule-decision');
-  await advanceTo(page, exceptionTimes.decision);
+  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), exceptionTimes.decisionDue);
+  await advance(page, exceptionTimes.decision);
   await guide(page, 'rescheduleDecision', 'P01', '#launch-reschedule-decision');
   await resourceStatus(page, 'awaitingCustomerDecision');
   assert.match(await page.locator('[data-reschedule-quote-visible]').innerText(), /Feb 15[\s\S]*\$10,000[\s\S]*Q-B[\s\S]*v1/);
   await page.locator('#launch-reschedule-decision').click();
   assert.match(await page.locator('#decision-deadline').innerText(), /Customer action due/i);
-  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), exceptionTimes.authorized);
+  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), exceptionTimes.authorizationDue);
   await page.locator('#priority-risk').screenshot({ path: path.join(output, 'exception-customer-action-banner.png'), style: '.demo-timeline, .topbar, #notice { visibility: hidden !important; }' });
   await page.locator('#risk-title a').click();
   await page.locator('#risk-followup-timeline').screenshot({ path: path.join(output, 'risk-exception-awaiting-authorization.png'), style: '.demo-timeline, .topbar, #notice { visibility: hidden !important; }' });
@@ -443,12 +445,17 @@ try {
   assert.equal(await page.locator('.reschedule-records p').count(), 6);
   assert.ok(!/1970|Invalid Date/.test(await page.locator('.reschedule-records').innerText()));
   assert.equal(await page.locator('#decision-deadline').getAttribute('data-deadline-state'), 'rescheduled');
+  assert.match(await page.locator('#decision-deadline').innerText(), /Technical reassessment status update/);
+  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), exceptionTimes.nextUpdate);
+  assert.match(await page.locator('#reschedule-next-timing').innerText(), /Technical reassessment status update/);
   await notifications(page);
   await page.locator('[data-task-link="rescheduleConfirmation"]').click();
   await page.locator('#task-rescheduleConfirmation').waitFor();
   assert.equal(await page.locator('#task-rescheduleConfirmation a').getAttribute('href'), '#wuxi');
   await page.locator('#risk-title a').click();
   assert.equal(await page.locator('.risk-request-state').getAttribute('data-risk-decision-state'), 'confirmed');
+  assert.match(await page.locator('#risk-resource-deadline').innerText(), /Technical reassessment status update/);
+  assert.match(await page.locator('#risk-update-title').innerText(), /Technical reassessment status update/);
   assert.equal(await page.locator('[data-risk-replacement="confirmed"]').count(), 1);
   assert.ok(!/1970|Invalid Date/.test(await page.locator('#risk-timeline').innerText()));
   assert.equal(await page.locator('#risk-followup-timeline [data-event-time-status="notScheduled"]').count(), 0);
@@ -470,6 +477,7 @@ try {
   await page.locator('#risk-followup-timeline').screenshot({ path: path.join(output, 'risk-exception-recorded.png'), style: '.demo-timeline, .topbar, #notice { visibility: hidden !important; }' });
   await page.locator('.risk-back').click();
   await capture(page, 'wuxi-rescheduled.png');
+  if (!exceptionOnly) {
   await authorizeB(page);
   await incurred(page, 0);
   assert.equal(await page.locator('#wuxi [data-hold-status="confirmed"]').count(), 0);
@@ -499,9 +507,10 @@ try {
   await assertMobile(mobile, '#wuxi [data-fee-incurred], #wuxi [data-hold-status], #wuxi-response');
   await capture(mobile, 'wuxi-hold-mobile.png');
   await mobileContext.close();
+  }
   assert.deepEqual(errors, [], 'No browser exceptions in publication, resources or exceptions');
   assert.deepEqual(network, [], 'Every Phase 5 action works from an isolated offline HTML file');
-  console.log('WuXi browser checks passed: customer draft isolation, publication review and metadata, explicit chapter resets and seed provenance, form/read-state reset, named resource response separation, hold and fee triggers, full quote/decision/authorization/reschedule flow, separate dated exception actions, office-calendar progression, unchanged original dates/amounts, offline and mobile.');
+  console.log(exceptionOnly ? 'Exception chapter passed: guided rejection, enquiry, quote, client decision, Wednesday authorization and formal confirmation; one customer advance, separate deadlines, technical reassessment update, no premature fees, offline standalone HTML.' : 'WuXi browser checks passed: customer draft isolation, publication review and metadata, explicit chapter resets and seed provenance, form/read-state reset, named resource response separation, hold and fee triggers, full quote/decision/authorization/reschedule flow, separate dated exception actions, office-calendar progression, unchanged original dates/amounts, offline and mobile.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

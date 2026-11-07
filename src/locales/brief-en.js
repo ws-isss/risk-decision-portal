@@ -125,7 +125,8 @@
       "Revised delivery and additional technical costs remain unconfirmed."
     ],
     nextReview: "{owner}: technical / QA review status expected {time}.",
-    nextConditionalResource: "If authorized by {plannedAuthorization}, {owner}’s resource assessment result is expected {time}; a hold is not guaranteed.",
+    dualZoneTime: "{primary} ({secondary})",
+    nextConditionalResource: "If authorized by {resourceReviewStart}, {owner}’s resource assessment result is expected {time}; a hold is not guaranteed.",
     nextConditionalQuote: "If authorized by {authorizationDue}, {owner}’s resource assessment and rescheduling quote are expected {time}; no window is guaranteed.",
     nextResource: "{owner}’s resource assessment result is expected {time}; a hold is not guaranteed.",
     nextHeld: "{owner}: first-round analysis expected {time}, subject to study execution; results still require review.",

@@ -68,23 +68,25 @@ check('40 frozen PRD rows and source references', () => {
 
 check('exception supplement matches PRD and both office calendars without weekend duty', () => {
   const expected = [
-    ['rescheduleRequested', '2026-11-16T09:00:00+08:00', ['P07'], 'startBy'],
-    ['rescheduleQuotePrepared', '2026-11-17T15:00:00+08:00', ['P08'], 'expectedResponse'],
-    ['rescheduleQuoteReturned', '2026-11-17T17:00:00+08:00', ['P07'], 'expectedResponse'],
-    ['rescheduleCustomerAvailable', '2026-11-17T09:00:00-05:00', ['P01', 'P06'], 'available'],
-    ['rescheduleDecisionCreated', '2026-11-17T11:00:00-05:00', ['P01'], 'customerActionDue'],
-    ['rescheduleAuthorized', '2026-11-19T17:00:00-05:00', ['P06'], 'customerActionDue'],
-    ['rescheduleConfirmed', '2026-11-20T17:00:00+08:00', ['P07'], 'expectedResponse'],
-    ['rescheduleNextUpdate', '2026-11-23T17:00:00+08:00', ['P07'], 'expectedResponse'],
+    ['rescheduleRequested', '2026-11-16T09:00:00+08:00', ['P07'], 'startBy', 'E01'],
+    ['rescheduleQuotePrepared', '2026-11-17T15:00:00+08:00', ['P08'], 'expectedResponse', 'E02'],
+    ['rescheduleQuoteReturned', '2026-11-17T17:00:00+08:00', ['P07'], 'expectedResponse', 'E03'],
+    ['rescheduleCustomerAvailable', '2026-11-17T09:00:00-05:00', ['P01', 'P06'], 'available', 'E04'],
+    ['rescheduleDecisionCreated', '2026-11-17T10:00:00-05:00', ['P01'], 'plannedAction', 'E05'],
+    ['rescheduleDecisionDue', '2026-11-17T11:00:00-05:00', ['P01'], 'customerActionDue', 'E05'],
+    ['rescheduleAuthorized', '2026-11-18T15:00:00-05:00', ['P06'], 'plannedAction', 'E06'],
+    ['rescheduleAuthorizationDue', '2026-11-19T17:00:00-05:00', ['P06'], 'customerActionDue', 'E06'],
+    ['rescheduleConfirmed', '2026-11-20T17:00:00+08:00', ['P07'], 'expectedResponse', 'E07'],
+    ['rescheduleNextUpdate', '2026-11-23T17:00:00+08:00', ['P07'], 'expectedResponse', 'E08'],
   ];
   const rows = read('PRD.md').split('\n').filter(line => /^\| E\d{2} \|/.test(line));
-  same(rows.length, expected.length);
+  same(rows.length, 8);
   same(data.rescheduleTiming.weekendDutyAssumed, false);
   let previous = time(at('resourceConfirmed'));
-  expected.forEach(([id, instant, actors, kind], i) => {
+  expected.forEach(([id, instant, actors, kind, ref]) => {
     const event = data.events[id];
-    same([event.at, event.ref, event.actorIds, event.timingKind, event.caseDesignAssumption], [instant, `E0${i + 1}`, actors, kind, true]);
-    assert.ok(rows[i].startsWith(`| E0${i + 1} |`) && rows[i].includes(instant), `${id} disagrees with its PRD row`);
+    same([event.at, event.ref, event.actorIds, event.timingKind, event.caseDesignAssumption], [instant, ref, actors, kind, true]);
+    assert.ok(rows.find(row => row.startsWith(`| ${ref} |`))?.includes(instant), `${id} disagrees with its PRD row`);
     assert.ok(time(instant) > previous, `${id} must follow the prior cross-zone event`);
     previous = time(instant);
     for (const owner of actors) {
@@ -99,20 +101,28 @@ check('exception supplement matches PRD and both office calendars without weeken
   });
   same(localParts(at('rescheduleQuoteReturned'), data.calendars.customer.timezone), { date: '2026-11-17', hour: 4, minute: 0 });
   same(localParts(at('rescheduleCustomerAvailable'), data.calendars.customer.timezone), { date: '2026-11-17', hour: 9, minute: 0 });
-  same(localParts(at('rescheduleAuthorized'), data.calendars.base.timezone), { date: '2026-11-20', hour: 6, minute: 0 });
+  same(localParts(at('rescheduleAuthorized'), data.calendars.base.timezone), { date: '2026-11-19', hour: 4, minute: 0 });
+  same(localParts(at('rescheduleAuthorizationDue'), data.calendars.base.timezone), { date: '2026-11-20', hour: 6, minute: 0 });
   const intervals = [
     ['quote', 'rescheduleRequested', 'rescheduleQuotePrepared', 'base', 14],
     ['quoteReturn', 'rescheduleQuotePrepared', 'rescheduleQuoteReturned', 'base', 2],
-    ['customerDecision', 'rescheduleCustomerAvailable', 'rescheduleDecisionCreated', 'customer', 2],
-    ['authorization', 'rescheduleDecisionCreated', 'rescheduleAuthorized', 'customer', 22],
-    ['confirmation', 'rescheduleAuthorized', 'rescheduleConfirmed', 'base', 8],
+    ['customerDecision', 'rescheduleCustomerAvailable', 'rescheduleDecisionCreated', 'customer', 1],
+    ['authorization', 'rescheduleDecisionCreated', 'rescheduleAuthorized', 'customer', 13],
+    ['confirmation', 'rescheduleAuthorized', 'rescheduleConfirmed', 'base', 16],
     ['nextUpdate', 'rescheduleConfirmed', 'rescheduleNextUpdate', 'base', 8],
   ];
   for (const [key, from, to, calendar, hours] of intervals) {
     same(officeHours(at(from), at(to), calendar), hours, `${key} has the wrong working-time allowance`);
     same(data.rescheduleTiming.officeTurnaroundHours[key], hours);
   }
-  same(data.rescheduleTimeline.map(item => item.eventRef), expected.filter(item => !['rescheduleCustomerAvailable', 'rescheduleNextUpdate'].includes(item[0])).map(item => item[0]));
+  same([data.rescheduleTiming.decisionEvent, data.rescheduleTiming.decisionDueEvent], ['rescheduleDecisionCreated', 'rescheduleDecisionDue']);
+  same([data.rescheduleTiming.authorizationEvent, data.rescheduleTiming.authorizationDueEvent], ['rescheduleAuthorized', 'rescheduleAuthorizationDue']);
+  for (const [action, deadline, margin] of [['rescheduleDecisionCreated', 'rescheduleDecisionDue', 1], ['rescheduleAuthorized', 'rescheduleAuthorizationDue', 10]]) {
+    assert.ok(time(at(action)) < time(at(deadline)), `${action} must happen before its deadline`);
+    same(officeHours(at(action), at(deadline), 'customer'), margin, `${action} has the wrong margin before its deadline`);
+  }
+  same(officeHours(at('rescheduleAuthorizationDue'), at('rescheduleConfirmed'), 'base'), 8, 'The latest customer authorization must still leave a full Shanghai office day before the expected confirmation');
+  same(data.rescheduleTimeline.map(item => item.eventRef), expected.filter(item => !['rescheduleCustomerAvailable', 'rescheduleNextUpdate'].includes(item[0]) && item[3] !== 'customerActionDue').map(item => item[0]));
   for (const item of data.rescheduleTimeline) {
     same(item.ownerIds, data.events[item.eventRef].actorIds);
     same(item.statusKey, 'planned');

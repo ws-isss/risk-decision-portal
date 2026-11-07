@@ -112,7 +112,7 @@
       finalBoundary: "The replacement window is formally confirmed. Aggregate reduction and process readiness remain under assessment, and delivery requires reassessment. The original study is not charged twice.",
       feeIncurred: "Rescheduling fee: {amount} incurred on formal WuXi confirmation. A non-refundable cancellation term is not specified.",
       scheduleNote: "Demo schedule uses Shanghai and New York business days. Each response still requires its named owner to submit it; advancing time does not confirm an outcome or revise delivery.",
-      timingLabels: { expectedResponse: "Expected WuXi response", customerActionDue: "Customer action due" },
+      timingLabels: { expectedResponse: "Expected WuXi response", customerActionDue: "Customer action due", technicalReassessment: "Technical reassessment status update" },
       actionScheduled: "Scheduled action time",
       actionReady: "Scheduled for",
       advanceTime: "Advance the demo clock before recording this action",

@@ -55,7 +55,7 @@ async function makePage(mobile = false, clipboardMode = mobile ? 'exec' : 'rich'
 const clock = page => page.locator('.demo-clock time').getAttribute('datetime');
 const exceptionTimes = {
   requested: '2026-11-16T09:00:00+08:00', quote: '2026-11-17T15:00:00+08:00', returned: '2026-11-17T17:00:00+08:00',
-  decision: '2026-11-17T11:00:00-05:00', authorized: '2026-11-19T17:00:00-05:00',
+  decision: '2026-11-17T10:00:00-05:00', authorized: '2026-11-18T15:00:00-05:00',
   confirmed: '2026-11-20T17:00:00+08:00'
 };
 const copies = page => page.evaluate(() => globalThis.testCopies);

@@ -34,7 +34,7 @@
     let state;
     const steps = ["backupAssigned", "alternateAssigned", "reviewsComplete", "budgetAuthorized", "resourceReviewStart", "resourceConfirmed"];
     const reviewOwners = { technical: "P02", quality: "P03" };
-    const rescheduleSteps = ["rescheduleRequested", "rescheduleQuotePrepared", "rescheduleQuoteReturned", "rescheduleCustomerAvailable", "rescheduleDecisionCreated", "rescheduleAuthorized", "rescheduleConfirmed"];
+    const rescheduleSteps = ["rescheduleRequested", "rescheduleQuotePrepared", "rescheduleQuoteReturned", "rescheduleDecisionCreated", "rescheduleAuthorized", "rescheduleConfirmed"];
     function initial(scene) {
       return {
         scene, viewer: scene === "prepublication" ? "P07" : "P01",
@@ -97,7 +97,7 @@
         if (!decision.authorization) blockKey = "authorizeCustomer";
         else if (nextEvent === "rescheduleQuotePrepared" && !r) blockKey = "requestReschedule";
         else if (nextEvent === "rescheduleQuoteReturned" && !(r && r.quote)) blockKey = "prepareRescheduleQuote";
-        else if (["rescheduleCustomerAvailable", "rescheduleDecisionCreated"].includes(nextEvent) && !(r && r.quoteReceipt)) blockKey = "returnRescheduleQuote";
+        else if (nextEvent === "rescheduleDecisionCreated" && !(r && r.quoteReceipt)) blockKey = "returnRescheduleQuote";
         else if (nextEvent === "rescheduleAuthorized" && !(r && r.decision)) blockKey = "createRescheduleDecision";
         else if (nextEvent === "rescheduleConfirmed" && !(r && r.authorization)) blockKey = "authorizeReschedule";
         return Object.freeze({ nextEvent, blockKey, done: false });

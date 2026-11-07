@@ -46,7 +46,7 @@
       requestKey: key, version: previous ? previous.version + 1 : 1,
       attachedBy: { id: state.viewer, name: data.people[state.viewer].name },
       attachedAt: state.clock,
-      attachedAtLabel: core.formatInstant(state.clock, data.baseline.timezone, { year: "numeric", timeZoneName: "short" }),
+      attachedAtLabel: `${core.formatInstant(state.clock, data.baseline.timezone, { year: "numeric" })} ${brief.metadata.timezoneLabel}`,
       brief: clone(brief)
     });
   }
@@ -73,6 +73,7 @@
         evidence: { measured: data.risk.hmwPct, target: data.risk.targetPct },
         quotes: Object.values(data.plans).map(plan => ({ id: plan.id, total: plan.total, window: plan.window.at, holdUntil: plan.holdUntil, delivery: plan.forecast.localDate })),
         fees: data.fees,
+        resourceTiming: { reviewStart: data.events.resourceReviewStart.at, response: data.events.resourceConfirmed.at, authorizationDue: data.events.latestAuthorization.at },
         rescheduleTiming: Object.fromEntries(Object.entries(data.rescheduleTiming).filter(([key]) => key.endsWith("Event")).map(([key, eventId]) => [key, data.events[eventId].at])),
         quote: quote ? { quoteRef: quote.quoteRef, version: quote.version } : null
       },
@@ -113,7 +114,10 @@
     const values = {
       aTotal: money(data.plans.A.total), bTotal: money(data.plans.B.total),
       authorizationDue: localTime(data.events.latestAuthorization.at, customerZone),
-      plannedAuthorization: localTime(data.events.budgetAuthorized.at, customerZone),
+      resourceReviewStart: interpolate(t.dualZoneTime, {
+        primary: localTime(data.events.resourceReviewStart.at, baseZone),
+        secondary: localTime(data.events.resourceReviewStart.at, customerZone)
+      }),
       actionDue: view.nextTiming?.kind === "customerActionDue" ? localTime(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone) : "",
       selected: d?.planId || "", selectedTotal: d ? money(data.plans[d.planId].total) : "",
       authorizedTotal: d?.authorization ? money(d.authorization.total) : "",
@@ -196,7 +200,7 @@
       edited: false, previewed: false,
       metadata: {
         title: `${data.project.id} · ${t.title}`, status: t.status[key] || t.status.unavailable,
-        asOf: localTime(state.clock, customerZone), sourceVersions,
+        asOf: localTime(state.clock, customerZone), timezoneLabel: text.common.easternTime, sourceVersions,
         labels: [text.common.demo, text.common.assumption, t.simulated],
         sourceNote: t.sourceNote
       }

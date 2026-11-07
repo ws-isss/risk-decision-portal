@@ -239,23 +239,22 @@ function finishRescheduling(session, expectedOriginalFailure) {
   assert.throws(() => session.advanceNext(), /ADVANCE_BLOCKED_returnRescheduleQuote/);
   session.returnRescheduleQuote();
   assert.equal(project('P01').rescheduleStage,'awaitingCustomerDecision');
-  assertTiming('rescheduleDecisionCreated','customerActionDue','P01');
+  assertTiming('rescheduleDecisionDue','customerActionDue','P01');
   assert.equal(project('P01').rescheduleQuote.amount,data.fees.reschedule);
   assert.equal(project('P01').rescheduleConfirmed,false);
   session.setViewer('P06'); assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:'ok',acknowledged:true}), /RESCHEDULE_DECISION_REQUIRED/);
   session.setViewer('P01');
   assert.throws(() => session.createRescheduleDecision(), /TOO_EARLY/,'A quote returned at New York 04:00 cannot imply an immediate customer action');
-  session.advanceNext();
-  assert.equal(session.getState().clock,data.events.rescheduleCustomerAvailable.at);
-  assert.equal(project('P01').rescheduleDecisionCreated,false,'Customer office opening is not a completed decision');
-  assert.throws(() => session.createRescheduleDecision(), /TOO_EARLY/,'The customer has a separate decision coordination interval after office opening');
+  assert.equal(session.getAdvanceInfo().nextEvent,'rescheduleDecisionCreated','Office opening is informational, not an empty clock advance');
   session.advanceNext();
   assert.equal(session.getState().clock,data.events.rescheduleDecisionCreated.at);
+  assert.ok(Date.parse(session.getState().clock) < Date.parse(data.events.rescheduleDecisionDue.at),'Emma acts before her separate action deadline');
+  assert.equal(project('P01').rescheduleDecisionCreated,false,'Reaching the planned action time does not create the decision');
   assert.equal(session.getAdvanceInfo().blockKey,'createRescheduleDecision');
   assert.throws(() => session.advanceNext(), /ADVANCE_BLOCKED_createRescheduleDecision/);
   session.createRescheduleDecision();
   assert.equal(project('P01').rescheduleStage,'awaitingCustomerAuthorization');
-  assertTiming('rescheduleAuthorized','customerActionDue','P06');
+  assertTiming('rescheduleAuthorizationDue','customerActionDue','P06');
   assert.equal(project('P01').committedFees,0);
   session.setViewer('P07'); assert.throws(() => session.confirmReschedule(), /RESCHEDULE_AUTHORIZATION_REQUIRED/);
   session.setViewer('P05'); assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:'ok',acknowledged:true}), /ROLE_NOT_ALLOWED/);
@@ -263,7 +262,8 @@ function finishRescheduling(session, expectedOriginalFailure) {
   assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:'ok',acknowledged:true}), /TOO_EARLY/);
   session.advanceNext();
   assert.equal(session.getState().clock,data.events.rescheduleAuthorized.at);
-  assert.equal(project('P01').rescheduleAuthorized,false,'The action deadline does not substitute for Elena’s explicit authorization');
+  assert.ok(Date.parse(session.getState().clock) < Date.parse(data.events.rescheduleAuthorizationDue.at),'Elena acts before the authorization deadline');
+  assert.equal(project('P01').rescheduleAuthorized,false,'The planned action time does not substitute for Elena’s explicit authorization');
   assert.equal(session.getAdvanceInfo().blockKey,'authorizeReschedule');
   assert.throws(() => session.advanceNext(), /ADVANCE_BLOCKED_authorizeReschedule/);
   assert.throws(() => session.authorizeReschedule({signature:'Ben Lewis',reason:'ok',acknowledged:true}), /INVALID_SIGNATURE/);
@@ -320,7 +320,12 @@ function finishRescheduling(session, expectedOriginalFailure) {
       assert.ok(tasks.some(task=>task.key===item.taskKey));
       if (ids.includes(item.id.split(':')[0])) { assert.equal(item.at,data.events[item.id.split(':')[0]].at); assert.equal(item.timeStatus,'recorded'); assert.ok(item.sequence>0); }
     }
-    for (const task of tasks.filter(task=>task.key.startsWith('reschedule'))) { assert.ok(ids.includes(task.event)); assert.ok(['startBy','expectedReply','actionDue'].includes(task.timingKey)); }
+    for (const task of tasks.filter(task=>task.key.startsWith('reschedule'))) {
+      const expectedDue = {rescheduleDecision:'rescheduleDecisionDue',rescheduleAuthorization:'rescheduleAuthorizationDue'}[task.key];
+      if (expectedDue) assert.equal(task.event,expectedDue,'Customer tasks display the deadline, not their earlier planned action time');
+      else assert.ok(ids.includes(task.event));
+      assert.ok(['startBy','expectedReply','actionDue'].includes(task.timingKey));
+    }
   }
 }
 finishRescheduling(s,false);

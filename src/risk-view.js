@@ -113,7 +113,7 @@
       const owner = data.people[data.risk.nextUpdateOwnerId];
       if (view.nextTiming) {
         const timing = view.nextTiming;
-        return `<section class="risk-update-strip" data-update-state="${rescheduleStage}" data-timing-kind="${timing.kind}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${text.wuxi.rescheduleFlow.timingLabels[timing.kind]}</h2><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong><span>${t.updateOwner}: ${escape(data.people[timing.ownerId].name)}</span><p>${view.rescheduleConfirmed ? t.replacementNoDelivery : rescheduleStatus()}</p></section>`;
+        return `<section class="risk-update-strip" data-update-state="${rescheduleStage}" data-timing-kind="${timing.kind}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${text.wuxi.rescheduleFlow.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : timing.kind]}</h2><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong><span>${t.updateOwner}: ${escape(data.people[timing.ownerId].name)}</span><p>${view.rescheduleConfirmed ? t.replacementNoDelivery : rescheduleStatus()}</p></section>`;
       }
       if (view.resourceConfirmed || view.resourceRejected) return `<section class="risk-update-strip" data-update-state="${view.resourceConfirmed ? "resourceRecorded" : "resourceRejected"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${t.resourceUpdateRecorded}</h2><strong>${time(resource.receipt.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span><p>${view.resourceRejected ? t.nextUpdateReassessment : t.holdStillConditional}</p></section>`;
       const authorized = Boolean(decision?.authorization);
@@ -214,7 +214,7 @@
     function resourceMilestone() {
       if (view.nextTiming) {
         const timing = view.nextTiming;
-        return `<div id="risk-resource-deadline" class="risk-resource-deadline" data-timing-kind="${timing.kind}"><span>${text.wuxi.rescheduleFlow.timingLabels[timing.kind]}</span><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong></div>`;
+        return `<div id="risk-resource-deadline" class="risk-resource-deadline" data-timing-kind="${timing.kind}"><span>${text.wuxi.rescheduleFlow.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : timing.kind]}</span><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong></div>`;
       }
       if (!isWuXi) return "";
       const laterWindowRequest = decision?.authorization && decision.planId === "B";

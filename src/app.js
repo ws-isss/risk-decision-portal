@@ -501,11 +501,18 @@
       openDialog(`${dialogHeading(text.brief.staleCopyTitle)}<p class="dialog-intro">${text.brief.staleCopyBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-copy-stale-brief">${text.brief.staleCopyConfirm}</button></div>`); return;
     }
     const content = global.DEMO_BRIEF.copyText(managementBrief,text,{staleReasons});
+    const html = global.DEMO_BRIEF_VIEW.copyHtml(managementBrief,text,{staleReasons});
     let copied = false;
-    try { await navigator.clipboard.writeText(content); copied = true; } catch (_) {
+    if (typeof ClipboardItem === "function" && navigator.clipboard?.write) {
+      try { await navigator.clipboard.write([new ClipboardItem({"text/plain": new Blob([content],{type:"text/plain"}),"text/html": new Blob([html],{type:"text/html"})})]); copied = true; } catch (_) { /* Try the compatible plain-text clipboard path below. */ }
+    }
+    if (!copied) { try { await navigator.clipboard.writeText(content); copied = true; } catch (_) { /* Local file previews may require the selection fallback. */ } }
+    if (!copied) {
       const field = document.createElement("textarea"); field.value = content;
       field.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.append(field); field.select();
-      try { copied = document.execCommand("copy"); } catch (_) { copied = false; } finally { field.remove(); }
+      const clipboard = event => { if (event.clipboardData) { event.clipboardData.setData("text/plain",content); event.clipboardData.setData("text/html",html); event.preventDefault(); } };
+      document.addEventListener("copy",clipboard);
+      try { copied = document.execCommand("copy"); } catch (_) { copied = false; } finally { document.removeEventListener("copy",clipboard); field.remove(); }
     }
     briefCopied = copied; render();
     notify(copied ? text.brief.copied : text.brief.copyFailed);
@@ -638,7 +645,10 @@
     const form = field.closest("form");
     if (field.id === "management-brief-editor") {
       if (session.getState().viewer !== "P01" || !managementBrief) return;
-      managementBrief.content = field.value; managementBrief.edited = true; managementBrief.previewed = false; briefPreview = false; briefCopied = false; fitDraft(field); return;
+      managementBrief.content = field.value; managementBrief.edited = true; managementBrief.previewed = false; briefPreview = false; briefCopied = false; fitDraft(field);
+      const counter = document.getElementById("management-brief-word-count");
+      if (counter) counter.textContent = interpolate(text.brief.wordCount,{count:global.DEMO_BRIEF.wordCount(managementBrief,text,{staleReasons:global.DEMO_BRIEF.staleReasons(managementBrief,{data,state:session.getState()})})});
+      return;
     }
     if (field.matches(".decision-form textarea")) fitDraft(field);
     if (form?.id === "resource-response-form" && field.name === "reason") formValues.resourceReason = field.value;

@@ -5,6 +5,52 @@
   const interpolate = (template, values) => String(template).replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ""));
   const customerView = (data, state) => global.DEMO_WORKFLOW.project(data, state, "P01");
 
+  function requestKey({ state }) {
+    const decision = state.decision;
+    if (!decision?.createdAt) return null;
+    const reschedule = decision.resource?.rescheduleRequest?.decision;
+    return reschedule?.at ? `reschedule:${reschedule.at}` : `main:${decision.createdAt}`;
+  }
+
+  function currentAttachment(attachments, current) {
+    const key = requestKey(current);
+    if (!key) return null;
+    return (attachments || []).filter(item => item.requestKey === key).reduce((latest, item) => !latest || item.version > latest.version ? item : latest, null);
+  }
+
+  // Preview/edit flags belong to Emma's workspace. An attachment only changes
+  // when the authored content or its captured source snapshot actually changes.
+  function isAttachedDraft(brief, attachment) {
+    if (!brief || !attachment?.brief) return false;
+    return ["content", "snapshot", "metadata", "generatedAt"].every(key => JSON.stringify(brief[key]) === JSON.stringify(attachment.brief[key]));
+  }
+
+  function deepFreeze(value) {
+    if (value && typeof value === "object" && !Object.isFrozen(value)) {
+      Object.values(value).forEach(deepFreeze);
+      Object.freeze(value);
+    }
+    return value;
+  }
+
+  function attach({ brief, attachments = [], data, core, state }) {
+    if (state.viewer !== "P01") throw new Error("ROLE_NOT_ALLOWED");
+    if (!customerView(data, state).clientVisible || state.publication?.status !== "published") throw new Error("UNPUBLISHED_RISK");
+    const key = requestKey({ state });
+    if (!key) throw new Error("DECISION_REQUIRED");
+    if (!brief?.previewed) throw new Error("PREVIEW_REQUIRED");
+    if (!brief.snapshot || staleReasons(brief, { data, state }).length) throw new Error("STALE_BRIEF");
+    const previous = currentAttachment(attachments, { state });
+    if (isAttachedDraft(brief, previous)) return previous;
+    return deepFreeze({
+      requestKey: key, version: previous ? previous.version + 1 : 1,
+      attachedBy: { id: state.viewer, name: data.people[state.viewer].name },
+      attachedAt: state.clock,
+      attachedAtLabel: core.formatInstant(state.clock, data.baseline.timezone, { year: "numeric", timeZoneName: "short" }),
+      brief: clone(brief)
+    });
+  }
+
   function statusKey(view) {
     if (view.rescheduleStage && view.rescheduleStage !== "none") return view.rescheduleStage === "quoteReadyInternal" ? "awaitingWuXiQuote" : view.rescheduleStage;
     if (view.resourceConfirmed) return "held";
@@ -31,6 +77,7 @@
         quote: quote ? { quoteRef: quote.quoteRef, version: quote.version } : null
       },
       business: {
+        requestKey: requestKey({ state }),
         planId: d?.planId || null, fallbackSelected: Boolean(d?.fallbackSelected),
         technicalComplete: view.technicalComplete, qualityComplete: view.qualityComplete, approverDesignated: view.approverDesignated,
         authorized: view.authorized, authorization: view.authorized ? { by: d.authorization.by, at: d.authorization.at, total: d.authorization.total } : null,
@@ -188,5 +235,5 @@
   function copyText(brief, text, options) { return plainText(recipientMarkdown(brief, text, options)); }
   function wordCount(brief, text, options) { return copyText(brief, text, options).trim().split(/\s+/).filter(Boolean).length; }
 
-  global.DEMO_BRIEF = Object.freeze({ generate, fingerprint, staleReasons, recipientMarkdown, plainText, copyText, wordCount, statusKey });
+  global.DEMO_BRIEF = Object.freeze({ generate, fingerprint, staleReasons, recipientMarkdown, plainText, copyText, wordCount, statusKey, requestKey, currentAttachment, attach, isAttachedDraft });
 })(globalThis);

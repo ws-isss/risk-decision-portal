@@ -16,6 +16,7 @@
   let decisionError = "";
   let formValues = {};
   let managementBrief = null;
+  const briefAttachments = [];
   let briefOpen = false;
   let briefLoading = false;
   let briefPreview = false;
@@ -96,21 +97,26 @@
   }
 
   function renderManagementBrief(state) {
-    if (!briefOpen && !(state.viewer === "P06" && managementBrief)) return "";
-    return global.DEMO_BRIEF_VIEW.render({brief:managementBrief,loading:briefLoading,state,text,helpers:{escape},staleReasons:global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}),preview:briefPreview,copied:briefCopied});
+    const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
+    if (state.viewer === "P06" && !attachment) return "";
+    if (!briefOpen && !(state.viewer === "P06" && attachment)) return "";
+    const draft = state.viewer === "P01" ? managementBrief : null;
+    return global.DEMO_BRIEF_VIEW.render({brief:draft,attachment,loading:briefLoading,state,text,helpers:{escape},staleReasons:global.DEMO_BRIEF.staleReasons(draft,{data,state}),attachmentStaleReasons:global.DEMO_BRIEF.staleReasons(attachment?.brief,{data,state}),preview:briefPreview,copied:briefCopied});
   }
 
   function renderAuthorizationBrief(state) {
     if (state.viewer !== "P06" || state.publication?.status !== "published") return "";
     const t = text.brief;
-    const reasons = global.DEMO_BRIEF.staleReasons(managementBrief,{data,state});
-    const status = !managementBrief ? "missing" : reasons.length ? "stale" : !managementBrief.previewed ? "unreviewed" : "current";
-    const title = {missing:t.authorizationBriefMissing,stale:t.authorizationBriefStale,unreviewed:t.authorizationBriefUnreviewed,current:t.authorizationBriefCurrent}[status];
-    const hint = {missing:t.authorizationBriefMissingHint,stale:t.authorizationBriefStaleHint,unreviewed:t.authorizationBriefUnreviewedHint}[status];
-    return `<aside id="authorization-brief-status" class="authorization-brief-status" data-brief-state="${status}" role="status"><strong>${title}</strong>${hint ? `<p>${hint}</p>` : ""}${reasons.length ? `<ul>${reasons.map(reason=>`<li>${escape(t.staleReasons[reason])}</li>`).join("")}</ul>` : ""}<div class="decision-action-group">${managementBrief ? `<button type="button" id="view-management-brief" class="button button-secondary">${t.viewShared}</button>` : ""}${status !== "current" ? `<button type="button" id="update-shared-brief" class="button button-secondary">${status === "unreviewed" ? t.reviewShared : managementBrief ? t.updateShared : t.prepareShared}</button>` : ""}</div></aside>`;
+    const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
+    const reasons = global.DEMO_BRIEF.staleReasons(attachment?.brief,{data,state});
+    const status = !attachment ? "missing" : reasons.length ? "stale" : "current";
+    const title = {missing:t.authorizationBriefMissing,stale:t.authorizationBriefStale,current:t.authorizationBriefCurrent}[status];
+    const hint = {missing:t.authorizationBriefMissingHint,stale:t.authorizationBriefStaleHint}[status];
+    return `<aside id="authorization-brief-status" class="authorization-brief-status" data-brief-state="${status}" role="status"><strong>${title}${attachment ? ` · v${attachment.version}` : ""}</strong>${hint ? `<p>${hint}</p>` : ""}${reasons.length ? `<ul>${reasons.map(reason=>`<li>${escape(t.staleReasons[reason])}</li>`).join("")}</ul>` : ""}<div class="decision-action-group">${attachment ? `<button type="button" id="view-management-brief" class="button button-secondary">${t.viewShared}</button>` : ""}${status !== "current" ? `<button type="button" id="update-shared-brief" class="button button-secondary">${attachment ? t.updateShared : t.prepareShared}</button>` : ""}</div></aside>`;
   }
 
   function clearBrief() {
+    briefAttachments.length = 0;
     managementBrief = null; briefOpen = false; briefLoading = false; briefPreview = false; briefCopied = false; briefGeneration++;
   }
 
@@ -207,10 +213,12 @@
     if (reached("budgetAuthorized")) {
       // One guide checkpoint before the initial signature. Later business events
       // retain manual updates and shared stale warnings, never another milestone.
+      const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
+      if (attachment && !global.DEMO_BRIEF.staleReasons(attachment.brief,{data,state}).length) return step("authorize","P06",'#authorization-form input[name="signature"]');
       if (!managementBrief) return step("managementBrief","P01","#generate-management-brief");
       if (global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length) return step("updateBrief","P01","#regenerate-management-brief");
       if (!managementBrief.previewed) return step("previewBrief","P01","#preview-management-brief");
-      return step("authorize","P06",'#authorization-form input[name="signature"]');
+      return step("attachBrief","P01","#attach-management-brief");
     }
     return null;
   }
@@ -241,8 +249,8 @@
     if (!guide || draftLoading || briefLoading) return;
     session.setViewer(guide.role); decisionError = ""; notificationsOpen = false;
     activePage = "overview";
-    const briefGuide = ["managementBrief","updateBrief","previewBrief"].includes(guide.key);
-    if (briefGuide) { briefOpen = Boolean(managementBrief); if (guide.key === "previewBrief") briefPreview = false; }
+    const briefGuide = ["managementBrief","updateBrief","previewBrief","attachBrief"].includes(guide.key);
+    if (briefGuide) { briefOpen = Boolean(managementBrief); if (guide.key === "previewBrief") briefPreview = false; if (guide.key === "attachBrief") briefPreview = true; }
     history.pushState(null,"",briefGuide ? (managementBrief ? "#management-brief" : "#decision") : guide.key === "select" ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
     render();
     focusOperation(document.querySelector(guide.target));
@@ -494,6 +502,16 @@
       render(); focusOperation(document.getElementById("management-brief-editor"));
     },650);
   }
+  function attachManagementBrief() {
+    const state = session.getState();
+    if (state.viewer !== "P01" || !managementBrief || !briefPreview || briefLoading) return;
+    try {
+      const attachment = global.DEMO_BRIEF.attach({brief:managementBrief,attachments:briefAttachments,data,core,state});
+      if (!briefAttachments.includes(attachment)) briefAttachments.push(attachment);
+      render(); focusOperation(document.getElementById("brief-attachment-status"));
+      notify(interpolate(text.brief.attachedNotice,{version:attachment.version}));
+    } catch (error) { notify(text.brief.errors[error.message] || text.brief.attachmentFailed); }
+  }
   async function copyManagementBrief(allowStale = false) {
     const state = session.getState();
     if (state.viewer !== "P01" || state.publication.status !== "published" || !managementBrief || !briefPreview) return;
@@ -522,16 +540,20 @@
   }
 
   document.addEventListener("click", event => {
+    if (event.target.closest("#attach-management-brief:not(:disabled)")) { attachManagementBrief(); return; }
     if (event.target.closest("#view-management-brief")) {
-      if (session.getState().viewer !== "P06" || !managementBrief) return;
+      const state = session.getState();
+      if (state.viewer !== "P06" || !global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state})) return;
       briefOpen = true; render(); focusOperation(document.getElementById("management-brief")); return;
     }
     if (event.target.closest("#update-shared-brief")) {
       if (session.getState().viewer !== "P06") return;
       session.setViewer("P01"); notificationsOpen = false; activePage = "overview"; briefOpen = Boolean(managementBrief);
-      const reviewOnly = managementBrief && !managementBrief.previewed && !global.DEMO_BRIEF.staleReasons(managementBrief,{data,state:session.getState()}).length;
-      if (reviewOnly) briefPreview = false;
-      render(); focusOperation(document.getElementById(reviewOnly ? "preview-management-brief" : managementBrief ? "regenerate-management-brief" : "generate-management-brief")); return;
+      const staleDraft = managementBrief && global.DEMO_BRIEF.staleReasons(managementBrief,{data,state:session.getState()}).length;
+      const target = !managementBrief ? "generate-management-brief" : staleDraft ? "regenerate-management-brief" : !managementBrief.previewed ? "preview-management-brief" : "attach-management-brief";
+      if (target === "preview-management-brief") briefPreview = false;
+      if (target === "attach-management-brief") briefPreview = true;
+      render(); focusOperation(document.getElementById(target)); return;
     }
     if (event.target.closest("#generate-management-brief")) { generateManagementBrief(); return; }
     if (event.target.closest("#regenerate-management-brief")) { requestBriefUpdate(); return; }

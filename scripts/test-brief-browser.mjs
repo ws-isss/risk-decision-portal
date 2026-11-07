@@ -76,18 +76,45 @@ async function role(page, id) {
   await page.locator('#viewer').selectOption(id);
   assert.equal(await clock(page), before);
 }
-async function sharedReadonly(page, { content, state } = {}) {
+async function privateFromElena(page, { content, checkRisk = false, state } = {}) {
+  await role(page, 'P06');
+  assert.equal(await page.locator('#management-brief, #management-brief-editor, #management-brief-preview, #view-management-brief').count(), 0, 'No private draft or view link is exposed to Elena before an explicit attachment');
+  if (content) assert.ok(!(await page.locator('body').innerText()).includes(content), 'Emma’s private wording is absent from Elena’s rendered page');
+  if (state) assert.equal(await page.locator('#authorization-brief-status').getAttribute('data-brief-state'), state);
+  if (checkRisk) {
+    await page.locator('#risk-title a').click();
+    assert.equal(await page.locator('#management-brief, #management-brief-editor, #management-brief-preview').count(), 0, 'Risk-page navigation does not reveal the private draft');
+    if (content) assert.ok(!(await page.locator('body').innerText()).includes(content));
+    await page.locator('.risk-back').click();
+  }
+}
+async function businessSnapshot(page) {
+  return page.evaluate(() => ({ clock:document.querySelector('.demo-clock time')?.dateTime, taskCount:document.querySelector('#decision')?.dataset.taskCount, authorized:document.querySelector('#decision-status')?.dataset.authorized, confirmations:[...document.querySelectorAll('[data-confirmation-key]')].map(node=>[node.dataset.confirmationKey,node.dataset.status]), resourceStatus:document.querySelector('#wuxi')?.dataset.resourceStatus, incurred:document.querySelector('#wuxi [data-fee-incurred]')?.dataset.feeIncurred }));
+}
+async function attach(page) {
+  const before = await businessSnapshot(page);
+  const expected = await page.locator('#management-brief-preview').innerText();
+  await page.locator('#attach-management-brief').click();
+  assert.deepEqual(await businessSnapshot(page), before, 'Attaching a brief never changes approval, task, resource, fee or clock records');
+  return expected;
+}
+async function sharedReadonly(page, { content, state, version } = {}) {
   await role(page, 'P06');
   const panel = page.locator('#management-brief');
   assert.equal(await panel.getAttribute('data-brief-readonly'), 'true', 'Elena reads the shared brief without becoming its editor');
-  assert.equal(await page.locator('#management-brief-editor, #generate-management-brief, #regenerate-management-brief, #edit-management-brief, #copy-management-brief, #preview-management-brief').count(), 0, 'Elena has no generation, editing, preview-confirmation or copy controls');
+  assert.equal(await page.locator('#management-brief-editor, #generate-management-brief, #regenerate-management-brief, #edit-management-brief, #copy-management-brief, #preview-management-brief, #attach-management-brief').count(), 0, 'Elena has no generation, editing, preview-confirmation, attachment or copy controls');
   if (content) assert.ok((await page.locator('#management-brief-preview').innerText()).includes(content), 'The read-only brief contains Emma’s exact manual wording');
   if (state) assert.equal(await page.locator('#authorization-brief-status').getAttribute('data-brief-state'), state);
+  if (version) {
+    assert.equal(await page.locator('#management-brief-preview').getAttribute('data-brief-version'), String(version));
+    assert.match(await panel.innerText(), new RegExp(`v${version}[\\s\\S]*Emma|Emma[\\s\\S]*v${version}`, 'i'));
+    assert.match(await panel.innerText(), /attached|data as of/i, 'The frozen version retains attribution, attachment time and data-as-of metadata');
+  }
 }
 async function noRepeatedBriefGuide(page, message) {
   const next = page.locator('#demo-next-step');
   const key = await next.count() ? await next.getAttribute('data-guide-key') : null;
-  assert.ok(!['managementBrief', 'updateBrief', 'previewBrief'].includes(key), message);
+  assert.ok(!['managementBrief', 'updateBrief', 'previewBrief', 'attachBrief'].includes(key), message);
 }
 async function advanceTo(page, at) {
   while (Date.parse(await clock(page)) < Date.parse(at)) {
@@ -228,10 +255,7 @@ try {
   await page.locator('#risk-evidence').waitFor();
   await page.locator('.risk-back').click();
   assert.equal(await page.locator('#management-brief-editor').inputValue(), edited);
-  await role(page, 'P06');
-  await sharedReadonly(page, { content: 'Emma’s note: preserve this manual wording' });
-  assert.match(await page.locator('#management-brief').innerText(), /not.*preview|not.*review|unreviewed|awaiting.*review/i, 'Elena can read an unpreviewed draft but sees that Emma has not confirmed its preview');
-  assert.equal(await page.locator('#management-brief-preview img').count(), 0);
+  await privateFromElena(page, { content: 'Emma’s note: preserve this manual wording', checkRisk:true });
   await role(page, 'P01');
   assert.equal(await page.locator('#management-brief-editor').inputValue(), edited);
   const initialPreview = await preview(page, { generated: false });
@@ -241,11 +265,14 @@ try {
   assert.ok(initialPreview.includes('<img src=x'), 'Raw HTML in a PM note remains visible text');
   await copyFresh(page);
   assert.equal(await page.locator('#decision').getAttribute('data-task-count'), '0');
+  assert.equal(await page.locator('#attach-management-brief:enabled').count(), 0, 'A private preview cannot be attached before a decision request exists');
+  await privateFromElena(page, { content:'Emma’s note: preserve this manual wording', checkRisk:true });
+  await role(page, 'P01');
   await capture(page, 'brief-before-authorization.png');
 
   // Customer requirement changes invalidate the captured brief without silently
   // overwriting it. Copying that exact earlier version requires a second action.
-  const originalAsOf = await page.locator('.brief-metadata time').getAttribute('datetime');
+  const originalAsOf = await page.locator('#management-brief > .brief-metadata time').getAttribute('datetime');
   await page.locator('#edit-requirement').click();
   await page.locator('#requirement-date').fill('2027-03-20');
   await page.locator('#requirement-form [type="submit"]').click();
@@ -254,7 +281,7 @@ try {
   assert.ok((await page.locator('#management-brief-preview').innerText()).includes('Emma’s note: preserve this manual wording'));
   const earlierPreview = await page.locator('#management-brief-preview').innerText();
   assert.match(earlierPreview, /Earlier version.*may be out of date/);
-  assert.equal(await page.locator('.brief-metadata time').getAttribute('datetime'), originalAsOf);
+  assert.equal(await page.locator('#management-brief > .brief-metadata time').getAttribute('datetime'), originalAsOf);
   const copyCount = (await copies(page)).length;
   await page.locator('#copy-management-brief').click();
   await page.locator('#confirm-copy-stale-brief').waitFor();
@@ -283,22 +310,59 @@ try {
 
   await page.locator('[data-select-plan="A"]').click();
   assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'Selecting a plan invalidates a previously generated comparison');
-  await sharedReadonly(page);
-  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
-  assert.match(await page.locator('#management-brief-stale').innerText(), /plan|scope|option|decision/i);
+  await privateFromElena(page);
   await generate(page, 'beforeAuthorization');
+  await preview(page);
+  const attachedV1 = await attach(page);
+  await sharedReadonly(page, { version:1 });
+  assert.equal(await page.locator('#management-brief-preview').innerText(), attachedV1);
+  const attachmentMetadataV1 = await page.locator('.brief-attachment-metadata').innerText();
+  await capture(page, 'brief-attached-v1.png');
+  await role(page, 'P01');
+  await page.locator('#edit-management-brief').click();
+  const privateNote = 'Emma’s private revision: draft wording must not reach Elena until I attach it.';
+  await page.locator('#management-brief-editor').fill(`${await page.locator('#management-brief-editor').inputValue()}\n\n${privateNote}`);
+  await sharedReadonly(page, { version:1 });
+  assert.equal(await page.locator('#management-brief-preview').innerText(), attachedV1, 'Editing the private draft cannot mutate frozen v1');
+  assert.ok(!(await page.locator('body').innerText()).includes(privateNote));
+  await page.locator('#risk-title a').click();
+  assert.ok(!(await page.locator('body').innerText()).includes(privateNote), 'The risk page also reads only the frozen attachment');
+  assert.equal(await page.locator('#management-brief-preview').innerText(), attachedV1);
+  await page.locator('.risk-back').click();
+  await role(page, 'P01');
   await page.locator('#fallback-authorization').check();
   const beforeFallbackEdit = await page.locator('#management-brief-editor').inputValue();
-  await sharedReadonly(page);
+  await sharedReadonly(page, { version:1 });
   assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
-  assert.match(await page.locator('#management-brief-stale').innerText(), /amount|scope|fallback|authorization/i, 'Changing the requested amount marks Elena’s brief as outdated');
+  assert.match(await page.locator('#management-brief-stale').innerText(), /amount|scope|fallback|authorization|decision/i, 'Changing the requested amount marks Elena’s brief as outdated');
+  assert.match(await page.locator('#management-brief-stale').innerText(), /Emma|update/i);
+  await capture(page, 'brief-attached-v1-stale.png');
   await role(page, 'P01');
   assert.equal(await page.locator('#management-brief-editor').inputValue(), beforeFallbackEdit);
   await generate(page, 'beforeAuthorization');
   assert.match(await page.locator('#management-brief-editor').inputValue(), /\$90,000/);
+  await capture(page, 'brief-private-draft-with-stale-attachment.png');
+  await page.locator('#management-brief').screenshot({ path:path.join(output, 'brief-private-draft-with-stale-attachment-panel.png'), style:'.demo-timeline, .topbar, .skip-link, #notice { visibility:hidden !important; }' });
+  await sharedReadonly(page, { version:1 });
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'Regenerating Emma’s private draft does not refresh a stale attachment');
+  assert.equal(await page.locator('.brief-attachment-metadata').innerText(), attachmentMetadataV1, 'Private regeneration preserves frozen attachment attribution and timestamps');
+  assert.ok(!(await page.locator('#management-brief-preview').innerText()).includes('$90,000'), 'Elena still sees the old amount until reattachment');
+  await role(page, 'P01');
+  await preview(page);
+  const attachedV2 = await attach(page);
+  await sharedReadonly(page, { version:2 });
+  assert.equal(await page.locator('#management-brief-preview').innerText(), attachedV2);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'false');
+  await capture(page, 'brief-attached-v2.png');
+  await role(page, 'P01');
+  if (await page.locator('#attach-management-brief:enabled').count()) await page.locator('#attach-management-brief').click();
+  await sharedReadonly(page, { version:2 });
+  assert.equal(await page.locator('#management-brief-preview').innerText(), attachedV2, 'Repeated attachment without changes is idempotent');
+  await role(page, 'P01');
   await page.locator('#fallback-authorization').uncheck();
   await generate(page, 'beforeAuthorization');
   await preview(page);
+  await attach(page);
   const copiesBeforeTasks = (await copies(page)).length;
   await page.locator('#draft-task-briefs').click();
   await page.locator('#confirm-task-briefs').waitFor();
@@ -361,12 +425,19 @@ try {
   assert.doesNotMatch(prerequisiteDraft, /Pending before authorization:/);
   assert.match(prerequisiteDraft, /If authorized by[\s\S]*Alex Lin’s resource assessment result is expected[\s\S]*a hold is not guaranteed\./, 'The next update promises an assessment result, never a successful hold');
   assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'previewBrief');
-  await sharedReadonly(page, { state: 'unreviewed' });
+  await sharedReadonly(page, { state: 'stale', version:3 });
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'A fresh private draft leaves the old attachment stale');
   await role(page, 'P01');
   await preview(page);
   await copyFresh(page);
   const readyPreview = await page.locator('#management-brief-preview').innerText();
-  await sharedReadonly(page, { state: 'current' });
+  assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'attachBrief');
+  await sharedReadonly(page, { state:'stale', version:3 });
+  await page.locator('#demo-next-step').click();
+  assert.equal(await page.locator('#viewer').inputValue(), 'P01');
+  assert.equal(await page.locator('#attach-management-brief').evaluate(node=>document.activeElement===node), true);
+  await attach(page);
+  await sharedReadonly(page, { state: 'current', version:4 });
   assert.equal(await page.locator('#management-brief-preview').innerText(), readyPreview);
   assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'authorize');
   await capture(page, 'brief-elena-current.png');
@@ -388,6 +459,7 @@ try {
   await page.locator('#advance-event').click();
   content = await generate(page, 'authorized');
   await preview(page);
+  await attach(page);
   const preInternal = await page.locator('#management-brief-preview').innerText();
   await role(page, 'P08');
   await page.locator('#resource-response-form select[name="outcome"]').selectOption('held');
@@ -448,17 +520,19 @@ try {
   assert.match(content, /\$10,000/);
   assert.match(content, /no fee|\$0|not incurred|unconfirmed|not confirmed/i);
   await preview(page);
+  await attach(page);
   assert.match(await page.locator('#management-brief-preview').innerText(), /Q-B v1/);
   assert.ok(!/To be agreed|timing unassigned|last scheduled snapshot/i.test(await page.locator('#management-brief-preview').innerText()), 'Recipient copy uses the exception schedule and its actual data-as-of time');
-  assert.equal(await page.locator('.brief-metadata time').getAttribute('datetime'), exceptionTimes.returned);
+  assert.equal(await page.locator('#management-brief > .brief-metadata time').getAttribute('datetime'), exceptionTimes.returned);
   await advanceTo(page, exceptionTimes.decision);
   await page.locator('#launch-reschedule-decision').click();
-  await sharedReadonly(page, { state: 'stale' });
-  assert.match(await page.locator('#authorization-brief-status').innerText(), /update|out of date|changed/i, 'The exception authorization form identifies an outdated shared brief');
+  await privateFromElena(page, { state:'missing', checkRisk:true });
+  assert.match(await page.locator('#authorization-brief-status').innerText(), /attach|brief/i, 'A new exception decision cannot reuse an attachment bound to the original request');
   await noRepeatedBriefGuide(page, 'A new exception decision warns manually without adding another brief checkpoint');
   currentOnly(await generate(page, 'awaitingCustomerAuthorization'));
   await preview(page);
-  await role(page, 'P06');
+  await attach(page);
+  await sharedReadonly(page, { state:'current', version:1 });
   await advanceTo(page, exceptionTimes.authorized);
   await page.locator('#fill-reschedule-signature').click();
   await page.locator('#reschedule-authorization-form input[name="acknowledged"]').check();
@@ -483,7 +557,7 @@ try {
   assert.match(content.split('\n')[0], /assess|readiness|technical/i);
   assert.doesNotMatch(content, /please approve|approval requested|\bauthorize\b/i);
   assert.ok(!/To be agreed|timing unassigned|last scheduled snapshot/i.test(content));
-  assert.equal(await page.locator('.brief-metadata time').getAttribute('datetime'), exceptionTimes.confirmed);
+  assert.equal(await page.locator('#management-brief > .brief-metadata time').getAttribute('datetime'), exceptionTimes.confirmed);
   await preview(page);
   await copyFresh(page);
   await capture(page, 'brief-rescheduled.png');
@@ -504,6 +578,35 @@ try {
     return button.bottom <= document.querySelector('.demo-timeline').getBoundingClientRect().top;
   });
   await capture(mobile, 'brief-mobile.png');
+  await chapter(mobile, 'authorization');
+  await generate(mobile, 'beforeAuthorization');
+  await preview(mobile);
+  const mobileV1 = await attach(mobile);
+  await sharedReadonly(mobile, { state:'current', version:1 });
+  assert.equal(await mobile.locator('#management-brief-preview').innerText(), mobileV1);
+  await mobileTable(mobile);
+  await capture(mobile, 'brief-attached-v1-mobile.png');
+  await role(mobile, 'P01');
+  await mobile.locator('#edit-management-brief').click();
+  const mobilePrivate = 'Emma’s mobile revision remains private until attached.';
+  await mobile.locator('#management-brief-editor').fill(`${await mobile.locator('#management-brief-editor').inputValue()}\n\n${mobilePrivate}`);
+  await sharedReadonly(mobile, { state:'current', version:1 });
+  assert.equal(await mobile.locator('#management-brief-preview').innerText(), mobileV1);
+  assert.ok(!(await mobile.locator('body').innerText()).includes(mobilePrivate));
+  await role(mobile, 'P01');
+  await preview(mobile, { generated:false });
+  const mobileV2 = await attach(mobile);
+  await sharedReadonly(mobile, { state:'current', version:2 });
+  assert.equal(await mobile.locator('#management-brief-preview').innerText(), mobileV2);
+  await mobileTable(mobile);
+  await capture(mobile, 'brief-attached-v2-mobile.png');
+  await role(mobile, 'P01');
+  await mobile.locator('#edit-requirement').click();
+  await mobile.locator('#requirement-date').fill('2027-03-20');
+  await mobile.locator('#requirement-form [type="submit"]').click();
+  await sharedReadonly(mobile, { state:'stale', version:2 });
+  await mobileTable(mobile);
+  await capture(mobile, 'brief-attached-stale-mobile.png');
   await returnResource(mobile, 'unavailable');
   await role(mobile, 'P07');
   await advanceTo(mobile, exceptionTimes.requested);
@@ -542,7 +645,7 @@ try {
   await plainContext.close();
   assert.deepEqual(errors, []);
   assert.deepEqual(network, [], 'The brief, clipboard fallback and full follow-up flow work without external requests');
-  console.log('Management brief browser checks passed: shared Emma/Elena content and read-only permissions, plan/amount/state staleness, manual update without overwriting, one before-signature guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with table and bold title, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
+  console.log('Management brief browser checks passed: Emma-only private drafts on both pages, explicit immutable v1/v2 attachments and metadata, read-only Elena permissions, plan/amount/state staleness until reattachment, no approval changes or duplicate attachments, request-specific attachment isolation, one generate–preview–attach–authorize guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with table and bold title, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

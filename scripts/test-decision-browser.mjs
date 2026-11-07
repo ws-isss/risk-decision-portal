@@ -216,12 +216,21 @@ async function sign(targetPage) {
   await guide(targetPage, 'previewBrief', 'P01', '#preview-management-brief');
   await targetPage.locator('#preview-management-brief').click();
   const sharedPreview = await targetPage.locator('#management-brief-preview').innerText();
-  assert.deepEqual(await decisionSnapshot(targetPage), before, 'Generating and previewing the shared brief does not sign or complete a workflow action');
+  assert.deepEqual(await decisionSnapshot(targetPage), before, 'Generating and previewing a private brief does not sign or complete a workflow action');
+  await role(targetPage, 'P06');
+  assert.equal(await targetPage.locator('#authorization-brief-status').getAttribute('data-brief-state'), 'missing');
+  assert.equal(await targetPage.locator('#management-brief').count(), 0, 'Elena cannot see Emma’s private draft, even after preview');
+  await guide(targetPage, 'attachBrief', 'P01', '#attach-management-brief');
+  assert.equal(await targetPage.locator('#management-brief-preview').innerText(), sharedPreview, 'Returning from Elena preserves the private preview');
+  await targetPage.locator('#attach-management-brief').click();
+  assert.deepEqual(await decisionSnapshot(targetPage), before, 'Attaching a frozen brief does not sign, complete or change any workflow action');
   await guide(targetPage, 'authorize', 'P06', '#authorization-form input[name="signature"]');
   assert.equal(await targetPage.locator('#authorization-brief-status').getAttribute('data-brief-state'), 'current');
   assert.equal(await targetPage.locator('#management-brief').getAttribute('data-brief-readonly'), 'true');
-  assert.equal(await targetPage.locator('#management-brief-preview').innerText(), sharedPreview, 'Elena sees the exact brief that Emma edited and previewed');
-  assert.equal(await targetPage.locator('#management-brief-editor, #generate-management-brief, #regenerate-management-brief, #edit-management-brief, #copy-management-brief, #preview-management-brief').count(), 0, 'Elena cannot edit, regenerate or copy Emma’s shared brief');
+  assert.equal(await targetPage.locator('#management-brief-preview').innerText(), sharedPreview, 'Elena sees the frozen version that Emma explicitly attached');
+  assert.equal(await targetPage.locator('#management-brief-preview').getAttribute('data-brief-version'), '1');
+  assert.match(await targetPage.locator('#management-brief').innerText(), /v1[\s\S]*Emma|Emma[\s\S]*v1/i);
+  assert.equal(await targetPage.locator('#management-brief-editor, #generate-management-brief, #regenerate-management-brief, #edit-management-brief, #copy-management-brief, #preview-management-brief, #attach-management-brief').count(), 0, 'Elena cannot edit, regenerate, attach or copy Emma’s private draft');
   await targetPage.locator('#view-management-brief').click();
   assert.equal(await targetPage.locator('#management-brief').evaluate(node => document.activeElement === node), true);
   await guide(targetPage, 'authorize', 'P06', '#authorization-form input[name="signature"]');
@@ -445,7 +454,7 @@ try {
   assert.deepEqual(hostedErrors, []);
   assert.deepEqual(failedResponses, []);
   await localContext.close();
-  console.log('Decision browser checks passed: offline A flow, role permissions, editable simulated drafts, explicit creation, Ben support-only authority, Elena designation/review/signature gates, one before-signature shared brief checkpoint and read-only Elena view, four monotonic clock stops, task/notification/risk synchronization, authorization stop before WuXi confirmation, fallback and B reset boundaries, frozen data, mobile layouts and local repository subpath.');
+  console.log('Decision browser checks passed: offline A flow, role permissions, editable simulated drafts, explicit creation, Ben support-only authority, Elena designation/review/signature gates, one generate–preview–attach–authorize brief checkpoint, private draft isolation and read-only frozen Elena view, four monotonic clock stops, task/notification/risk synchronization, authorization stop before WuXi confirmation, fallback and B reset boundaries, frozen data, mobile layouts and local repository subpath.');
   console.log('Screenshots: output/decision-ben.png, decision-authorized.png, decision-risk-authorized.png, decision-mobile.png, decision-mobile-signature.png and decision-mobile-wuxi.png');
 } finally {
   if (server) await new Promise(resolve => server.close(resolve));

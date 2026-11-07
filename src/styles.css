@@ -652,8 +652,8 @@ main { padding-bottom: var(--demo-bar-space); }
 .authorization-brief-status { max-width: 720px; border: 1px solid var(--strong-line); padding: 14px 16px; margin: 16px 0; background: #fff; }
 .authorization-brief-status p, .authorization-brief-status ul { font-size: 13px; margin: 8px 0; }
 .authorization-brief-status ul { padding-left: 18px; }
-.authorization-brief-status[data-brief-state="stale"] { border-left: 3px solid var(--risk); }
-.authorization-brief-status[data-brief-state="stale"] > strong { color: var(--risk); }
+.authorization-brief-status[data-brief-state="stale"], .authorization-brief-status[data-brief-stale="true"] { border-left: 3px solid var(--risk); }
+.authorization-brief-status[data-brief-state="stale"] > strong, .authorization-brief-status[data-brief-stale="true"] > strong { color: var(--risk); }
 .reschedule-workspace { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--strong-line); }
 .reschedule-steps { display: flex; flex-wrap: wrap; gap: 8px 24px; padding-left: 20px; font-size: 12px; }
 .reschedule-steps li { padding: 4px 0; }

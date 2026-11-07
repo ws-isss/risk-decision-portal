@@ -43,24 +43,34 @@
     return `<div style="font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#20262e">${renderMarkdown(global.DEMO_BRIEF.recipientMarkdown(brief,text,options))}</div>`;
   }
 
-  function render({ brief, loading = false, state, text, helpers, staleReasons = [], preview = false, copied = false }) {
+  function render({ brief, attachment = null, loading = false, state, text, helpers, staleReasons = [], attachmentStaleReasons = [], preview = false, copied = false }) {
     if (!["P01", "P06"].includes(state.viewer) || state.publication?.status !== "published" || state.scene === "prepublication") return "";
     const readonly = state.viewer === "P06";
-    if (readonly && !brief) return "";
+    if (readonly && !attachment) return "";
     const t = text.brief;
     const { escape } = helpers;
+    const model = global.DEMO_BRIEF;
     const heading = `<div class="section-heading"><h2>${t.title}</h2><span class="data-tag">${t.simulated}</span></div>`;
-    if (!readonly && (loading || !brief)) return `<section id="management-brief" class="section management-brief" aria-busy="${loading}">${heading}<p role="status">${t.generating}</p></section>`;
+    const attachedMetadata = attachment ? `<div class="brief-metadata brief-attachment-metadata"><span>${t.version}: v${escape(attachment.version)}</span><span>${t.attachedBy}: ${escape(attachment.attachedBy.name)}</span><span>${t.attachedAt}: <time datetime="${escape(attachment.attachedAt)}">${escape(attachment.attachedAtLabel)}</time></span><span>${t.asOf}: <time datetime="${escape(attachment.brief.generatedAt)}">${escape(attachment.brief.metadata.asOf)}</time></span></div>` : "";
+    const attachmentStatus = !readonly && attachment ? `<aside id="brief-attachment-status" class="authorization-brief-status" data-brief-version="${escape(attachment.version)}" data-brief-stale="${attachmentStaleReasons.length > 0}" role="status"><strong>${attachmentStaleReasons.length ? t.authorizationBriefStale : t.attachmentCurrent.replace("{version}",attachment.version)}</strong>${attachedMetadata}${attachmentStaleReasons.length ? `<ul>${attachmentStaleReasons.map(key => `<li>${escape(t.staleReasons[key])}</li>`).join("")}</ul>` : ""}<p>${t.attachmentFrozenHint}</p></aside>` : "";
+    if (!readonly && (loading || !brief)) return `<section id="management-brief" class="section management-brief" aria-busy="${loading}">${heading}<p>${t.intro}</p>${attachmentStatus}<p role="status">${loading ? t.generating : t.noPrivateDraft}</p></section>`;
+    // Elena only receives the captured attachment. The private editor can keep
+    // changing without changing this rendered source or its original metadata.
+    if (readonly) { brief = attachment.brief; staleReasons = attachmentStaleReasons; }
     const meta = brief.metadata;
     const stale = staleReasons.length > 0 ? `<div id="management-brief-stale" class="brief-stale" role="status"><strong>${readonly ? t.authorizationBriefStale : t.staleTitle}</strong><ul>${staleReasons.map(key => `<li>${escape(t.staleReasons[key])}</li>`).join("")}</ul>${readonly ? `<p>${t.authorizationBriefStaleHint}</p>` : ""}</div>` : "";
-    const metadata = `<div class="brief-metadata"><span>${t.asOf}: <time datetime="${escape(brief.generatedAt)}">${escape(meta.asOf)}</time></span><span>${t.versions}: ${meta.sourceVersions.map(escape).join(" · ")}</span></div>`;
-    const count = global.DEMO_BRIEF.wordCount(brief,text,{staleReasons});
+    const metadata = `${readonly ? attachedMetadata : ""}<div class="brief-metadata">${readonly ? "" : `<span>${t.asOf}: <time datetime="${escape(brief.generatedAt)}">${escape(meta.asOf)}</time></span>`}<span>${t.versions}: ${meta.sourceVersions.map(escape).join(" · ")}</span></div>`;
+    const count = model.wordCount(brief,text,{staleReasons});
     const counter = `<p id="management-brief-word-count" class="brief-word-count">${t.wordCount.replace("{count}",count)}</p>`;
     const showPreview = preview || readonly;
-    const body = showPreview ? `<div class="brief-recipient-preview"><h3>${readonly ? t.sharedHeading : t.previewHeading}</h3>${readonly ? "" : `<p class="decision-note">${t.previewHint}</p>`}<article id="management-brief-preview" tabindex="0" aria-label="${escape(readonly ? t.sharedHeading : t.previewHeading)}">${renderMarkdown(global.DEMO_BRIEF.recipientMarkdown(brief, text, { staleReasons }))}</article></div>` : `<label class="brief-editor-label" for="management-brief-editor">${t.editLabel}<span class="decision-note">${t.editHint}</span><textarea id="management-brief-editor" rows="12" maxlength="18000">${escape(brief.content)}</textarea></label>`;
-    const controls = readonly ? "" : `<div class="brief-controls">${preview ? `<button id="edit-management-brief" class="button button-secondary">${t.edit}</button><button id="copy-management-brief" class="button button-primary">${t.copy}</button>` : `<button id="preview-management-brief" class="button button-primary">${t.preview}</button>`}<button id="regenerate-management-brief" class="button button-secondary">${t.regenerate}</button></div>`;
-    const unreviewed = readonly && !brief.previewed ? `<p id="management-brief-unreviewed" class="decision-note" role="status">${t.authorizationBriefUnreviewedHint}</p>` : "";
-    return `<section id="management-brief" class="section management-brief" data-brief-status="${escape(brief.statusKey)}" data-brief-stale="${staleReasons.length > 0}" data-brief-preview="${showPreview}" data-brief-readonly="${readonly}">${heading}<p>${readonly ? t.readonlyIntro : t.intro}</p><p class="status">${escape(meta.status)}</p>${brief.edited ? `<span class="data-tag">${t.edited}</span>` : ""}${metadata}${stale}${unreviewed}${body}${counter}${controls}${!readonly && copied ? `<p id="management-brief-copied" role="status">${t.copied}</p>` : ""}</section>`;
+    const body = showPreview ? `<div class="brief-recipient-preview"><h3>${readonly ? t.sharedHeading : t.previewHeading}</h3>${readonly ? "" : `<p class="decision-note">${t.previewHint}</p>`}<article id="management-brief-preview" tabindex="0"${readonly ? ` data-brief-version="${escape(attachment.version)}"` : ""} aria-label="${escape(readonly ? t.sharedHeading : t.previewHeading)}">${renderMarkdown(model.recipientMarkdown(brief, text, { staleReasons }))}</article></div>` : `<label class="brief-editor-label" for="management-brief-editor">${t.editLabel}<span class="decision-note">${t.editHint}</span><textarea id="management-brief-editor" rows="12" maxlength="18000">${escape(brief.content)}</textarea></label>`;
+    const alreadyAttached = !readonly && attachment && model.isAttachedDraft(brief,attachment);
+    const noRequest = !readonly && !model.requestKey({state});
+    const attachmentBlocked = alreadyAttached || noRequest || staleReasons.length || !brief.previewed;
+    const attachHint = !readonly && preview ? noRequest ? t.attachRequiresRequest : staleReasons.length ? t.attachRequiresCurrent : !brief.previewed ? t.attachRequiresPreview : alreadyAttached ? t.attachmentFrozenHint : t.attachHint : "";
+    const attachButton = !readonly && preview ? `<button id="attach-management-brief" class="button button-primary"${attachmentBlocked ? " disabled" : ""} aria-describedby="brief-attach-hint">${alreadyAttached ? t.attachAlready.replace("{version}",attachment.version) : attachment ? t.reattach : t.attach}</button>` : "";
+    const controls = readonly ? "" : `<div class="brief-controls">${preview ? `<button id="edit-management-brief" class="button button-secondary">${t.edit}</button>${attachButton}<button id="copy-management-brief" class="button button-secondary">${t.copy}</button>` : `<button id="preview-management-brief" class="button button-primary">${t.preview}</button>`}<button id="regenerate-management-brief" class="button button-secondary">${t.regenerate}</button></div>${attachHint ? `<p id="brief-attach-hint" class="decision-note">${attachHint}</p>` : ""}`;
+    return `<section id="management-brief" class="section management-brief" data-brief-status="${escape(brief.statusKey)}" data-brief-stale="${staleReasons.length > 0}" data-brief-preview="${showPreview}" data-brief-readonly="${readonly}"${readonly ? ` data-brief-version="${escape(attachment.version)}"` : ""}>${heading}<p>${readonly ? t.readonlyIntro : t.intro}</p>${attachmentStatus}<p class="status">${escape(meta.status)}</p>${brief.edited ? `<span class="data-tag">${t.edited}</span>` : ""}${metadata}${stale}${body}${counter}${controls}${!readonly && copied ? `<p id="management-brief-copied" role="status">${t.copied}</p>` : ""}</section>`;
   }
 
   global.DEMO_BRIEF_VIEW = Object.freeze({ render, renderMarkdown, copyHtml });

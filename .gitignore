@@ -1,0 +1,19 @@
+# Private research inputs, including derived text and Markdown.
+/reference/
+
+# Local operating-system files.
+.DS_Store
+
+# Local dependencies, build outputs, and temporary review artifacts.
+/node_modules/
+/dist/
+/tmp/
+/output/
+/src.zip
+
+# Local credentials and private conversation exports.
+.env
+.env.*
+!.env.example
+/private/
+/conversation-exports/

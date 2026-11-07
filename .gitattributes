@@ -1,0 +1,7 @@
+# Defense in depth for Git archives; deployment still requires an output check.
+reference export-ignore
+reference/** export-ignore
+private export-ignore
+private/** export-ignore
+conversation-exports export-ignore
+conversation-exports/** export-ignore

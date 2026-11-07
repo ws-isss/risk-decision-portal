@@ -27,6 +27,7 @@
         evidence: { measured: data.risk.hmwPct, target: data.risk.targetPct },
         quotes: Object.values(data.plans).map(plan => ({ id: plan.id, total: plan.total, window: plan.window.at, holdUntil: plan.holdUntil, delivery: plan.forecast.localDate })),
         fees: data.fees,
+        rescheduleTiming: Object.fromEntries(Object.entries(data.rescheduleTiming).filter(([key]) => key.endsWith("Event")).map(([key, eventId]) => [key, data.events[eventId].at])),
         quote: quote ? { quoteRef: quote.quoteRef, version: quote.version } : null
       },
       business: {
@@ -101,8 +102,11 @@
     options.push(copy(historical ? t.premiumHistorical : t.premium), copy(t.requirement));
     if (d?.planId === "A") options.push(d.fallbackSelected ? interpolate(t.fallbackOn, { cap: money(data.fees.fallbackCap), total: money(data.fees.totals.AWithFallback) }) : t.fallbackOff);
     let nextUpdate;
-    if (["awaitingCustomerDecision", "awaitingCustomerAuthorization"].includes(key)) nextUpdate = interpolate(t.nextCustomer, { owner: data.people.P01.name, approver: data.people.P06.name });
-    else if (view.resourceRejected || view.rescheduleRequested || key === "confirmed") nextUpdate = copy(t.nextUnavailable);
+    if (view.nextTiming) {
+      const timing = view.nextTiming;
+      const template = timing.kind === "customerActionDue" ? t.nextCustomer : key === "confirmed" ? t.nextReassessment : t.nextUnavailable;
+      nextUpdate = interpolate(template, Object.assign({}, values, { owner: data.people[timing.ownerId].name, time: localTime(data.events[timing.eventRef].at, timing.timezone) }));
+    }
     else if (view.resourceConfirmed) {
       const firstAnalysis = data.plans.A.stages.find(stage => stage.id === "firstAnalysis");
       nextUpdate = interpolate(t.nextHeld, Object.assign({}, values, { time: localTime(firstAnalysis.end, firstAnalysis.executionTimezone) }));
@@ -131,8 +135,7 @@
         title: `${data.project.id} · ${t.title}`, status: t.status[key] || t.status.unavailable,
         asOf: localTime(state.clock, customerZone), sourceVersions,
         labels: [text.common.demo, text.common.assumption, t.simulated],
-        sourceNote: t.sourceNote,
-        sequenceNote: view.rescheduleRequested ? t.sameClockNote : ""
+        sourceNote: t.sourceNote
       }
     };
   }
@@ -143,7 +146,7 @@
     const t = text.brief;
     const meta = brief.metadata;
     const warning = staleReasons.length ? `${t.staleRecipient}\n${staleReasons.map(key => t.staleReasons[key]).join(" ")}` : "";
-    return [meta.title, meta.status, meta.labels.join(" · "), `${t.asOf}: ${meta.asOf}`, warning, "", brief.content, "", `${t.versions}: ${meta.sourceVersions.join("; ")}`, meta.sourceNote, meta.sequenceNote].filter((line, index, lines) => line || lines[index - 1]).join("\n");
+    return [meta.title, meta.status, meta.labels.join(" · "), `${t.asOf}: ${meta.asOf}`, warning, "", brief.content, "", `${t.versions}: ${meta.sourceVersions.join("; ")}`, meta.sourceNote].filter((line, index, lines) => line || lines[index - 1]).join("\n");
   }
 
   global.DEMO_BRIEF = Object.freeze({ generate, fingerprint, staleReasons, copyText, statusKey });

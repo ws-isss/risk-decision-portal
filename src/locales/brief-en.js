@@ -33,7 +33,6 @@
     asOf: "Data as of",
     versions: "Source versions",
     sourceNote: "Synthetic project records only.",
-    sameClockNote: "Data-as-of refers to the last scheduled snapshot. Later rescheduling actions are recorded in sequence with timing unassigned.",
     guide: "Switch to Emma · generate management brief",
     guideReview: "Switch to Emma · review management brief",
     sections: { decision: "Management decision", facts: "Known facts", options: "Options and delivery impact", unknowns: "Still to be confirmed", update: "Next update" },
@@ -92,8 +91,9 @@
     reviewAvailable: "Technical and QA opinions are recorded. {owner} will next return the resource / window response at {time} (planned).",
     nextResource: "{owner} will return the resource / window response at {time} (planned).",
     nextHeld: "Next expected study milestone: first-round analysis {time}, subject to the confirmed scope and resources. {owner} coordinates the next customer update; the next communication time has not been separately agreed.",
-    nextUnavailable: "{owner} owns the next resource / rescheduling update. Its timing is to be agreed; no new date has been committed.",
-    nextCustomer: "{owner} coordinates the customer decision and {approver} provides the required authorization. The next update time is to be agreed.",
+    nextUnavailable: "Expected WuXi response: {owner} will return the next resource / rescheduling response at {time}. This planned response does not confirm the window, technical readiness or a revised delivery date.",
+    nextCustomer: "Customer action due: {owner} must record the next customer decision or authorization by {time}. No fee is incurred before authorized formal WuXi confirmation.",
+    nextReassessment: "Expected WuXi response: {owner} will update the technical reassessment status at {time}. This is a status update, not a promised experimental result or revised delivery date.",
     errors: { ROLE_NOT_ALLOWED: "Only Emma can prepare and copy the management brief.", UNPUBLISHED_RISK: "Publish the risk before generating a client management brief." }
   };
 })(globalThis);

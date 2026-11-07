@@ -43,7 +43,15 @@
       "P05",
       "P06",
       "P07",
-      "P08"
+      "P08",
+      "E01",
+      "E02",
+      "E03",
+      "E04",
+      "E05",
+      "E06",
+      "E07",
+      "E08"
     ],
     "project": {
       "ref": "D01",
@@ -545,6 +553,87 @@
         "actorIds": [
           "P08"
         ]
+      },
+      "rescheduleRequested": {
+        "at": "2026-11-16T09:00:00+08:00",
+        "ref": "E01",
+        "actorIds": [
+          "P07"
+        ],
+        "executionTimezone": "Asia/Shanghai",
+        "timingKind": "startBy",
+        "caseDesignAssumption": true
+      },
+      "rescheduleQuotePrepared": {
+        "at": "2026-11-17T15:00:00+08:00",
+        "ref": "E02",
+        "actorIds": [
+          "P08"
+        ],
+        "executionTimezone": "Asia/Shanghai",
+        "timingKind": "expectedResponse",
+        "caseDesignAssumption": true
+      },
+      "rescheduleQuoteReturned": {
+        "at": "2026-11-17T17:00:00+08:00",
+        "ref": "E03",
+        "actorIds": [
+          "P07"
+        ],
+        "executionTimezone": "Asia/Shanghai",
+        "timingKind": "expectedResponse",
+        "caseDesignAssumption": true
+      },
+      "rescheduleCustomerAvailable": {
+        "at": "2026-11-17T09:00:00-05:00",
+        "ref": "E04",
+        "actorIds": [
+          "P01",
+          "P06"
+        ],
+        "executionTimezone": "America/New_York",
+        "timingKind": "available",
+        "caseDesignAssumption": true
+      },
+      "rescheduleDecisionCreated": {
+        "at": "2026-11-17T11:00:00-05:00",
+        "ref": "E05",
+        "actorIds": [
+          "P01"
+        ],
+        "executionTimezone": "America/New_York",
+        "timingKind": "customerActionDue",
+        "caseDesignAssumption": true
+      },
+      "rescheduleAuthorized": {
+        "at": "2026-11-19T17:00:00-05:00",
+        "ref": "E06",
+        "actorIds": [
+          "P06"
+        ],
+        "executionTimezone": "America/New_York",
+        "timingKind": "customerActionDue",
+        "caseDesignAssumption": true
+      },
+      "rescheduleConfirmed": {
+        "at": "2026-11-20T17:00:00+08:00",
+        "ref": "E07",
+        "actorIds": [
+          "P07"
+        ],
+        "executionTimezone": "Asia/Shanghai",
+        "timingKind": "expectedResponse",
+        "caseDesignAssumption": true
+      },
+      "rescheduleNextUpdate": {
+        "at": "2026-11-23T17:00:00+08:00",
+        "ref": "E08",
+        "actorIds": [
+          "P07"
+        ],
+        "executionTimezone": "Asia/Shanghai",
+        "timingKind": "expectedResponse",
+        "caseDesignAssumption": true
       }
     },
     "durations": {
@@ -1379,6 +1468,85 @@
       {
         "key": "ind",
         "statusKey": "notAssessed"
+      }
+    ],
+    "rescheduleTiming": {
+      "requestEvent": "rescheduleRequested",
+      "quoteEvent": "rescheduleQuotePrepared",
+      "quoteReturnEvent": "rescheduleQuoteReturned",
+      "customerAvailableEvent": "rescheduleCustomerAvailable",
+      "decisionEvent": "rescheduleDecisionCreated",
+      "authorizationEvent": "rescheduleAuthorized",
+      "confirmationEvent": "rescheduleConfirmed",
+      "nextUpdateEvent": "rescheduleNextUpdate",
+      "refs": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06",
+        "E07",
+        "E08"
+      ],
+      "officeTurnaroundHours": {
+        "quote": 14,
+        "quoteReturn": 2,
+        "customerDecision": 2,
+        "authorization": 22,
+        "confirmation": 8,
+        "nextUpdate": 8
+      },
+      "weekendDutyAssumed": false
+    },
+    "rescheduleTimeline": [
+      {
+        "id": "rescheduleRequested",
+        "eventRef": "rescheduleRequested",
+        "ownerIds": [
+          "P07"
+        ],
+        "statusKey": "planned"
+      },
+      {
+        "id": "rescheduleQuotePrepared",
+        "eventRef": "rescheduleQuotePrepared",
+        "ownerIds": [
+          "P08"
+        ],
+        "statusKey": "planned"
+      },
+      {
+        "id": "rescheduleQuoteReturned",
+        "eventRef": "rescheduleQuoteReturned",
+        "ownerIds": [
+          "P07"
+        ],
+        "statusKey": "planned"
+      },
+      {
+        "id": "rescheduleDecisionCreated",
+        "eventRef": "rescheduleDecisionCreated",
+        "ownerIds": [
+          "P01"
+        ],
+        "statusKey": "planned"
+      },
+      {
+        "id": "rescheduleAuthorized",
+        "eventRef": "rescheduleAuthorized",
+        "ownerIds": [
+          "P06"
+        ],
+        "statusKey": "planned"
+      },
+      {
+        "id": "rescheduleConfirmed",
+        "eventRef": "rescheduleConfirmed",
+        "ownerIds": [
+          "P07"
+        ],
+        "statusKey": "planned"
       }
     ]
   };

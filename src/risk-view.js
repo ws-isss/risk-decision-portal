@@ -111,8 +111,10 @@
 
     function nextUpdate() {
       const owner = data.people[data.risk.nextUpdateOwnerId];
-      if (rescheduleStage !== "none") return `<section class="risk-update-strip" data-update-state="${rescheduleStage}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${t.rescheduleUpdate}</h2><strong>${rescheduleStatus()}</strong><span>${t.updateOwner}: ${escape(data.people[rescheduleOwners[rescheduleStage]].name)}</span><p>${view.rescheduleConfirmed ? t.replacementNoDelivery : t.followupTimePending}</p></section>`;
-      if (decision?.authorization && decision.planId === "B") return `<section class="risk-update-strip" data-update-state="reschedulePending" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${t.nextUpdate}</h2><span>${t.updateOwner}: ${escape(owner.name)}</span><p>${t.rescheduleUpdatePending}</p></section>`;
+      if (view.nextTiming) {
+        const timing = view.nextTiming;
+        return `<section class="risk-update-strip" data-update-state="${rescheduleStage}" data-timing-kind="${timing.kind}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${text.wuxi.rescheduleFlow.timingLabels[timing.kind]}</h2><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong><span>${t.updateOwner}: ${escape(data.people[timing.ownerId].name)}</span><p>${view.rescheduleConfirmed ? t.replacementNoDelivery : rescheduleStatus()}</p></section>`;
+      }
       if (view.resourceConfirmed || view.resourceRejected) return `<section class="risk-update-strip" data-update-state="${view.resourceConfirmed ? "resourceRecorded" : "resourceRejected"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${t.resourceUpdateRecorded}</h2><strong>${time(resource.receipt.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span><p>${view.resourceRejected ? t.nextUpdateReassessment : t.holdStillConditional}</p></section>`;
       const authorized = Boolean(decision?.authorization);
       const selectedUpdate = authorized ? "resourceConfirmed" : publication?.nextUpdateEvent || data.risk.nextUpdateEvent;
@@ -149,8 +151,6 @@
         technicalStarted: ["P02"], qualityStarted: ["P03"],
         technicalCompleted: ["P02"], qualityCompleted: ["P03"],
         resourceReviewStarted: ["P07"], schedulingHeld: ["P08"], schedulingUnavailable: ["P08"],
-        rescheduleRequested: ["P07"], rescheduleQuotePrepared: ["P08"], rescheduleQuoteReturned: ["P07"],
-        rescheduleDecisionCreated: ["P01"], rescheduleAuthorized: ["P06"], rescheduleConfirmed: ["P07"]
       };
       for (const record of audit) {
         if (!auditOwners[record.id] || !view.occurred(record.id)) continue;
@@ -162,16 +162,23 @@
         const owners = entry.ownerIds.map(id => escape(data.people[id].name)).join(" / ");
         const isWuXi = entry.ownerIds.some(id => ["wuxiPM", "scheduling"].includes(data.people[id].roleKey));
         const shanghaiTime = at && isWuXi && zone !== baseZone ? `<small data-shanghai-time>${time(at, baseZone)} ${city(baseZone)}</small>` : "";
-        const when = at ? `${time(at, zone, { year: "numeric" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}` : `${t.timingNotAgreed}<small>${copy(t.recordedSequence, {sequence:entry.sequence})}</small>`;
-        return `<tr data-risk-event="${entry.id}" data-event-status="${status}"${at ? "" : ` data-event-time-status="notScheduled" data-event-sequence="${entry.sequence}"`}><td data-field="time" data-label="${escape(t.timelineDate)}">${when}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
+        const when = `${time(at, zone, { year: "numeric", weekday: "short" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}`;
+        return `<tr data-risk-event="${entry.id}" data-event-status="${status}"><td data-field="time" data-label="${escape(t.timelineDate)}">${when}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
       }
       // Recorded actions stay above Now, even when their audit row was added later.
       const recorded = entries.filter(entry => entry.status === "recorded" && entry.at).sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
-      const untimed = entries.filter(entry => entry.status === "recorded" && !entry.at).sort((left, right) => left.sequence - right.sequence);
       const remaining = entries.filter(entry => entry.status !== "recorded");
       const rows = recorded.map(renderEntry).join("") + now + remaining.map(renderEntry).join("");
       const tableHead = `<thead><tr><th scope="col">${t.timelineDate}</th><th scope="col">${t.timelineEvent}</th><th scope="col">${t.timelineOwner}</th><th scope="col">${t.timelineStatus}</th></tr></thead>`;
-      const followup = untimed.length ? `<div id="risk-followup-timeline"><h3>${t.followupTimeline}</h3><p class="decision-note">${t.followupTimelineExplanation}</p><div class="table-wrap"><table class="risk-timeline-table">${tableHead}<tbody>${untimed.map(renderEntry).join("")}</tbody></table></div></div>` : "";
+      const exceptionEntries = view.nextTiming ? data.rescheduleTimeline.map(entry => {
+        const record = view.occurred(entry.eventRef) ? auditById.get(entry.eventRef) : null;
+        const at = record?.at || data.events[entry.eventRef].at;
+        const status = record ? "recorded" : Date.parse(at) <= Date.parse(state.clock) ? "pending" : "planned";
+        return { ...entry, id: entry.eventRef, at, zone: data.people[entry.ownerIds[0]].timezone, status, label: record ? t.recordedTimelineEvents[entry.eventRef] : t.timelineEvents[entry.eventRef] };
+      }) : [];
+      const exceptionRows = exceptionEntries.filter(entry => entry.status === "recorded").map(renderEntry).join("") + now.replace('id="risk-timeline-now"', 'id="risk-followup-now"') + exceptionEntries.filter(entry => entry.status !== "recorded").map(renderEntry).join("");
+      const handoff = data.events.rescheduleCustomerAvailable;
+      const followup = exceptionEntries.length ? `<div id="risk-followup-timeline"><h3>${t.followupTimeline}</h3><p class="decision-note">${t.followupTimelineExplanation}</p><p>${t.customerWorkdayStart}: ${time(handoff.at, customerZone, { weekday: "short" })} ${city(customerZone)}</p><div class="table-wrap"><table class="risk-timeline-table"><caption>${t.followupTimelineZone}</caption>${tableHead}<tbody>${exceptionRows}</tbody></table></div></div>` : "";
       return `<section id="risk-timeline" class="section" aria-labelledby="risk-timeline-title"><div class="section-heading"><div class="heading-with-info"><h2 id="risk-timeline-title">${t.timeline}</h2>${info("timelineStatus", t.timelineScope, note(t.timelineExplanation))}</div>${assumption}</div><div class="table-wrap"><table class="risk-timeline-table"><caption>${copy(t.timelineZone, { zone: city(person.timezone) })}</caption>${tableHead}<tbody>${rows}</tbody></table></div>${followup}</section>`;
     }
 
@@ -205,6 +212,10 @@
     }
 
     function resourceMilestone() {
+      if (view.nextTiming) {
+        const timing = view.nextTiming;
+        return `<div id="risk-resource-deadline" class="risk-resource-deadline" data-timing-kind="${timing.kind}"><span>${text.wuxi.rescheduleFlow.timingLabels[timing.kind]}</span><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong></div>`;
+      }
       if (!isWuXi) return "";
       const laterWindowRequest = decision?.authorization && decision.planId === "B";
       const title = view.rescheduleConfirmed ? t.replacementWindow : rescheduleStage !== "none" || resourceUnavailable || laterWindowRequest ? t.rescheduleUpdate : resourceHeld ? t.confirmedHoldUntil : text.wuxi.deadline;

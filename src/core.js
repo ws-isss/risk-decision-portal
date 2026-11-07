@@ -34,6 +34,7 @@
     let state;
     const steps = ["backupAssigned", "alternateAssigned", "reviewsComplete", "budgetAuthorized", "resourceReviewStart", "resourceConfirmed"];
     const reviewOwners = { technical: "P02", quality: "P03" };
+    const rescheduleSteps = ["rescheduleRequested", "rescheduleQuotePrepared", "rescheduleQuoteReturned", "rescheduleCustomerAvailable", "rescheduleDecisionCreated", "rescheduleAuthorized", "rescheduleConfirmed"];
     function initial(scene) {
       return {
         scene, viewer: scene === "prepublication" ? "P07" : "P01",
@@ -66,9 +67,10 @@
       }
       return entry;
     }
-    function orderedRecord(id, fields = {}) {
-      const entry = record(id, null, "notScheduled");
-      return Object.assign({ by: entry.by, at: null, timeStatus: "notScheduled", sequence: entry.sequence }, fields);
+    function rescheduleRecord(id, fields = {}) {
+      atEvent(id);
+      const entry = record(id);
+      return Object.assign({ by: entry.by, at: entry.at, sequence: entry.sequence }, fields);
     }
     function rescheduleRequest() {
       const d = tasksRequired();
@@ -85,7 +87,21 @@
           : Object.freeze({ nextEvent: null, blockKey: "publishRisk", done: true });
       }
       customer();
-      if (state.decision && state.decision.planId === "B" && Date.parse(state.clock) >= Date.parse(data.events.budgetAuthorized.at)) return Object.freeze({ nextEvent: null, blockKey: null, done: true });
+      const decision = state.decision;
+      const exceptionActive = decision && ((decision.planId === "B" && Date.parse(state.clock) >= Date.parse(data.events.budgetAuthorized.at)) || (decision.resource.receipt && decision.resource.receipt.outcome === "unavailable"));
+      if (exceptionActive) {
+        const nextEvent = rescheduleSteps.find(id => Date.parse(data.events[id].at) > Date.parse(state.clock)) || null;
+        if (!nextEvent) return Object.freeze({ nextEvent: null, blockKey: null, done: true });
+        const r = decision.resource.rescheduleRequest;
+        let blockKey = null;
+        if (!decision.authorization) blockKey = "authorizeCustomer";
+        else if (nextEvent === "rescheduleQuotePrepared" && !r) blockKey = "requestReschedule";
+        else if (nextEvent === "rescheduleQuoteReturned" && !(r && r.quote)) blockKey = "prepareRescheduleQuote";
+        else if (["rescheduleCustomerAvailable", "rescheduleDecisionCreated"].includes(nextEvent) && !(r && r.quoteReceipt)) blockKey = "returnRescheduleQuote";
+        else if (nextEvent === "rescheduleAuthorized" && !(r && r.decision)) blockKey = "createRescheduleDecision";
+        else if (nextEvent === "rescheduleConfirmed" && !(r && r.authorization)) blockKey = "authorizeReschedule";
+        return Object.freeze({ nextEvent, blockKey, done: false });
+      }
       const nextEvent = steps.find(id => Date.parse(data.events[id].at) > Date.parse(state.clock)) || null;
       if (!nextEvent) return Object.freeze({ nextEvent: null, blockKey: null, done: true });
       const d = state.decision;
@@ -305,27 +321,27 @@
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED");
         ensure(d.planId === "B" || (d.resource.receipt && d.resource.receipt.outcome === "unavailable"), "RESCHEDULE_NOT_AVAILABLE");
         if (d.resource.rescheduleRequest) return snapshot();
-        d.resource.rescheduleRequest = orderedRecord("rescheduleRequested", { quote: null, quoteReceipt: null, decision: null, authorization: null, confirmation: null });
+        d.resource.rescheduleRequest = rescheduleRecord("rescheduleRequested", { quote: null, quoteReceipt: null, decision: null, authorization: null, confirmation: null });
         return changed();
       },
       respondRescheduleQuote() {
         role("P08"); const r = rescheduleRequest();
         if (r.quote) return snapshot();
-        r.quote = orderedRecord("rescheduleQuotePrepared", { candidateWindow: data.plans.B.window.at, amount: data.fees.reschedule, quoteRef: "Q-B", version: data.reports["Q-B"].version });
+        r.quote = rescheduleRecord("rescheduleQuotePrepared", { candidateWindow: data.plans.B.window.at, amount: data.fees.reschedule, quoteRef: "Q-B", version: data.reports["Q-B"].version });
         return changed();
       },
       returnRescheduleQuote() {
         role("P07"); const r = rescheduleRequest();
         ensure(r.quote, "RESCHEDULE_QUOTE_REQUIRED");
         if (r.quoteReceipt) return snapshot();
-        r.quoteReceipt = orderedRecord("rescheduleQuoteReturned");
+        r.quoteReceipt = rescheduleRecord("rescheduleQuoteReturned");
         return changed();
       },
       createRescheduleDecision() {
         role("P01"); const r = rescheduleRequest();
         ensure(r.quoteReceipt, "RESCHEDULE_QUOTE_RETURN_REQUIRED");
         if (r.decision) return snapshot();
-        r.decision = orderedRecord("rescheduleDecisionCreated", { amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
+        r.decision = rescheduleRecord("rescheduleDecisionCreated", { amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
         return changed();
       },
       authorizeReschedule(values) {
@@ -337,14 +353,14 @@
         ensure(typeof values.reason === "string" && values.reason.trim(), "REASON_REQUIRED");
         ensure(values.acknowledged === true, "ACKNOWLEDGEMENT_REQUIRED");
         ensure(r.quote.amount <= data.people.P06.budgetLimit, "BUDGET_LIMIT_EXCEEDED");
-        r.authorization = orderedRecord("rescheduleAuthorized", { signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
+        r.authorization = rescheduleRecord("rescheduleAuthorized", { signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
         return changed();
       },
       confirmReschedule() {
         role("P07"); const r = rescheduleRequest();
         ensure(r.authorization, "RESCHEDULE_AUTHORIZATION_REQUIRED");
         if (r.confirmation) return snapshot();
-        r.confirmation = orderedRecord("rescheduleConfirmed", { candidateWindow: r.quote.candidateWindow, amount: r.authorization.amount });
+        r.confirmation = rescheduleRecord("rescheduleConfirmed", { candidateWindow: r.quote.candidateWindow, amount: r.authorization.amount });
         return changed();
       },
       enterChapter(id, fixtures = {}) {

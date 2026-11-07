@@ -38,11 +38,28 @@ async function makePage(mobile = false) {
   return { page, context };
 }
 const clock = page => page.locator('.demo-clock time').getAttribute('datetime');
+const exceptionTimes = {
+  requested: '2026-11-16T09:00:00+08:00', quote: '2026-11-17T15:00:00+08:00', returned: '2026-11-17T17:00:00+08:00',
+  decision: '2026-11-17T11:00:00-05:00', authorized: '2026-11-19T17:00:00-05:00',
+  confirmed: '2026-11-20T17:00:00+08:00'
+};
 const copies = page => page.evaluate(() => globalThis.testCopies);
 async function role(page, id) {
   const before = await clock(page);
   await page.locator('#viewer').selectOption(id);
   assert.equal(await clock(page), before);
+}
+async function advanceTo(page, at) {
+  while (Date.parse(await clock(page)) < Date.parse(at)) {
+    const before = await clock(page);
+    const status = await page.locator('#wuxi').getAttribute('data-resource-status');
+    assert.equal(await page.locator('#advance-event').isEnabled(), true, `A pending action must not block advancement before ${at}`);
+    await page.locator('#advance-event').click();
+    assert.ok(Date.parse(await clock(page)) > Date.parse(before));
+    assert.ok(Date.parse(await clock(page)) <= Date.parse(at));
+    assert.equal(await page.locator('#wuxi').getAttribute('data-resource-status'), status, 'Advancement never submits the next action');
+  }
+  assert.equal(Date.parse(await clock(page)), Date.parse(at));
 }
 async function chapter(page, id) {
   await page.locator('#chapter-select').selectOption(id);
@@ -235,16 +252,19 @@ try {
   await preview(page);
   await capture(page, 'brief-unavailable.png');
   await role(page, 'P07');
+  await advanceTo(page, exceptionTimes.requested);
   await page.locator('#request-reschedule').click();
   content = await generate(page, 'awaitingWuXiQuote');
   await preview(page);
   const preQuote = await page.locator('#management-brief-preview').innerText();
   await role(page, 'P08');
+  await advanceTo(page, exceptionTimes.quote);
   await page.locator('#record-reschedule-quote').click();
   await role(page, 'P01');
   assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'false');
   assert.equal(await page.locator('#management-brief-preview').innerText(), preQuote);
   await role(page, 'P07');
+  await advanceTo(page, exceptionTimes.returned);
   await page.locator('#return-reschedule-quote').click();
   await role(page, 'P01');
   assert.match(await page.locator('#management-brief-stale').innerText(), /resource response has changed[\s\S]*quote version or source data has changed/i);
@@ -253,11 +273,14 @@ try {
   assert.match(content, /No replacement window is confirmed or fee incurred/);
   await preview(page);
   assert.match(await page.locator('#management-brief-preview').innerText(), /Q-B v1/);
-  assert.match(await page.locator('#management-brief-preview').innerText(), /recorded in sequence with timing unassigned/);
+  assert.ok(!/To be agreed|timing unassigned|last scheduled snapshot/i.test(await page.locator('#management-brief-preview').innerText()), 'Recipient copy uses the exception schedule and its actual data-as-of time');
+  assert.equal(await page.locator('.brief-metadata time').getAttribute('datetime'), exceptionTimes.returned);
+  await advanceTo(page, exceptionTimes.decision);
   await page.locator('#launch-reschedule-decision').click();
   await generate(page, 'awaitingCustomerAuthorization');
   await preview(page);
   await role(page, 'P06');
+  await advanceTo(page, exceptionTimes.authorized);
   await page.locator('#fill-reschedule-signature').click();
   await page.locator('#reschedule-authorization-form input[name="acknowledged"]').check();
   await page.locator('#authorize-reschedule').click();
@@ -266,12 +289,15 @@ try {
   assert.match(content, /Authorization alone does not incur the fee/);
   await preview(page);
   await role(page, 'P07');
+  await advanceTo(page, exceptionTimes.confirmed);
   await page.locator('#confirm-reschedule').click();
   await fee(page, 10000);
   content = await generate(page, 'confirmed');
   assert.match(content, /\$10,000 rescheduling fee is now incurred/);
   assert.match(content, /\$30,000 study has not started/);
   assert.match(content, /revised delivery estimate still needs review/);
+  assert.ok(!/To be agreed|timing unassigned|last scheduled snapshot/i.test(content));
+  assert.equal(await page.locator('.brief-metadata time').getAttribute('datetime'), exceptionTimes.confirmed);
   await preview(page);
   await copyFresh(page);
   await capture(page, 'brief-rescheduled.png');
@@ -293,19 +319,25 @@ try {
   await capture(mobile, 'brief-mobile.png');
   await returnResource(mobile, 'unavailable');
   await role(mobile, 'P07');
+  await advanceTo(mobile, exceptionTimes.requested);
   await mobile.locator('#request-reschedule').click();
   await role(mobile, 'P08');
+  await advanceTo(mobile, exceptionTimes.quote);
   await mobile.locator('#record-reschedule-quote').click();
   await role(mobile, 'P07');
+  await advanceTo(mobile, exceptionTimes.returned);
   await mobile.locator('#return-reschedule-quote').click();
   await role(mobile, 'P01');
+  await advanceTo(mobile, exceptionTimes.decision);
   await mobile.locator('#launch-reschedule-decision').click();
   await role(mobile, 'P06');
+  await advanceTo(mobile, exceptionTimes.authorized);
   await mobile.locator('#fill-reschedule-signature').click();
   await mobile.locator('#reschedule-authorization-form input[name="acknowledged"]').check();
   await mobile.locator('#authorize-reschedule').click();
   await fee(mobile, 0);
   await role(mobile, 'P07');
+  await advanceTo(mobile, exceptionTimes.confirmed);
   await mobile.locator('#confirm-reschedule').click();
   await fee(mobile, 10000);
   await generate(mobile, 'confirmed');

@@ -168,6 +168,7 @@ summary::-webkit-details-marker { display: none; }
 .task-description > .info-tip { margin-left: 5px; }
 .action-due time { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12px; }
 .action-due time span { font-size: 11px; }
+.task-time-kind { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
 .due-today { color: var(--risk); font-weight: 600; }
 .status { display: inline-block; font-size: 11px; border: 1px solid #d0d5db; border-radius: 2px; padding: 2px 6px; color: #464d56; background: #fafbfc; white-space: nowrap; }
 .status-atRisk { color: var(--risk); border-color: #c79790; background: white; }
@@ -624,6 +625,8 @@ main { padding-bottom: var(--demo-bar-space); }
 #comparison-table td > small { display: block; margin: 5px 0 2px; color: var(--muted); font-size: 11px; }
 #priority-risk .risk-status:not(#project-status) { white-space: normal; max-width: 640px; line-height: 1.5; }
 #decision-deadline[data-deadline-state="held"] > span, #decision-deadline[data-deadline-state="pending"] > span, #decision-deadline[data-deadline-state="rescheduled"] > span { color: var(--ink); }
+#decision-deadline[data-timing-kind="expectedResponse"] time,
+.risk-resource-deadline[data-timing-kind="expectedResponse"] { color: var(--ink); }
 #decision-deadline > strong { display: block; font-size: 17px; margin-top: 5px; }
 .notification-sequence { display: block; margin-top: 5px; font-size: 10px; color: var(--muted); }
 .decision-workspace > .section-heading { flex-wrap: wrap; }

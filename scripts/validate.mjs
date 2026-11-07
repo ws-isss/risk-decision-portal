@@ -53,7 +53,7 @@ check('40 frozen PRD rows and source references', () => {
   let checksum = 2166136261;
   for (const character of normalized) checksum = Math.imul(checksum ^ character.codePointAt(0), 16777619) >>> 0;
   same(checksum.toString(16).padStart(8, '0'), '769baeb0', 'Frozen PRD table changed; do not auto-update this baseline.');
-  const ids = [...Array.from({ length: 32 }, (_, i) => `D${String(i + 1).padStart(2, '0')}`), ...Array.from({ length: 8 }, (_, i) => `P${String(i + 1).padStart(2, '0')}`)];
+  const ids = [...Array.from({ length: 32 }, (_, i) => `D${String(i + 1).padStart(2, '0')}`), ...Array.from({ length: 8 }, (_, i) => `P${String(i + 1).padStart(2, '0')}`), ...Array.from({ length: 8 }, (_, i) => `E${String(i + 1).padStart(2, '0')}`)];
   same(data.sourceRefs, ids);
   function inspect(value) {
     if (!value || typeof value !== 'object') return;
@@ -64,6 +64,59 @@ check('40 frozen PRD rows and source references', () => {
   inspect(data);
   same(data.schemaVersion, 1);
   assert.ok(Object.isFrozen(sandbox.DEMO_DATA) && Object.isFrozen(sandbox.DEMO_DATA.plans.A.forecast));
+});
+
+check('exception supplement matches PRD and both office calendars without weekend duty', () => {
+  const expected = [
+    ['rescheduleRequested', '2026-11-16T09:00:00+08:00', ['P07'], 'startBy'],
+    ['rescheduleQuotePrepared', '2026-11-17T15:00:00+08:00', ['P08'], 'expectedResponse'],
+    ['rescheduleQuoteReturned', '2026-11-17T17:00:00+08:00', ['P07'], 'expectedResponse'],
+    ['rescheduleCustomerAvailable', '2026-11-17T09:00:00-05:00', ['P01', 'P06'], 'available'],
+    ['rescheduleDecisionCreated', '2026-11-17T11:00:00-05:00', ['P01'], 'customerActionDue'],
+    ['rescheduleAuthorized', '2026-11-19T17:00:00-05:00', ['P06'], 'customerActionDue'],
+    ['rescheduleConfirmed', '2026-11-20T17:00:00+08:00', ['P07'], 'expectedResponse'],
+    ['rescheduleNextUpdate', '2026-11-23T17:00:00+08:00', ['P07'], 'expectedResponse'],
+  ];
+  const rows = read('PRD.md').split('\n').filter(line => /^\| E\d{2} \|/.test(line));
+  same(rows.length, expected.length);
+  same(data.rescheduleTiming.weekendDutyAssumed, false);
+  let previous = time(at('resourceConfirmed'));
+  expected.forEach(([id, instant, actors, kind], i) => {
+    const event = data.events[id];
+    same([event.at, event.ref, event.actorIds, event.timingKind, event.caseDesignAssumption], [instant, `E0${i + 1}`, actors, kind, true]);
+    assert.ok(rows[i].startsWith(`| E0${i + 1} |`) && rows[i].includes(instant), `${id} disagrees with its PRD row`);
+    assert.ok(time(instant) > previous, `${id} must follow the prior cross-zone event`);
+    previous = time(instant);
+    for (const owner of actors) {
+      const person = data.people[owner];
+      const calendar = person.timezone === data.calendars.base.timezone ? data.calendars.base : data.calendars.customer;
+      same(event.executionTimezone, calendar.timezone);
+      const local = localParts(instant, calendar.timezone);
+      assert.ok(calendar.weekdays.includes(new Date(local.date).getUTCDay()), `${id} falls outside ${owner}'s workweek`);
+      assert.ok(!calendar.holidays.includes(local.date), `${id} falls on ${owner}'s holiday`);
+      assert.ok(local.hour + local.minute / 60 >= calendar.startHour && local.hour + local.minute / 60 <= calendar.endHour, `${id} falls outside ${owner}'s office hours`);
+    }
+  });
+  same(localParts(at('rescheduleQuoteReturned'), data.calendars.customer.timezone), { date: '2026-11-17', hour: 4, minute: 0 });
+  same(localParts(at('rescheduleCustomerAvailable'), data.calendars.customer.timezone), { date: '2026-11-17', hour: 9, minute: 0 });
+  same(localParts(at('rescheduleAuthorized'), data.calendars.base.timezone), { date: '2026-11-20', hour: 6, minute: 0 });
+  const intervals = [
+    ['quote', 'rescheduleRequested', 'rescheduleQuotePrepared', 'base', 14],
+    ['quoteReturn', 'rescheduleQuotePrepared', 'rescheduleQuoteReturned', 'base', 2],
+    ['customerDecision', 'rescheduleCustomerAvailable', 'rescheduleDecisionCreated', 'customer', 2],
+    ['authorization', 'rescheduleDecisionCreated', 'rescheduleAuthorized', 'customer', 22],
+    ['confirmation', 'rescheduleAuthorized', 'rescheduleConfirmed', 'base', 8],
+    ['nextUpdate', 'rescheduleConfirmed', 'rescheduleNextUpdate', 'base', 8],
+  ];
+  for (const [key, from, to, calendar, hours] of intervals) {
+    same(officeHours(at(from), at(to), calendar), hours, `${key} has the wrong working-time allowance`);
+    same(data.rescheduleTiming.officeTurnaroundHours[key], hours);
+  }
+  same(data.rescheduleTimeline.map(item => item.eventRef), expected.filter(item => !['rescheduleCustomerAvailable', 'rescheduleNextUpdate'].includes(item[0])).map(item => item[0]));
+  for (const item of data.rescheduleTimeline) {
+    same(item.ownerIds, data.events[item.eventRef].actorIds);
+    same(item.statusKey, 'planned');
+  }
 });
 
 check('project, evidence, people and authority limits', () => {
@@ -154,7 +207,7 @@ check('frozen action events and original/candidate window instants', () => {
     latestBudgetStart: '2026-11-13T09:00:00-05:00', originalWindow: '2027-01-04T09:00:00+08:00',
     candidateWindow: '2027-02-15T09:00:00+08:00',
   };
-  same(Object.fromEntries(Object.entries(data.events).map(([key, value]) => [key, value.at])), expected);
+  same(Object.fromEntries(Object.entries(data.events).filter(([, value]) => !value.ref.startsWith('E')).map(([key, value]) => [key, value.at])), expected);
   same(data.initialClock, expected.customerPacketAvailable);
   assert.ok(time(at('riskDiscovered')) < time(at('materialReady')) && time(at('materialReady')) < time(data.initialClock));
   same(data.risk.publishedAt, expected.materialReady);

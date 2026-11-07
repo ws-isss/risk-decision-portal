@@ -89,9 +89,8 @@
 
   function bannerState(state) {
     const view = workflow.project(data,state);
-    if (view.rescheduleConfirmed) return {label:text.portal.confirmedWindow,at:data.plans.B.window.at,zone:data.calendars.base.timezone,status:text.portal.rescheduleStages.confirmed};
+    if (view.nextTiming) return {label:text.portal.timingLabels[view.nextTiming.kind],at:data.events[view.nextTiming.eventRef].at,zone:view.nextTiming.timezone,status:view.rescheduleRequested ? text.portal.rescheduleStages[view.rescheduleStage] : view.resourceRejected ? text.portal.unavailable : text.portal.pendingReschedule,kind:view.nextTiming.kind};
     if (view.resourceConfirmed) return {label:text.portal.holdExpiry,at:data.plans.A.holdUntil,zone:data.calendars.base.timezone,status:text.portal.success};
-    if (view.resourceRejected || view.rescheduleRequested || state.decision?.authorization && state.decision.planId === "B") return {label:text.portal.awaitingUpdate,at:null,status:view.rescheduleRequested ? text.portal.rescheduleStages[view.rescheduleStage] : view.resourceRejected ? text.portal.unavailable : text.portal.pendingReschedule};
     const isWuxi = ["P07","P08"].includes(state.viewer);
     if (isWuxi || state.decision?.authorization) return {label:text.portal.resourceDue,at:data.events.resourceConfirmationDeadline.at,zone:data.calendars.base.timezone,status:state.decision?.authorization ? text.decision.authorized : text.overview.riskState};
     return {label:text.overview.decisionBy,at:data.events.latestAuthorization.at,zone:data.baseline.timezone,status:text.overview.riskState};
@@ -121,25 +120,27 @@
     const copy = text.actions.rows[action.info];
     return info(action.info, copy.title, note(copy.detail));
   }
-  function actionDue(action, person) {
+  function actionDue(action, person, withLabel = false) {
     if (!action.event) return escape(text.portal.notScheduled);
     const at = data.events[action.event].at;
     const value = action.day && session.getState().clock === data.initialClock && person.timezone === data.baseline.timezone
       ? `${text.common[action.day]}, ${core.formatInstant(at, person.timezone, { month: undefined, day: undefined })}`
       : core.formatInstant(at, person.timezone, { weekday: "short" });
-    return `<time datetime="${at}" class="${action.day === "today" ? "due-today" : ""}">${escape(value)} <span>${zoneLabel(person.timezone)}</span></time>`;
+    return `${withLabel ? `<span class="task-time-kind">${text.portal.taskTimingLabels[action.timingKey || "startBy"]}</span>` : ""}<time datetime="${at}" class="${action.day === "today" ? "due-today" : ""}">${escape(value)} <span>${zoneLabel(person.timezone)}</span></time>`;
   }
   function renderActions(state, person) {
     const actions = workflow.tasks(data, state);
+    const mixedTiming = actions.some(action => action.timingKey);
+    const timingHeading = mixedTiming ? text.portal.timing : text.overview.deadline;
     const hasCoverage = ["P01", "P04", "P05", "P06"].includes(person.id);
     return `<section id="actions" class="section" aria-labelledby="actions-title">
       <div class="section-heading"><div class="heading-with-info"><h2 id="actions-title">${person.id === "P01" ? (state.clock === data.initialClock ? text.overview.todayTitle : text.nav.actions) : text.overview.roleTitle}</h2>${person.id === "P01" ? info("actionScope", text.overview.actionScope, note(text.overview.actionScopeExplanation)) : ""}</div>
         ${hasCoverage ? `<div class="coverage-note">${text.overview.coverageNote}${info("coverage", text.overview.coverageInfo, note(state.decision ? coverageCopy(state.decision) : text.overview.coverageExplanation), "end")}</div>` : `<span class="role-label">${escape(text.roles[person.roleKey])}</span>`}
       </div>
-      ${actions.length ? `<div class="table-wrap actions-wrap"><table class="actions-table"><thead><tr><th scope="col">${text.overview.person}</th><th scope="col">${text.overview.action}</th><th scope="col">${text.overview.deadline}</th><th scope="col">${text.overview.status}</th></tr></thead><tbody>${actions.map(action => {
+      ${actions.length ? `<div class="table-wrap actions-wrap"><table class="actions-table"><thead><tr><th scope="col">${text.overview.person}</th><th scope="col">${text.overview.action}</th><th scope="col">${timingHeading}</th><th scope="col">${text.overview.status}</th></tr></thead><tbody>${actions.map(action => {
         const owner = data.people[action.owner];
         const title = actionTitle(action);
-        return `<tr id="task-${action.key}" data-task="${action.key}" data-owner="${owner.id}" tabindex="-1"${location.hash === `#task-${action.key}` ? ' class="task-highlight"' : ""}><td class="task-person">${escape(owner.name)}</td><td class="task-description"><span>${state.decision ? `<a href="${(["resource","schedule","monitor","receipt"].includes(action.key) || action.key.startsWith("reschedule")) ? "#wuxi" : "#decision"}">${escape(title)}</a>` : escape(title)}</span>${actionInfo(action)}</td><td class="action-due" data-label="${escape(text.overview.deadline)}">${actionDue(action, person)}</td><td data-task-status="${action.status}">${badge(action.status)}</td></tr>`;
+        return `<tr id="task-${action.key}" data-task="${action.key}" data-owner="${owner.id}" tabindex="-1"${location.hash === `#task-${action.key}` ? ' class="task-highlight"' : ""}><td class="task-person">${escape(owner.name)}</td><td class="task-description"><span>${state.decision ? `<a href="${(["resource","schedule","monitor","receipt"].includes(action.key) || action.key.startsWith("reschedule")) ? "#wuxi" : "#decision"}">${escape(title)}</a>` : escape(title)}</span>${actionInfo(action)}</td><td class="action-due" data-label="${escape(timingHeading)}">${actionDue(action, person, mixedTiming)}</td><td data-task-status="${action.status}">${badge(action.status)}</td></tr>`;
       }).join("")}</tbody></table></div>` : `<div class="empty-actions"><strong>${text.actions.noTasks}</strong>${info("unassigned", text.overview.coverageInfo, note(person.id === "P05" ? text.actions.backupNote : text.actions.alternateNote))}</div>`}
     </section>`;
   }
@@ -152,7 +153,7 @@
     const step = session.getAdvanceInfo();
     const guide = nextGuidedAction(state);
     const guideButton = guide && guide.key !== "advancePublication";
-    const stepZone = state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone;
+    const stepZone = data.events[step.nextEvent]?.executionTimezone || (state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone);
     return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
   }
 
@@ -170,6 +171,7 @@
   function nextGuidedAction(state) {
     const d = state.decision;
     const step = (key, role, target) => ({key,role,target});
+    const scheduledStep = (key, role, target, eventRef) => Date.parse(state.clock) >= Date.parse(data.events[eventRef].at) ? step(key,role,target) : null;
     if (state.publication?.status === "draft") {
       if (!state.publication.reviewedAt) return step("editRisk","P07","#review-publication-draft");
       return Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? step("publishRisk","P07","#publish-risk") : step("advancePublication","P07","#advance-event");
@@ -186,14 +188,14 @@
       const q = r?.rescheduleRequest;
       if (q) {
         if (q.confirmation) return null;
-        if (q.authorization) return step("confirmReschedule","P07","#confirm-reschedule");
-        if (q.decision) return step("rescheduleAuthorization","P06",'#reschedule-authorization-form input[name="signature"]');
-        if (q.quoteReceipt) return step("rescheduleDecision","P01","#launch-reschedule-decision");
-        if (q.quote) return step("returnQuote","P07","#return-reschedule-quote");
-        return step("rescheduleQuote","P08","#record-reschedule-quote");
+        if (q.authorization) return scheduledStep("confirmReschedule","P07","#confirm-reschedule","rescheduleConfirmed");
+        if (q.decision) return scheduledStep("rescheduleAuthorization","P06",'#reschedule-authorization-form input[name="signature"]',"rescheduleAuthorized");
+        if (q.quoteReceipt) return scheduledStep("rescheduleDecision","P01","#launch-reschedule-decision","rescheduleDecisionCreated");
+        if (q.quote) return scheduledStep("returnQuote","P07","#return-reschedule-quote","rescheduleQuoteReturned");
+        return scheduledStep("rescheduleQuote","P08","#record-reschedule-quote","rescheduleQuotePrepared");
       }
       if (r?.receipt?.outcome === "held") return null;
-      if (r?.receipt?.outcome === "unavailable" || d.planId === "B") return step("reschedule","P07","#request-reschedule");
+      if (r?.receipt?.outcome === "unavailable" || d.planId === "B") return scheduledStep("reschedule","P07","#request-reschedule","rescheduleRequested");
       if (r?.scheduling && !r.receipt) return step("replyReceipt","P07","#return-resource-receipt");
       if (!r?.startedAt) return Date.parse(state.clock) >= Date.parse(data.events.resourceReviewStart.at) ? step("startResources","P07","#start-resource-review") : null;
       if (Date.parse(state.clock) >= Date.parse(data.events.resourceConfirmed.at)) return step("scheduling","P08",'#resource-response-form select[name="outcome"]');
@@ -369,11 +371,12 @@
     const isWuxi = ["P07","P08"].includes(state.viewer);
     const banner = bannerState(state);
     const finding = interpolate(text.overview.finding, { measured: data.risk.hmwPct.toFixed(1), target: data.risk.targetPct.toFixed(1) });
-    const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : state.decision?.authorization && state.decision.planId === "B" ? note(interpolate(text.portal.updateUnscheduled,{owner:data.people.P07.name})) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
+    const nextTimingInfo = view.nextTiming ? `<p>${text.portal.timingLabels[view.nextTiming.kind]}: ${instant(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone)} · ${city(view.nextTiming.timezone)}</p>` : "";
+    const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
     root.innerHTML = `<a class="skip-link" href="#main">${text.nav.skip}</a>
       <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools"><details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.english}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="true">${text.overview.languageCurrent}</button><button type="button" data-language="zh" disabled>${text.overview.languagePending}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
       <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
-      <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
+      <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-timing-kind="${banner.kind || "milestone"}" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
       ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement}})}${renderWuxi(state)}${renderContext(state)}`}
       ${renderManagementBrief(state)}${renderAdvance(state,person)}
       <footer class="page-footer">${text.overview.footer}</footer></main>`;

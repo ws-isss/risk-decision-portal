@@ -76,6 +76,19 @@ async function role(page, id) {
   await page.locator('#viewer').selectOption(id);
   assert.equal(await clock(page), before);
 }
+async function sharedReadonly(page, { content, state } = {}) {
+  await role(page, 'P06');
+  const panel = page.locator('#management-brief');
+  assert.equal(await panel.getAttribute('data-brief-readonly'), 'true', 'Elena reads the shared brief without becoming its editor');
+  assert.equal(await page.locator('#management-brief-editor, #generate-management-brief, #regenerate-management-brief, #edit-management-brief, #copy-management-brief, #preview-management-brief').count(), 0, 'Elena has no generation, editing, preview-confirmation or copy controls');
+  if (content) assert.ok((await page.locator('#management-brief-preview').innerText()).includes(content), 'The read-only brief contains Emma’s exact manual wording');
+  if (state) assert.equal(await page.locator('#authorization-brief-status').getAttribute('data-brief-state'), state);
+}
+async function noRepeatedBriefGuide(page, message) {
+  const next = page.locator('#demo-next-step');
+  const key = await next.count() ? await next.getAttribute('data-guide-key') : null;
+  assert.ok(!['managementBrief', 'updateBrief', 'previewBrief'].includes(key), message);
+}
 async function advanceTo(page, at) {
   while (Date.parse(await clock(page)) < Date.parse(at)) {
     const before = await clock(page);
@@ -205,6 +218,7 @@ try {
   assert.match(original, /34 (?:calendar )?days (?:after|late)/);
   pendingPrerequisites(original, prerequisiteLabels);
   assert.equal(await page.locator('#decision').getAttribute('data-task-count'), '0');
+  await noRepeatedBriefGuide(page, 'An early manual brief does not create an extra guided checkpoint');
   await preview(page);
   await capture(page, 'brief-before-authorization-clean.png');
   await page.locator('#edit-management-brief').click();
@@ -215,7 +229,9 @@ try {
   await page.locator('.risk-back').click();
   assert.equal(await page.locator('#management-brief-editor').inputValue(), edited);
   await role(page, 'P06');
-  assert.equal(await page.locator('#management-brief, #generate-management-brief').count(), 0);
+  await sharedReadonly(page, { content: 'Emma’s note: preserve this manual wording' });
+  assert.match(await page.locator('#management-brief').innerText(), /not.*preview|not.*review|unreviewed|awaiting.*review/i, 'Elena can read an unpreviewed draft but sees that Emma has not confirmed its preview');
+  assert.equal(await page.locator('#management-brief-preview img').count(), 0);
   await role(page, 'P01');
   assert.equal(await page.locator('#management-brief-editor').inputValue(), edited);
   const initialPreview = await preview(page, { generated: false });
@@ -266,6 +282,21 @@ try {
   await copyFresh(page);
 
   await page.locator('[data-select-plan="A"]').click();
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'Selecting a plan invalidates a previously generated comparison');
+  await sharedReadonly(page);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
+  assert.match(await page.locator('#management-brief-stale').innerText(), /plan|scope|option|decision/i);
+  await generate(page, 'beforeAuthorization');
+  await page.locator('#fallback-authorization').check();
+  const beforeFallbackEdit = await page.locator('#management-brief-editor').inputValue();
+  await sharedReadonly(page);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
+  assert.match(await page.locator('#management-brief-stale').innerText(), /amount|scope|fallback|authorization/i, 'Changing the requested amount marks Elena’s brief as outdated');
+  await role(page, 'P01');
+  assert.equal(await page.locator('#management-brief-editor').inputValue(), beforeFallbackEdit);
+  await generate(page, 'beforeAuthorization');
+  assert.match(await page.locator('#management-brief-editor').inputValue(), /\$90,000/);
+  await page.locator('#fallback-authorization').uncheck();
   await generate(page, 'beforeAuthorization');
   await preview(page);
   const copiesBeforeTasks = (await copies(page)).length;
@@ -312,16 +343,39 @@ try {
   await preview(page);
   await role(page, 'P03');
   await page.locator('#review-quality-form [type="submit"]').click();
+  await advanceTo(page, '2026-11-12T17:00:00-05:00');
+  await sharedReadonly(page, { state: 'stale' });
+  await capture(page, 'brief-elena-stale.png');
+  await page.locator('#authorization-brief-status').screenshot({ path: path.join(output, 'brief-elena-stale-status.png') });
+  await page.locator('#update-shared-brief').click();
+  assert.equal(await page.locator('#viewer').inputValue(), 'P01');
+  assert.equal(await page.locator('#regenerate-management-brief').evaluate(node => document.activeElement === node), true);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'Requesting Emma’s update does not regenerate or replace the earlier brief');
+  assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'updateBrief', 'The single before-signature checkpoint requests an update if an earlier brief is stale');
+  await page.locator('#demo-next-step').click();
+  assert.equal(await page.locator('#viewer').inputValue(), 'P01');
+  assert.equal(await page.locator('#regenerate-management-brief').evaluate(node => document.activeElement === node), true);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'Guidance never silently regenerates a stale brief');
   prerequisiteDraft = await generate(page, 'beforeAuthorization');
   assert.match(prerequisiteDraft, /Technical and QA study-scope reviews and approver designation: completed\./);
   assert.doesNotMatch(prerequisiteDraft, /Pending before authorization:/);
   assert.match(prerequisiteDraft, /If authorized by[\s\S]*Alex Lin’s resource assessment result is expected[\s\S]*a hold is not guaranteed\./, 'The next update promises an assessment result, never a successful hold');
+  assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'previewBrief');
+  await sharedReadonly(page, { state: 'unreviewed' });
+  await role(page, 'P01');
   await preview(page);
   await copyFresh(page);
+  const readyPreview = await page.locator('#management-brief-preview').innerText();
+  await sharedReadonly(page, { state: 'current' });
+  assert.equal(await page.locator('#management-brief-preview').innerText(), readyPreview);
+  assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'authorize');
+  await capture(page, 'brief-elena-current.png');
+  await page.locator('#authorization-brief-status').screenshot({ path: path.join(output, 'brief-elena-current-status.png') });
 
   // A customer authorization is not a resource receipt. An internal Mei result
   // must neither leak into the brief nor invalidate it until Alex returns it.
   await chapter(page, 'hold');
+  await noRepeatedBriefGuide(page, 'An authorized chapter does not reinsert brief generation');
   let content = await generate(page, 'authorized');
   assert.match(content.split('\n')[0], /authorized[\s\S]*\$80,000|\$80,000[\s\S]*authorized/i);
   assert.match(content, /await[\s\S]*(?:resource|WuXi)|(?:resource|WuXi)[\s\S]*await/i);
@@ -346,6 +400,9 @@ try {
   await role(page, 'P01');
   assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
   assert.match(await page.locator('#management-brief-stale').innerText(), /resource response has changed/i);
+  await noRepeatedBriefGuide(page, 'The completed hold does not reinsert a brief checkpoint');
+  await sharedReadonly(page);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
   content = await generate(page, 'held');
   assert.match(content, /Dec 9, 2026, 5:00 PM Shanghai/);
   assert.match(content, /\$50,000/);
@@ -360,6 +417,7 @@ try {
   // The exception brief distinguishes historical forecasts, new quotes,
   // customer authorization and the eventual fee-triggering formal confirmation.
   await returnResource(page, 'unavailable');
+  await noRepeatedBriefGuide(page, 'A failed resource hold does not reinsert brief generation');
   content = await generate(page, 'unavailable');
   currentOnly(content);
   assert.match(content, /unavailable|cannot support|could not support/i);
@@ -383,6 +441,7 @@ try {
   await page.locator('#return-reschedule-quote').click();
   await role(page, 'P01');
   assert.match(await page.locator('#management-brief-stale').innerText(), /resource response has changed[\s\S]*quote version or source data has changed/i);
+  await noRepeatedBriefGuide(page, 'The returned rescheduling quote continues directly to customer decision');
   content = await generate(page, 'awaitingCustomerDecision');
   currentOnly(content);
   assert.match(content, /Feb 15, 2027/);
@@ -394,6 +453,9 @@ try {
   assert.equal(await page.locator('.brief-metadata time').getAttribute('datetime'), exceptionTimes.returned);
   await advanceTo(page, exceptionTimes.decision);
   await page.locator('#launch-reschedule-decision').click();
+  await sharedReadonly(page, { state: 'stale' });
+  assert.match(await page.locator('#authorization-brief-status').innerText(), /update|out of date|changed/i, 'The exception authorization form identifies an outdated shared brief');
+  await noRepeatedBriefGuide(page, 'A new exception decision warns manually without adding another brief checkpoint');
   currentOnly(await generate(page, 'awaitingCustomerAuthorization'));
   await preview(page);
   await role(page, 'P06');
@@ -402,6 +464,8 @@ try {
   await page.locator('#reschedule-authorization-form input[name="acknowledged"]').check();
   await page.locator('#authorize-reschedule').click();
   await fee(page, 0);
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'An authorization state change is visible in Elena’s shared view');
+  await noRepeatedBriefGuide(page, 'Exception authorization does not repeat the guide’s brief step');
   content = await generate(page, 'awaitingWuXiConfirmation');
   currentOnly(content);
   assert.match(content, /\$0|no fee|not incurred|fee.*formal|formal.*fee/i);
@@ -410,6 +474,7 @@ try {
   await advanceTo(page, exceptionTimes.confirmed);
   await page.locator('#confirm-reschedule').click();
   await fee(page, 10000);
+  await noRepeatedBriefGuide(page, 'Formal confirmation ends the workflow without requesting a new guided brief');
   content = await generate(page, 'confirmed');
   currentOnly(content);
   assert.match(content.split('\n')[0], /Feb 15, 2027/);
@@ -477,7 +542,7 @@ try {
   await plainContext.close();
   assert.deepEqual(errors, []);
   assert.deepEqual(network, [], 'The brief, clipboard fallback and full follow-up flow work without external requests');
-  console.log('Management brief browser checks passed: action-derived prerequisite lists, designation staleness without overwriting edits, conditional resource-assessment wording, compact current-state briefs, real A/B table and bold title, safe HTML/plain clipboard parity, independent editing, stale confirmations and captured metadata, private-result isolation, generation cancellation, four main states and full rescheduling, frozen data, offline rich/plain/selection clipboard fallbacks and mobile layout.');
+  console.log('Management brief browser checks passed: shared Emma/Elena content and read-only permissions, plan/amount/state staleness, manual update without overwriting, one before-signature guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with table and bold title, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

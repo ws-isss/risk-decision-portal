@@ -10,6 +10,7 @@ for (const file of ['src/data.js', 'src/core.js', 'src/workflow.js', 'src/locale
 const { DEMO_DATA: data, DEMO_CORE: core, DEMO_BRIEF: briefModel, DEMO_BRIEF_VIEW: briefView } = context;
 const text = context.DEMO_MESSAGES.en;
 const plain = value => JSON.parse(JSON.stringify(value));
+const escape=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const originalData = JSON.stringify(data);
 const session = core.createSession(data);
 const fixtures = {
@@ -49,7 +50,13 @@ for (const viewer of ['P02','P03','P04','P05','P06','P07','P08']) {
   session.setViewer(viewer);
   assert.throws(generate,/ROLE_NOT_ALLOWED/);
   assert.deepEqual(stale(brief),[],'Role switching does not change shareable records');
-  assert.equal(briefView.render({brief,state:session.getState(),text,helpers:{}}),'');
+  const html=briefView.render({brief,state:session.getState(),text,helpers:{escape}});
+  if(viewer==='P06') {
+    assert.ok(html.includes('data-brief-readonly="true"'),'Elena sees the existing Emma-generated brief');
+    assert.ok(html.includes('id="management-brief-preview"'));
+    assert.equal(html.includes('<textarea'),false);
+    assert.equal(briefView.render({brief:null,state:session.getState(),text,helpers:{escape}}),'','No shared brief does not display a generating placeholder');
+  } else assert.equal(html,'');
 }
 session.setViewer('P01');session.advanceTo('backupAssigned');
 assert.deepEqual(stale(brief),[],'Time alone does not create an outcome');
@@ -205,7 +212,6 @@ assert.ok(directBBrief.content.includes('Not selected'));
 assert.equal(/unavailable|Closed/.test(directBBrief.content),false,'Selecting B does not invent a failed A scheduling attempt');
 assert.equal(directBBrief.content.includes('$10,000'),false,'The old B comparison is not a newly returned rescheduling quote');
 
-const escape=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const editedPreview={...brief,content:'**Emma note** <script>unsafe()</script>\n\n| Cost | Scope |\n| --- | --- |\n| $10,000 | A \\| B |',edited:true};
 let html=briefView.render({brief:editedPreview,state:session.getState(),text,helpers:{escape},preview:false});
 assert.ok(html.includes('id="management-brief-editor"'));
@@ -222,5 +228,22 @@ assert.ok(html.includes('id="management-brief-stale"'));
 assert.ok(html.includes('id="copy-management-brief"'));
 assert.equal(html.includes('id="generate-management-brief"'),false);
 assert.ok(briefModel.copyText(editedPreview,text,{staleReasons:['business']}).includes(text.brief.staleRecipient));
+const existingBrief=JSON.stringify(editedPreview);
+session.setViewer('P06');
+html=briefView.render({brief:editedPreview,state:session.getState(),text,helpers:{escape},preview:false,staleReasons:['business'],copied:true});
+assert.ok(html.includes('data-brief-readonly="true"'));
+assert.ok(html.includes('data-brief-preview="true"'),'Elena always sees the shared recipient rendering, not the editor');
+assert.ok(html.includes('<strong>Emma note</strong> &lt;script&gt;unsafe()&lt;/script&gt;'));
+assert.ok(html.includes('>A | B</td>'));
+assert.ok(html.includes(text.brief.authorizationBriefStale));
+assert.ok(html.includes(text.brief.authorizationBriefStaleHint));
+assert.ok(html.includes(text.brief.staleRecipient),'The same captured content retains its stale warning for Elena');
+assert.ok(html.includes(text.brief.authorizationBriefUnreviewedHint));
+for(const control of ['<textarea','id="edit-management-brief"','id="copy-management-brief"','id="preview-management-brief"','id="regenerate-management-brief"','id="management-brief-copied"'])assert.equal(html.includes(control),false,`Elena must not receive ${control}`);
+assert.equal(JSON.stringify(editedPreview),existingBrief,'Viewing as Elena neither regenerates nor modifies the shared brief');
+html=briefView.render({brief:{...editedPreview,previewed:true},state:session.getState(),text,helpers:{escape}});
+assert.equal(html.includes('id="management-brief-unreviewed"'),false);
+session.enterChapter('prepublication');session.setViewer('P06');
+assert.equal(briefView.render({brief:editedPreview,state:session.getState(),text,helpers:{escape}}),'','Shared brief remains hidden before risk publication');
 assert.equal(JSON.stringify(data),originalData,'Brief generation and copying never change scenario data');
 console.log('Management brief checks passed: 150–200 recipient words across all states; current-only A/B rows, state-specific opening and authorization scope, quote privacy, source snapshots, stale edits, safe formatted preview and plain-copy parity.',Object.fromEntries(checked));

@@ -102,15 +102,6 @@ async function decisionSnapshot(targetPage) {
   }));
 }
 async function guide(targetPage, key, viewer, target) {
-  if (await targetPage.locator('#demo-next-step').getAttribute('data-guide-key') === 'managementBrief' && key !== 'managementBrief') {
-    const milestoneBefore = await decisionSnapshot(targetPage);
-    await targetPage.locator('#demo-next-step').click();
-    await targetPage.locator('#generate-management-brief').click();
-    if (await targetPage.locator('#confirm-regenerate-brief').isVisible()) await targetPage.locator('#confirm-regenerate-brief').click();
-    await targetPage.locator('#management-brief-editor').waitFor();
-    await targetPage.locator('#preview-management-brief').click();
-    assert.deepEqual(await decisionSnapshot(targetPage), milestoneBefore, 'Reviewing a management brief does not execute a workflow action');
-  }
   const before = await decisionSnapshot(targetPage);
   const button = targetPage.locator('#demo-next-step');
   assert.equal(await button.getAttribute('data-guide-key'), key);
@@ -211,6 +202,28 @@ async function completeReviews(targetPage) {
   assert.match(await confirmation(targetPage, 'quality').innerText(), /confirmed|complete/i);
 }
 async function sign(targetPage) {
+  // This is the only guided brief checkpoint. All earlier guide calls assert
+  // their business action directly, so an extra brief step fails the flow.
+  await role(targetPage, 'P06');
+  assert.equal(await targetPage.locator('#authorization-brief-status').getAttribute('data-brief-state'), 'missing');
+  const before = await decisionSnapshot(targetPage);
+  await guide(targetPage, 'managementBrief', 'P01', '#generate-management-brief');
+  assert.equal(await targetPage.locator('#management-brief').count(), 0, 'The guide focuses generation without generating automatically');
+  await targetPage.locator('#generate-management-brief').click();
+  await targetPage.locator('#management-brief-editor').waitFor();
+  const draft = `${await targetPage.locator('#management-brief-editor').inputValue()}\n\nEmma’s authorization note: confirm the selected study scope before signing.`;
+  await targetPage.locator('#management-brief-editor').fill(draft);
+  await guide(targetPage, 'previewBrief', 'P01', '#preview-management-brief');
+  await targetPage.locator('#preview-management-brief').click();
+  const sharedPreview = await targetPage.locator('#management-brief-preview').innerText();
+  assert.deepEqual(await decisionSnapshot(targetPage), before, 'Generating and previewing the shared brief does not sign or complete a workflow action');
+  await guide(targetPage, 'authorize', 'P06', '#authorization-form input[name="signature"]');
+  assert.equal(await targetPage.locator('#authorization-brief-status').getAttribute('data-brief-state'), 'current');
+  assert.equal(await targetPage.locator('#management-brief').getAttribute('data-brief-readonly'), 'true');
+  assert.equal(await targetPage.locator('#management-brief-preview').innerText(), sharedPreview, 'Elena sees the exact brief that Emma edited and previewed');
+  assert.equal(await targetPage.locator('#management-brief-editor, #generate-management-brief, #regenerate-management-brief, #edit-management-brief, #copy-management-brief, #preview-management-brief').count(), 0, 'Elena cannot edit, regenerate or copy Emma’s shared brief');
+  await targetPage.locator('#view-management-brief').click();
+  assert.equal(await targetPage.locator('#management-brief').evaluate(node => document.activeElement === node), true);
   await guide(targetPage, 'authorize', 'P06', '#authorization-form input[name="signature"]');
   const form = targetPage.locator('#authorization-form');
   const sampleReason = await form.locator('textarea[name="reason"]').inputValue();
@@ -248,6 +261,8 @@ async function sign(targetPage) {
   await form.locator('#authorize-budget').click();
   assert.match(await targetPage.locator('#decision-status').innerText(), /Customer authorized.*awaiting WuXi confirmation/i);
   assert.match(await confirmation(targetPage, 'schedule').innerText(), /awaiting|pending|ready/i);
+  assert.equal(await targetPage.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'The new authorization state marks the same shared brief as outdated');
+  assert.equal(await targetPage.locator('#demo-next-step').count(), 0, 'Authorization completes the single brief checkpoint; no repeat generation is inserted before the next resource event');
 }
 async function assertMobileFit(targetPage, selector) {
   assert.equal(await targetPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Mobile page has no horizontal overflow');
@@ -430,7 +445,7 @@ try {
   assert.deepEqual(hostedErrors, []);
   assert.deepEqual(failedResponses, []);
   await localContext.close();
-  console.log('Decision browser checks passed: offline A flow, role permissions, editable simulated drafts, explicit creation, Ben support-only authority, Elena designation/review/signature gates, four monotonic clock stops, task/notification/risk synchronization, authorization stop before WuXi confirmation, fallback and B reset boundaries, frozen data, mobile layouts and local repository subpath.');
+  console.log('Decision browser checks passed: offline A flow, role permissions, editable simulated drafts, explicit creation, Ben support-only authority, Elena designation/review/signature gates, one before-signature shared brief checkpoint and read-only Elena view, four monotonic clock stops, task/notification/risk synchronization, authorization stop before WuXi confirmation, fallback and B reset boundaries, frozen data, mobile layouts and local repository subpath.');
   console.log('Screenshots: output/decision-ben.png, decision-authorized.png, decision-risk-authorized.png, decision-mobile.png, decision-mobile-signature.png and decision-mobile-wuxi.png');
 } finally {
   if (server) await new Promise(resolve => server.close(resolve));

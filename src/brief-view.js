@@ -44,19 +44,23 @@
   }
 
   function render({ brief, loading = false, state, text, helpers, staleReasons = [], preview = false, copied = false }) {
-    if (state.viewer !== "P01" || state.publication?.status !== "published" || state.scene === "prepublication") return "";
+    if (!["P01", "P06"].includes(state.viewer) || state.publication?.status !== "published" || state.scene === "prepublication") return "";
+    const readonly = state.viewer === "P06";
+    if (readonly && !brief) return "";
     const t = text.brief;
     const { escape } = helpers;
     const heading = `<div class="section-heading"><h2>${t.title}</h2><span class="data-tag">${t.simulated}</span></div>`;
-    if (loading || !brief) return `<section id="management-brief" class="section management-brief" aria-busy="${loading}">${heading}<p role="status">${t.generating}</p></section>`;
+    if (!readonly && (loading || !brief)) return `<section id="management-brief" class="section management-brief" aria-busy="${loading}">${heading}<p role="status">${t.generating}</p></section>`;
     const meta = brief.metadata;
-    const stale = staleReasons.length > 0 ? `<div id="management-brief-stale" class="brief-stale" role="status"><strong>${t.staleTitle}</strong><ul>${staleReasons.map(key => `<li>${escape(t.staleReasons[key])}</li>`).join("")}</ul></div>` : "";
+    const stale = staleReasons.length > 0 ? `<div id="management-brief-stale" class="brief-stale" role="status"><strong>${readonly ? t.authorizationBriefStale : t.staleTitle}</strong><ul>${staleReasons.map(key => `<li>${escape(t.staleReasons[key])}</li>`).join("")}</ul>${readonly ? `<p>${t.authorizationBriefStaleHint}</p>` : ""}</div>` : "";
     const metadata = `<div class="brief-metadata"><span>${t.asOf}: <time datetime="${escape(brief.generatedAt)}">${escape(meta.asOf)}</time></span><span>${t.versions}: ${meta.sourceVersions.map(escape).join(" · ")}</span></div>`;
     const count = global.DEMO_BRIEF.wordCount(brief,text,{staleReasons});
     const counter = `<p id="management-brief-word-count" class="brief-word-count">${t.wordCount.replace("{count}",count)}</p>`;
-    const body = preview ? `<div class="brief-recipient-preview"><h3>${t.previewHeading}</h3><p class="decision-note">${t.previewHint}</p><article id="management-brief-preview" tabindex="0" aria-label="${escape(t.previewHeading)}">${renderMarkdown(global.DEMO_BRIEF.recipientMarkdown(brief, text, { staleReasons }))}</article></div>` : `<label class="brief-editor-label" for="management-brief-editor">${t.editLabel}<span class="decision-note">${t.editHint}</span><textarea id="management-brief-editor" rows="12" maxlength="18000">${escape(brief.content)}</textarea></label>`;
-    const controls = preview ? `<button id="edit-management-brief" class="button button-secondary">${t.edit}</button><button id="copy-management-brief" class="button button-primary">${t.copy}</button>` : `<button id="preview-management-brief" class="button button-primary">${t.preview}</button>`;
-    return `<section id="management-brief" class="section management-brief" data-brief-status="${escape(brief.statusKey)}" data-brief-stale="${staleReasons.length > 0}" data-brief-preview="${preview}">${heading}<p>${t.intro}</p><p class="status">${escape(meta.status)}</p>${brief.edited ? `<span class="data-tag">${t.edited}</span>` : ""}${metadata}${stale}${body}${counter}<div class="brief-controls">${controls}<button id="regenerate-management-brief" class="button button-secondary">${t.regenerate}</button></div>${copied ? `<p id="management-brief-copied" role="status">${t.copied}</p>` : ""}</section>`;
+    const showPreview = preview || readonly;
+    const body = showPreview ? `<div class="brief-recipient-preview"><h3>${readonly ? t.sharedHeading : t.previewHeading}</h3>${readonly ? "" : `<p class="decision-note">${t.previewHint}</p>`}<article id="management-brief-preview" tabindex="0" aria-label="${escape(readonly ? t.sharedHeading : t.previewHeading)}">${renderMarkdown(global.DEMO_BRIEF.recipientMarkdown(brief, text, { staleReasons }))}</article></div>` : `<label class="brief-editor-label" for="management-brief-editor">${t.editLabel}<span class="decision-note">${t.editHint}</span><textarea id="management-brief-editor" rows="12" maxlength="18000">${escape(brief.content)}</textarea></label>`;
+    const controls = readonly ? "" : `<div class="brief-controls">${preview ? `<button id="edit-management-brief" class="button button-secondary">${t.edit}</button><button id="copy-management-brief" class="button button-primary">${t.copy}</button>` : `<button id="preview-management-brief" class="button button-primary">${t.preview}</button>`}<button id="regenerate-management-brief" class="button button-secondary">${t.regenerate}</button></div>`;
+    const unreviewed = readonly && !brief.previewed ? `<p id="management-brief-unreviewed" class="decision-note" role="status">${t.authorizationBriefUnreviewedHint}</p>` : "";
+    return `<section id="management-brief" class="section management-brief" data-brief-status="${escape(brief.statusKey)}" data-brief-stale="${staleReasons.length > 0}" data-brief-preview="${showPreview}" data-brief-readonly="${readonly}">${heading}<p>${readonly ? t.readonlyIntro : t.intro}</p><p class="status">${escape(meta.status)}</p>${brief.edited ? `<span class="data-tag">${t.edited}</span>` : ""}${metadata}${stale}${unreviewed}${body}${counter}${controls}${!readonly && copied ? `<p id="management-brief-copied" role="status">${t.copied}</p>` : ""}</section>`;
   }
 
   global.DEMO_BRIEF_VIEW = Object.freeze({ render, renderMarkdown, copyHtml });

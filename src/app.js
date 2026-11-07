@@ -20,7 +20,6 @@
   let briefLoading = false;
   let briefPreview = false;
   let briefGeneration = 0;
-  const briefMilestones = new Set();
   let briefCopied = false;
   let layoutFrame;
   const footerObserver = new ResizeObserver(() => reserveFooterSpace());
@@ -97,12 +96,22 @@
   }
 
   function renderManagementBrief(state) {
-    if (!briefOpen) return "";
+    if (!briefOpen && !(state.viewer === "P06" && managementBrief)) return "";
     return global.DEMO_BRIEF_VIEW.render({brief:managementBrief,loading:briefLoading,state,text,helpers:{escape},staleReasons:global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}),preview:briefPreview,copied:briefCopied});
   }
 
+  function renderAuthorizationBrief(state) {
+    if (state.viewer !== "P06" || state.publication?.status !== "published") return "";
+    const t = text.brief;
+    const reasons = global.DEMO_BRIEF.staleReasons(managementBrief,{data,state});
+    const status = !managementBrief ? "missing" : reasons.length ? "stale" : !managementBrief.previewed ? "unreviewed" : "current";
+    const title = {missing:t.authorizationBriefMissing,stale:t.authorizationBriefStale,unreviewed:t.authorizationBriefUnreviewed,current:t.authorizationBriefCurrent}[status];
+    const hint = {missing:t.authorizationBriefMissingHint,stale:t.authorizationBriefStaleHint,unreviewed:t.authorizationBriefUnreviewedHint}[status];
+    return `<aside id="authorization-brief-status" class="authorization-brief-status" data-brief-state="${status}" role="status"><strong>${title}</strong>${hint ? `<p>${hint}</p>` : ""}${reasons.length ? `<ul>${reasons.map(reason=>`<li>${escape(t.staleReasons[reason])}</li>`).join("")}</ul>` : ""}<div class="decision-action-group">${managementBrief ? `<button type="button" id="view-management-brief" class="button button-secondary">${t.viewShared}</button>` : ""}${status !== "current" ? `<button type="button" id="update-shared-brief" class="button button-secondary">${status === "unreviewed" ? t.reviewShared : managementBrief ? t.updateShared : t.prepareShared}</button>` : ""}</div></aside>`;
+  }
+
   function clearBrief() {
-    managementBrief = null; briefOpen = false; briefLoading = false; briefPreview = false; briefCopied = false; briefGeneration++; briefMilestones.clear();
+    managementBrief = null; briefOpen = false; briefLoading = false; briefPreview = false; briefCopied = false; briefGeneration++;
   }
 
   function actionTitle(action) {
@@ -157,17 +166,6 @@
     return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
   }
 
-  function briefMilestone(state) {
-    if (state.publication?.status !== "published") return null;
-    const view = workflow.project(data,state,"P01");
-    if (view.rescheduleConfirmed) return "rescheduleConfirmed";
-    if (view.rescheduleQuoteReturned && !view.rescheduleDecisionCreated) return "rescheduleQuote";
-    if (view.resourceConfirmed) return "held";
-    if (view.resourceRejected) return "unavailable";
-    if (view.authorized) return "authorized";
-    if (state.decision?.tasksCreated) return "beforeAuthorization";
-    return null;
-  }
   function nextGuidedAction(state) {
     const d = state.decision;
     const step = (key, role, target) => ({key,role,target});
@@ -175,11 +173,6 @@
     if (state.publication?.status === "draft") {
       if (!state.publication.reviewedAt) return step("editRisk","P07","#review-publication-draft");
       return Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? step("publishRisk","P07","#publish-risk") : step("advancePublication","P07","#advance-event");
-    }
-    const milestone = briefMilestone(state);
-    if (milestone && !briefMilestones.has(milestone)) {
-      const current = managementBrief && !global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length;
-      if (!current || !managementBrief.previewed) return current ? step("previewBrief","P01","#preview-management-brief") : step("managementBrief","P01","#generate-management-brief");
     }
     if (!d) return step("select","P01","#comparison");
     if (!d.tasksCreated) return Object.values(d.drafts).every(value => value.trim()) ? step("confirm","P01","#confirm-task-briefs") : step("draft","P01","#draft-task-briefs");
@@ -211,7 +204,14 @@
       if (d.reviews.technical.status !== "completed") return step("completeTechnical","P02",'#review-technical-form textarea[name="reason"]');
       if (d.reviews.quality.status !== "completed") return step("completeQuality","P03",'#review-quality-form textarea[name="reason"]');
     }
-    if (reached("budgetAuthorized")) return step("authorize","P06",'#authorization-form input[name="signature"]');
+    if (reached("budgetAuthorized")) {
+      // One guide checkpoint before the initial signature. Later business events
+      // retain manual updates and shared stale warnings, never another milestone.
+      if (!managementBrief) return step("managementBrief","P01","#generate-management-brief");
+      if (global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length) return step("updateBrief","P01","#regenerate-management-brief");
+      if (!managementBrief.previewed) return step("previewBrief","P01","#preview-management-brief");
+      return step("authorize","P06",'#authorization-form input[name="signature"]');
+    }
     return null;
   }
 
@@ -241,8 +241,9 @@
     if (!guide || draftLoading || briefLoading) return;
     session.setViewer(guide.role); decisionError = ""; notificationsOpen = false;
     activePage = "overview";
-    if (["managementBrief","previewBrief"].includes(guide.key)) briefOpen = Boolean(managementBrief);
-    history.pushState(null,"",["managementBrief","previewBrief"].includes(guide.key) ? (guide.key === "previewBrief" ? "#management-brief" : "#decision") : guide.key === "select" ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
+    const briefGuide = ["managementBrief","updateBrief","previewBrief"].includes(guide.key);
+    if (briefGuide) { briefOpen = Boolean(managementBrief); if (guide.key === "previewBrief") briefPreview = false; }
+    history.pushState(null,"",briefGuide ? (managementBrief ? "#management-brief" : "#decision") : guide.key === "select" ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
     render();
     focusOperation(document.querySelector(guide.target));
   }
@@ -355,7 +356,7 @@
   }
 
   function renderWuxi(state) {
-    return global.DEMO_WUXI_VIEW.render({data,core,state,text,formValues,helpers:{escape,interpolate,money,instant,dateOnly,zoneLabel,city,icon,info,note,badge,renderFeeBreakdown}});
+    return global.DEMO_WUXI_VIEW.render({data,core,state,text,formValues,helpers:{escape,interpolate,money,instant,dateOnly,zoneLabel,city,icon,info,note,badge,renderFeeBreakdown,renderAuthorizationBrief}});
   }
   function renderUnpublished(state, person) {
     return `<div class="page-heading"><h1>${state.viewer === "P07" ? text.portal.privateDraft : text.project.title}</h1><div class="snapshot"><span>${text.overview.snapshot}</span> <time id="snapshot-time" datetime="${state.clock}">${instant(state.clock,person.timezone)}</time> ${zoneLabel(person.timezone)}</div></div>${state.viewer === "P07" ? renderWuxi(state) : `<section class="unpublished-state"><h2>${text.portal.hiddenTitle}</h2><p>${text.portal.hiddenBody}</p></section>`}`;
@@ -377,7 +378,7 @@
       <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools"><details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.english}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="true">${text.overview.languageCurrent}</button><button type="button" data-language="zh" disabled>${text.overview.languagePending}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
       <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
       <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-timing-kind="${banner.kind || "milestone"}" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
-      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement}})}${renderWuxi(state)}${renderContext(state)}`}
+      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief}})}${renderWuxi(state)}${renderContext(state)}`}
       ${renderManagementBrief(state)}${renderAdvance(state,person)}
       <footer class="page-footer">${text.overview.footer}</footer></main>`;
     footerObserver.disconnect();
@@ -521,16 +522,29 @@
   }
 
   document.addEventListener("click", event => {
+    if (event.target.closest("#view-management-brief")) {
+      if (session.getState().viewer !== "P06" || !managementBrief) return;
+      briefOpen = true; render(); focusOperation(document.getElementById("management-brief")); return;
+    }
+    if (event.target.closest("#update-shared-brief")) {
+      if (session.getState().viewer !== "P06") return;
+      session.setViewer("P01"); notificationsOpen = false; activePage = "overview"; briefOpen = Boolean(managementBrief);
+      const reviewOnly = managementBrief && !managementBrief.previewed && !global.DEMO_BRIEF.staleReasons(managementBrief,{data,state:session.getState()}).length;
+      if (reviewOnly) briefPreview = false;
+      render(); focusOperation(document.getElementById(reviewOnly ? "preview-management-brief" : managementBrief ? "regenerate-management-brief" : "generate-management-brief")); return;
+    }
     if (event.target.closest("#generate-management-brief")) { generateManagementBrief(); return; }
     if (event.target.closest("#regenerate-management-brief")) { requestBriefUpdate(); return; }
     if (event.target.closest("#confirm-regenerate-brief")) { dialog.close(); generateManagementBrief(true); return; }
     if (event.target.closest("#preview-management-brief")) {
       if (session.getState().viewer !== "P01" || !managementBrief) return;
       briefPreview = true; managementBrief.previewed = true;
-      if (!global.DEMO_BRIEF.staleReasons(managementBrief,{data,state:session.getState()}).length) briefMilestones.add(briefMilestone(session.getState()));
       render(); focusOperation(document.getElementById("management-brief-preview")); return;
     }
-    if (event.target.closest("#edit-management-brief")) { briefPreview = false; briefCopied = false; render(); focusOperation(document.getElementById("management-brief-editor")); return; }
+    if (event.target.closest("#edit-management-brief")) {
+      if (session.getState().viewer !== "P01" || !managementBrief) return;
+      briefPreview = false; briefCopied = false; render(); focusOperation(document.getElementById("management-brief-editor")); return;
+    }
     if (event.target.closest("#copy-management-brief")) { void copyManagementBrief(); return; }
     if (event.target.closest("#confirm-copy-stale-brief")) { dialog.close(); void copyManagementBrief(true); return; }
     if (event.target.closest("#demo-next-step:not(:disabled)")) { openGuidedAction(); return; }

@@ -102,6 +102,15 @@ async function decisionSnapshot(targetPage) {
   }));
 }
 async function guide(targetPage, key, viewer, target) {
+  if (await targetPage.locator('#demo-next-step').getAttribute('data-guide-key') === 'managementBrief' && key !== 'managementBrief') {
+    const milestoneBefore = await decisionSnapshot(targetPage);
+    await targetPage.locator('#demo-next-step').click();
+    await targetPage.locator('#generate-management-brief').click();
+    if (await targetPage.locator('#confirm-regenerate-brief').isVisible()) await targetPage.locator('#confirm-regenerate-brief').click();
+    await targetPage.locator('#management-brief-editor').waitFor();
+    await targetPage.locator('#preview-management-brief').click();
+    assert.deepEqual(await decisionSnapshot(targetPage), milestoneBefore, 'Reviewing a management brief does not execute a workflow action');
+  }
   const before = await decisionSnapshot(targetPage);
   const button = targetPage.locator('#demo-next-step');
   assert.equal(await button.getAttribute('data-guide-key'), key);
@@ -320,8 +329,8 @@ try {
   await sign(page);
   assert.equal(await clock(page), stops[3]);
   assert.match(await page.locator('#priority-risk .risk-status:not(#project-status)').innerText(), /awaiting WuXi confirmation/i, 'The homepage banner no longer asks for a customer decision after authorization');
-  assert.match(await page.locator('#decision-deadline').innerText(), /Customer authorized at/);
-  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), stops[3]);
+  assert.match(await page.locator('#decision-deadline').innerText(), /WuXi|confirmation/i);
+  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), '2026-11-16T17:00:00+08:00');
   assert.equal(await page.locator('#advance-event').isEnabled(), true, 'A valid authorization unlocks the next WuXi work event, without confirming resources');
   await capture(page, 'decision-authorized.png');
   for (const [id, task] of [['P07', 'receipt'], ['P08', 'schedule']]) {

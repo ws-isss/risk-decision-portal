@@ -5,9 +5,9 @@
   "description": "Local-first synthetic delivery-risk decision prototype",
   "scripts": {
     "validate": "node scripts/validate.mjs",
-    "test": "node scripts/test-core.mjs && node scripts/test-workflow.mjs && node scripts/test-decision.mjs && node scripts/test-wuxi.mjs",
+    "test": "node scripts/test-core.mjs && node scripts/test-workflow.mjs && node scripts/test-decision.mjs && node scripts/test-wuxi.mjs && node scripts/test-brief.mjs",
     "build": "node scripts/build.mjs",
-    "check": "node scripts/validate.mjs && node scripts/test-core.mjs && node scripts/test-workflow.mjs && node scripts/test-decision.mjs && node scripts/test-wuxi.mjs && node scripts/build.mjs"
+    "check": "node scripts/validate.mjs && node scripts/test-core.mjs && node scripts/test-workflow.mjs && node scripts/test-decision.mjs && node scripts/test-wuxi.mjs && node scripts/test-brief.mjs && node scripts/build.mjs"
   },
   "engines": { "node": ">=18" }
 }

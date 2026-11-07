@@ -58,6 +58,15 @@ async function notifications(targetPage) {
   await targetPage.locator('#notifications-panel').waitFor();
 }
 async function guide(targetPage, key, viewer, target) {
+  if (await targetPage.locator('#demo-next-step').getAttribute('data-guide-key') === 'managementBrief' && key !== 'managementBrief') {
+    const milestoneClock = await clock(targetPage);
+    await targetPage.locator('#demo-next-step').click();
+    await targetPage.locator('#generate-management-brief').click();
+    if (await targetPage.locator('#confirm-regenerate-brief').isVisible()) await targetPage.locator('#confirm-regenerate-brief').click();
+    await targetPage.locator('#management-brief-editor').waitFor();
+    await targetPage.locator('#preview-management-brief').click();
+    assert.equal(await clock(targetPage), milestoneClock, 'Brief preview does not advance the business clock');
+  }
   const before = await clock(targetPage);
   const initialViewer = await targetPage.locator('#viewer').inputValue();
   const resourceBefore = await targetPage.locator('#wuxi').getAttribute('data-resource-status');
@@ -190,6 +199,14 @@ try {
   assert.match(await page.locator('#risk-client-preview').innerText(), /possible|potential|may/i);
   assert.equal(await page.locator('[data-preview-certainty]').getAttribute('data-preview-certainty'), 'potentialImpact');
   assert.match(await page.locator('#risk-client-preview').innerText(), /2\.8%/);
+  await page.locator('#review-publication-draft').click();
+  assert.equal(await page.locator('#demo-next-step').count(), 0, 'A reviewed prepublication draft guides to time advancement, not the same review again');
+  assert.equal(await page.locator('#advance-event').isEnabled(), true);
+  await publication.locator('select[name="certainty"]').selectOption('underAssessment');
+  assert.equal(await page.locator('#review-publication-draft').count(), 1, 'Editing the draft requires a fresh review');
+  assert.equal(await page.locator('#publish-risk').isDisabled(), true);
+  await publication.locator('select[name="certainty"]').selectOption('potentialImpact');
+  await page.locator('#review-publication-draft').click();
   await advance(page, '2026-11-09T16:00:00+08:00');
   await page.locator('#publish-risk').click();
   assert.equal(Date.parse(await clock(page)), Date.parse(chapterTimes.selection), 'Publishing advances to the existing customer snapshot, never backwards');
@@ -266,6 +283,8 @@ try {
   assert.equal(await page.locator('#wuxi-response [data-receipt-by="P07"]').count(), 1);
   assert.match(await page.locator('[data-metric="confirmation"] [data-plan="A"]').innerText(), /held|hold confirmed/i);
   assert.match(await page.locator('#project-status').innerText(), /At risk/);
+  assert.equal(await page.locator('#decision-deadline').getAttribute('data-deadline-state'), 'held');
+  assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), '2026-12-09T17:00:00+08:00');
   await page.locator('#risk-title a').click();
   await page.locator('#risk-timeline').waitFor();
   assert.equal(await page.locator('[data-risk-event="resourceConfirmed"]').getAttribute('data-event-status'), 'recorded');
@@ -294,15 +313,16 @@ try {
   assert.equal(await page.locator('#wuxi [data-hold-status="confirmed"]').count(), 0);
   assert.match(await page.locator('[data-metric="delivery"]').innerText(), /reassessment|required|reassess/i);
   assert.ok(!(await page.locator('[data-metric="gap"]').innerText()).match(/8 days before|34 days after/), 'A rejected resource assumption cannot retain an active delivery-gap forecast');
+  await guide(page, 'reschedule', 'P07', '#request-reschedule');
   await page.locator('#request-reschedule').click();
-  await resourceStatus(page, 'reschedulePending');
+  await resourceStatus(page, 'awaitingWuXiQuote');
   await incurred(page, 0);
   assert.match(await page.locator('#wuxi').innerText(), /pending|awaiting/i);
   assert.match(await page.locator('[data-task="reschedule"]').innerText(), /To be agreed/i, 'A newly requested reschedule does not inherit an expired action-start date');
   assert.equal(await page.locator('[data-task="reschedule"] time').count(), 0);
   assert.equal(await page.locator('#wuxi [data-hold-status="confirmed"]').count(), 0);
   assert.ok(!/Apr 22/.test(await page.locator('#wuxi').innerText()), 'A reschedule request does not inherit option B delivery');
-  assert.match(await page.locator('[data-metric="confirmation"] [data-plan="B"]').innerText(), /pending|not yet|awaiting/i);
+  assert.match(await page.locator('[data-metric="confirmation"] [data-plan="B"]').innerText(), /pending|not yet|awaiting|waiting/i);
   await page.locator('#risk-title a').click();
   await page.locator('#risk-timeline').waitFor();
   assert.equal(await page.locator('[data-risk-event="resourceRejected"]').getAttribute('data-event-status'), 'recorded');
@@ -311,13 +331,78 @@ try {
   await page.locator('.risk-back').click();
   await page.locator('#wuxi').waitFor();
   await capture(page, 'wuxi-unavailable.png');
+
+  // Quote preparation, customer response, a new decision and a fresh signed
+  // authorization all precede the only rescheduling fee-triggering action.
+  const rescheduleClock = await clock(page);
+  await guide(page, 'rescheduleQuote', 'P08', '#record-reschedule-quote');
+  await page.locator('#record-reschedule-quote').click();
+  await resourceStatus(page, 'quoteReadyInternal');
+  await incurred(page, 0);
+  await role(page, 'P01');
+  await resourceStatus(page, 'awaitingWuXiQuote');
+  assert.equal(await page.locator('[data-reschedule-quote-visible]').count(), 0, 'An internal quote is not customer-visible before Alex returns it');
+  assert.equal(await page.locator('#launch-reschedule-decision').count(), 0);
+  await guide(page, 'returnQuote', 'P07', '#return-reschedule-quote');
+  await page.locator('#return-reschedule-quote').click();
+  await incurred(page, 0);
+  await guide(page, 'rescheduleDecision', 'P01', '#launch-reschedule-decision');
+  await resourceStatus(page, 'awaitingCustomerDecision');
+  assert.match(await page.locator('[data-reschedule-quote-visible]').innerText(), /Feb 15[\s\S]*\$10,000[\s\S]*Q-B[\s\S]*v1/);
+  await page.locator('#launch-reschedule-decision').click();
+  await guide(page, 'rescheduleAuthorization', 'P06', '#reschedule-authorization-form input[name="signature"]');
+  await resourceStatus(page, 'awaitingCustomerAuthorization');
+  await incurred(page, 0);
+  await page.locator('#authorize-reschedule').click();
+  assert.equal(await page.locator('#reschedule-authorization-form input[name="signature"]').evaluate(node => node.validity.valueMissing), true);
+  await role(page, 'P07');
+  assert.equal(await page.locator('#confirm-reschedule').count(), 0, 'Leaving Elena unsigned cannot be treated as authorization');
+  await resourceStatus(page, 'awaitingCustomerAuthorization');
+  await incurred(page, 0);
+  await guide(page, 'rescheduleAuthorization', 'P06', '#reschedule-authorization-form input[name="signature"]');
+  await page.locator('#fill-reschedule-signature').click();
+  await resourceStatus(page, 'awaitingCustomerAuthorization');
+  await page.locator('#reschedule-authorization-form textarea[name="reason"]').fill('I authorize the returned $10,000 rescheduling quote. Technical readiness and delivery remain under assessment.');
+  await page.locator('#reschedule-authorization-form input[name="acknowledged"]').check();
+  await page.locator('#authorize-reschedule').click();
+  await resourceStatus(page, 'awaitingWuXiConfirmation');
+  await incurred(page, 0);
+  await guide(page, 'confirmReschedule', 'P07', '#confirm-reschedule');
+  await page.locator('#confirm-reschedule').click();
+  await resourceStatus(page, 'confirmed');
+  await incurred(page, 10000);
+  assert.equal(await clock(page), rescheduleClock, 'Sequence-only follow-up actions do not invent elapsed business time');
+  await role(page, 'P01');
+  await incurred(page, 10000);
+  assert.match(await page.locator('#reschedule-workspace').innerText(), /readiness[\s\S]*under assessment|readiness pending|delivery requires reassessment/i);
+  assert.match(await page.locator('[data-metric="delivery"]').innerText(), /reassessment required/i);
+  assert.equal(await page.locator('.reschedule-records time').count(), 0, 'Unscheduled records have order labels, not invented timestamps');
+  await page.locator('.reschedule-records summary').click();
+  assert.equal(await page.locator('.reschedule-records p').count(), 6);
+  assert.ok(!/1970|Invalid Date/.test(await page.locator('.reschedule-records').innerText()));
+  assert.equal(await page.locator('#decision-deadline').getAttribute('data-deadline-state'), 'rescheduled');
+  await notifications(page);
+  await page.locator('[data-task-link="rescheduleConfirmation"]').click();
+  await page.locator('#task-rescheduleConfirmation').waitFor();
+  assert.equal(await page.locator('#task-rescheduleConfirmation a').getAttribute('href'), '#wuxi');
+  await page.locator('#risk-title a').click();
+  assert.equal(await page.locator('.risk-request-state').getAttribute('data-risk-decision-state'), 'confirmed');
+  assert.equal(await page.locator('[data-risk-replacement="confirmed"]').count(), 1);
+  assert.ok(!/1970|Invalid Date/.test(await page.locator('#risk-timeline').innerText()));
+  assert.equal(await page.locator('#risk-followup-timeline [data-event-time-status="notScheduled"]').count(), 6);
+  assert.equal(await page.locator('#risk-followup-timeline time').count(), 0);
+  const sequence = await page.locator('#risk-followup-timeline [data-event-sequence]').evaluateAll(nodes => nodes.map(node => Number(node.dataset.eventSequence)));
+  assert.equal(new Set(sequence).size, 6);
+  assert.deepEqual(sequence, [...sequence].sort((a, b) => a - b), 'Unscheduled follow-up records preserve their action order');
+  await page.locator('.risk-back').click();
+  await capture(page, 'wuxi-rescheduled.png');
   await authorizeB(page);
   await incurred(page, 0);
   assert.equal(await page.locator('#wuxi [data-hold-status="confirmed"]').count(), 0);
   assert.equal(await page.locator('#resource-response-form option[value="held"]:enabled').count(), 0, 'Option B never offers an original-window hold');
   await guide(page, 'reschedule', 'P07', '#request-reschedule');
   await page.locator('#request-reschedule').click();
-  await resourceStatus(page, 'reschedulePending');
+  await resourceStatus(page, 'awaitingWuXiQuote');
   await incurred(page, 0);
   assert.equal(await page.locator('#wuxi [data-hold-status="confirmed"]').count(), 0);
   assert.ok(!/Apr 22/.test(await page.locator('#wuxi').innerText()), 'B authorization submits a reschedule request, not a confirmed delivery date');
@@ -339,7 +424,7 @@ try {
   await mobileContext.close();
   assert.deepEqual(errors, [], 'No browser exceptions in publication, resources or exceptions');
   assert.deepEqual(network, [], 'Every Phase 5 action works from an isolated offline HTML file');
-  console.log('WuXi browser checks passed: customer draft isolation, publication metadata, explicit chapter resets and seed provenance, form/read-state reset, resource review and named response separation, conditional hold, fee triggers, rejection and pending reschedule, frozen dates/amounts, offline and mobile.');
+  console.log('WuXi browser checks passed: customer draft isolation, publication review and metadata, explicit chapter resets and seed provenance, form/read-state reset, named resource response separation, hold and fee triggers, full quote/decision/authorization/reschedule flow, sequence-only follow-up records, frozen dates/amounts, offline and mobile.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

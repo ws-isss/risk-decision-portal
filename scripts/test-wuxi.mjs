@@ -40,6 +40,10 @@ assert.throws(() => s.saveRiskDraft({ certainty:'potentialImpact',nextUpdateEven
 s.saveRiskDraft({ certainty:'potentialImpact',nextUpdateEvent:'resourceConfirmed' });
 assert.equal(s.getState().publication.status, 'draft');
 assert.equal(s.getAdvanceInfo().nextEvent, 'materialReady');
+assert.equal(s.getAdvanceInfo().blockKey, 'reviewRiskDraft');
+assert.throws(() => s.advanceNext(), /ADVANCE_BLOCKED_reviewRiskDraft/);
+s.reviewRiskDraft();
+assert.equal(s.getState().publication.reviewedAt,data.events.riskDiscovered.at);
 s.advanceNext();
 assert.equal(s.getState().clock, data.events.materialReady.at);
 assert.equal(s.getState().publication.status, 'draft');
@@ -136,7 +140,7 @@ assert.equal(s.getState().branchIntent, 'unavailable');
 s.respondScheduling({outcome:'unavailable',reason:fixtures.rejectionReason});
 assert.equal(workflow.project(data,s.getState(),'P07').committedFees,0);
 assert.equal(workflow.project(data,s.getState(),'P01').resourceRejected,false);
-s.setViewer('P01'); assert.throws(() => s.requestReschedule(), /RESCHEDULE_NOT_AVAILABLE/);
+s.setViewer('P07'); assert.throws(() => s.requestReschedule(), /RESCHEDULE_NOT_AVAILABLE/);
 s.setViewer('P07'); s.returnResourceReceipt();
 state = s.getState();
 assert.equal(workflow.project(data,state,'P01').resourceRejected,true);
@@ -149,9 +153,10 @@ assert.equal(rescheduleTask.timingKey,'notScheduled', 'No replacement start dead
 assert.ok(!state.eventIds.includes('resourceSlotsConfirmed'));
 assert.ok(!state.eventIds.includes('windowHoldConfirmed'));
 s.setViewer('P05'); assert.throws(() => s.requestReschedule(), /ROLE_NOT_ALLOWED/);
-s.setViewer('P01'); s.requestReschedule();
+s.setViewer('P01'); assert.throws(() => s.requestReschedule(), /ROLE_NOT_ALLOWED/);
+s.setViewer('P07'); s.requestReschedule();
 const requested = s.getState();
-assert.equal(requested.decision.resource.rescheduleRequest.by,'P01');
+assert.equal(requested.decision.resource.rescheduleRequest.by,'P07');
 assert.equal(workflow.project(data,requested).rescheduleRequested,true);
 assert.equal(workflow.project(data,requested).resourceConfirmed,false);
 assert.equal(workflow.project(data,requested).committedFees,0);
@@ -161,7 +166,7 @@ for (const role of Object.keys(data.people)) {
   const tasks = workflow.tasks(data,s.getState(),role), notices = workflow.notifications(data,s.getState(),role);
   for (const notice of notices) {
     assert.ok(tasks.some(task=>task.key===notice.taskKey),'Every notification has a visible task target');
-    assert.ok(Date.parse(notice.at)<=Date.parse(s.getState().clock),'No future notification is recorded');
+    assert.ok(notice.timeStatus === 'notScheduled' && notice.at === null || Date.parse(notice.at)<=Date.parse(s.getState().clock),'No future notification is recorded');
   }
 }
 
@@ -181,11 +186,116 @@ assert.equal(workflow.project(data,s.getState()).resourceConfirmed,false);
 assert.equal(s.getState().decision.resource.scheduling,null);
 assert.equal(s.getState().clock,data.events.budgetAuthorized.at);
 const finalClock = s.getState().clock;
+function finishRescheduling(session, expectedOriginalFailure) {
+  const frozenClock = session.getState().clock;
+  const project = role => workflow.project(data, session.getState(), role);
+  assert.equal(project('P01').rescheduleStage,'awaitingWuXiQuote');
+  assert.equal(project('P01').rescheduleQuote,null);
+  assert.equal(project('P01').rescheduleFees,0);
+  session.setViewer('P07');
+  assert.throws(() => session.returnRescheduleQuote(), /RESCHEDULE_QUOTE_REQUIRED/);
+  assert.throws(() => session.confirmReschedule(), /RESCHEDULE_AUTHORIZATION_REQUIRED/);
+  const customerBeforeQuote = JSON.stringify(project('P01'));
+  const clientNoticesBeforeQuote = JSON.stringify(workflow.notifications(data,session.getState(),'P01'));
+  session.setViewer('P01'); assert.throws(() => session.respondRescheduleQuote(), /ROLE_NOT_ALLOWED/);
+  assert.throws(() => session.createRescheduleDecision(), /RESCHEDULE_QUOTE_RETURN_REQUIRED/);
+  session.setViewer('P08'); session.respondRescheduleQuote();
+  assert.equal(project('P08').rescheduleStage,'quoteReadyInternal');
+  assert.equal(project('P08').rescheduleQuote.amount,data.fees.reschedule);
+  assert.equal(project('P08').rescheduleQuote.candidateWindow,data.plans.B.window.at);
+  assert.equal(project('P08').rescheduleQuote.quoteRef,'Q-B');
+  assert.equal(project('P08').rescheduleQuote.version,data.reports['Q-B'].version);
+  assert.equal(JSON.stringify(project('P01')),customerBeforeQuote,'A private quote cannot change client-visible data or brief source fingerprint');
+  assert.equal(JSON.stringify(workflow.notifications(data,session.getState(),'P01')),clientNoticesBeforeQuote,'A private quote cannot leak through customer notifications');
+  const quotedRevision = session.getState().revision; session.respondRescheduleQuote(); assert.equal(session.getState().revision,quotedRevision);
+  assert.equal(project('P08').committedFees,0);
+  session.setViewer('P07'); session.returnRescheduleQuote();
+  assert.equal(project('P01').rescheduleStage,'awaitingCustomerDecision');
+  assert.equal(project('P01').rescheduleQuote.amount,data.fees.reschedule);
+  assert.equal(project('P01').rescheduleConfirmed,false);
+  session.setViewer('P06'); assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:'ok',acknowledged:true}), /RESCHEDULE_DECISION_REQUIRED/);
+  session.setViewer('P01'); session.createRescheduleDecision();
+  assert.equal(project('P01').rescheduleStage,'awaitingCustomerAuthorization');
+  assert.equal(project('P01').committedFees,0);
+  session.setViewer('P07'); assert.throws(() => session.confirmReschedule(), /RESCHEDULE_AUTHORIZATION_REQUIRED/);
+  session.setViewer('P05'); assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:'ok',acknowledged:true}), /ROLE_NOT_ALLOWED/);
+  session.setViewer('P06');
+  assert.throws(() => session.authorizeReschedule({signature:'Ben Lewis',reason:'ok',acknowledged:true}), /INVALID_SIGNATURE/);
+  assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:' ',acknowledged:true}), /REASON_REQUIRED/);
+  assert.throws(() => session.authorizeReschedule({signature:data.people.P06.name,reason:'ok',acknowledged:false}), /ACKNOWLEDGEMENT_REQUIRED/);
+  session.authorizeReschedule({signature:data.people.P06.name,reason:'Authorize the quoted rescheduling scope separately.',acknowledged:true});
+  assert.equal(project('P01').rescheduleStage,'awaitingWuXiConfirmation');
+  assert.equal(project('P01').rescheduleAuthorized,true);
+  assert.equal(project('P01').rescheduleConfirmed,false);
+  assert.equal(project('P01').committedFees,0,'Elena authorization alone cannot commit a fee or confirm the alternative window');
+  assert.equal(project('P01').rescheduleAuthorization.at,null,'No calendar timestamp exists for this new approval');
+  assert.equal(project('P01').rescheduleAuthorization.timeStatus,'notScheduled');
+  const authorizedRevision = session.getState().revision;
+  session.authorizeReschedule({signature:data.people.P06.name,reason:'duplicate',acknowledged:true}); assert.equal(session.getState().revision,authorizedRevision);
+  assert.throws(() => session.confirmReschedule(), /ROLE_NOT_ALLOWED/);
+  session.setViewer('P07'); session.confirmReschedule();
+  assert.equal(project('P01').rescheduleStage,'confirmed');
+  assert.equal(project('P01').rescheduleConfirmed,true);
+  assert.equal(project('P01').rescheduleConfirmation.candidateWindow,data.plans.B.window.at);
+  assert.equal(project('P01').rescheduleFees,data.fees.reschedule);
+  assert.equal(project('P01').resourceFees,0);
+  assert.equal(project('P01').committedFees,data.fees.reschedule,'Only the separate rescheduling fee is committed');
+  assert.equal(project('P01').forecastReassessmentRequired,true,'A confirmed alternative window cannot revive a previous delivery forecast');
+  assert.equal(project('P01').resourceRejected,expectedOriginalFailure);
+  if (expectedOriginalFailure) assert.equal(workflow.confirmations(data,session.getState()).find(item=>item.key==='schedule').status,'resourceUnavailable','Original A resource rejection remains distinct from Alex’s new B confirmation');
+  const completedRevision = session.getState().revision; session.confirmReschedule(); assert.equal(session.getState().revision,completedRevision);
+  assert.equal(session.getState().clock,frozenClock,'Unscheduled new steps cannot fabricate a clock or same-time approval');
+  const ids = ['rescheduleRequested','rescheduleQuotePrepared','rescheduleQuoteReturned','rescheduleDecisionCreated','rescheduleAuthorized','rescheduleConfirmed'];
+  const records = ids.map(id => session.getState().decision.audit.find(item=>item.id===id));
+  for (let index=0; index<records.length; index++) {
+    assert.equal(records[index].at,null); assert.equal(records[index].timeStatus,'notScheduled');
+    if (index) assert.ok(records[index].sequence>records[index-1].sequence);
+    assert.equal(session.getState().decision.audit.filter(item=>item.id===ids[index]).length,1);
+  }
+  for (const viewer of Object.keys(data.people)) {
+    const tasks = workflow.tasks(data,session.getState(),viewer);
+    for (const item of workflow.notifications(data,session.getState(),viewer)) {
+      assert.ok(tasks.some(task=>task.key===item.taskKey));
+      if (ids.includes(item.id.split(':')[0])) { assert.equal(item.at,null); assert.equal(item.timeStatus,'notScheduled'); assert.ok(item.sequence>0); }
+    }
+    for (const task of tasks.filter(task=>task.key.startsWith('reschedule'))) { assert.equal(task.event,null); assert.equal(task.timingKey,'notScheduled'); }
+  }
+}
+finishRescheduling(s,false);
+
+// A prior optional fallback never substitutes for this separately quoted,
+// explicitly signed decision. Exercise both unchecked and checked scopes.
+for (const fallback of [false,true]) {
+  const a = core.createSession(data);
+  a.selectPlan('A'); if (fallback) a.setFallback(true); a.saveDrafts(fixtures.drafts); a.confirmTasks();
+  a.setViewer('P02'); a.startReview('technical'); a.setViewer('P03'); a.startReview('quality'); a.advanceNext();
+  a.setViewer('P01'); a.assignSupport(); a.setViewer('P05'); a.acceptSupport(); a.advanceNext();
+  a.setViewer('P01'); a.designateApprover(); a.advanceNext();
+  a.setViewer('P02'); a.completeReview('technical',fixtures.reviewReasons.technical);
+  a.setViewer('P03'); a.completeReview('quality',fixtures.reviewReasons.quality); a.advanceNext();
+  a.setViewer('P06'); a.authorize({signature:data.people.P06.name,reason:fixtures.authorizationReason,acknowledged:true}); a.advanceNext();
+  a.setViewer('P07'); a.startResourceReview(); a.advanceNext(); a.setViewer('P08'); a.respondScheduling({outcome:'unavailable',reason:fixtures.rejectionReason});
+  a.setViewer('P07'); a.returnResourceReceipt(); a.requestReschedule();
+  assert.equal(a.getState().decision.fallbackSelected,fallback);
+  finishRescheduling(a,true);
+}
+
 s.setViewer('P01'); assert.equal(s.getState().clock,finalClock);
 s.enterChapter('selection');
 assert.equal(s.getState().decision,null);
 assert.deepEqual(plain(s.getState().eventIds),[]);
 assert.equal(s.getState().chapterSeeded,false);
 assert.equal(s.getState().resetNotice,true);
+s.enterChapter('prepublication');
+s.reviewRiskDraft();
+const reviewedDraft = s.getState().publication.reviewedAt;
+s.saveRiskDraft({certainty:'underAssessment',nextUpdateEvent:'reviewsComplete'});
+assert.equal(s.getState().publication.reviewedAt,reviewedDraft,'Saving unchanged draft fields keeps the explicit review');
+s.saveRiskDraft({certainty:'potentialImpact',nextUpdateEvent:'reviewsComplete'});
+assert.equal(s.getState().publication.reviewedAt,null,'Changed draft content requires a new explicit review');
+assert.equal(s.getAdvanceInfo().blockKey,'reviewRiskDraft');
+s.advanceTo('materialReady');
+assert.throws(() => s.publishRisk(), /RISK_REVIEW_REQUIRED/);
+s.reviewRiskDraft(); s.publishRisk();
 assert.equal(JSON.stringify(data),originalData,'Phase5 never modifies frozen facts, dates, windows or fees');
-console.log('WuXi checks passed: publication isolation, monotonic clock, explicit seeded chapters, role guards, distinct scheduling/receipt records, private outcome isolation, exact fee triggers, rejection and pending rescheduling, B boundary and reset.');
+console.log('WuXi checks passed: publication isolation, monotonic clock, explicit seeded chapters, role guards, distinct scheduling/receipt records, private outcome isolation, exact fee triggers, rejection and separate rescheduling quote/decision/signature/confirmation, untimed ordering, fallback isolation, B boundary and reset.');

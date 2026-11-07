@@ -15,6 +15,13 @@
   let draftGeneration = 0;
   let decisionError = "";
   let formValues = {};
+  let managementBrief = null;
+  let briefOpen = false;
+  let briefLoading = false;
+  let briefPreview = false;
+  let briefGeneration = 0;
+  const briefMilestones = new Set();
+  let briefCopied = false;
   let layoutFrame;
   const footerObserver = new ResizeObserver(() => reserveFooterSpace());
   const notificationReads = new Map();
@@ -56,13 +63,15 @@
 
   function decisionStatus(state) {
     const view = workflow.project(data,state);
-    if (view.rescheduleRequested) return text.portal.pendingReschedule;
+    if (view.rescheduleStage && view.rescheduleStage !== "none") return text.portal.rescheduleStages[view.rescheduleStage];
     if (view.resourceRejected) return text.portal.unavailable;
     if (view.resourceConfirmed) return text.portal.success;
     return state.decision?.authorization ? text.decision.authorized : text.decision.requestOpen;
   }
   function feeStatement(state) {
     const view = workflow.project(data,state);
+    if (view.rescheduleConfirmed) return interpolate(text.portal.rescheduleCommitted,{amount:money(data.fees.reschedule),study:money(data.fees.shared)});
+    if (view.rescheduleQuoteReturned) return interpolate(text.portal.reschedulePendingFee,{amount:money(data.fees.reschedule)});
     if (view.committedFees) return interpolate(text.portal.committed,{amount:money(view.committedFees),study:money(data.fees.shared)});
     if (view.resourceRejected) return text.portal.failureNote;
     if (state.decision?.authorization && !["P07","P08"].includes(state.viewer)) return text.portal.feesAwaiting;
@@ -70,11 +79,31 @@
   }
   function windowStatus(plan, state) {
     const view = workflow.project(data,state);
-    if (view.rescheduleRequested && plan.id === "B") return text.portal.pendingReschedule;
+    if (view.rescheduleConfirmed && plan.id === "B") return text.portal.confirmedWindow;
+    if (view.rescheduleRequested && plan.id === "B") return text.portal.rescheduleStages[view.rescheduleStage];
     if (plan.id !== state.decision?.planId) return text.overview.notRequested;
     if (view.resourceConfirmed) return interpolate(text.portal.heldUntil,{time:core.formatInstant(data.plans.A.holdUntil,data.calendars.base.timezone)});
     if (view.resourceRejected) return text.portal.unavailable;
     return state.decision?.authorization ? text.portal.awaiting : text.overview.notRequested;
+  }
+
+  function bannerState(state) {
+    const view = workflow.project(data,state);
+    if (view.rescheduleConfirmed) return {label:text.portal.confirmedWindow,at:data.plans.B.window.at,zone:data.calendars.base.timezone,status:text.portal.rescheduleStages.confirmed};
+    if (view.resourceConfirmed) return {label:text.portal.holdExpiry,at:data.plans.A.holdUntil,zone:data.calendars.base.timezone,status:text.portal.success};
+    if (view.resourceRejected || view.rescheduleRequested || state.decision?.authorization && state.decision.planId === "B") return {label:text.portal.awaitingUpdate,at:null,status:view.rescheduleRequested ? text.portal.rescheduleStages[view.rescheduleStage] : view.resourceRejected ? text.portal.unavailable : text.portal.pendingReschedule};
+    const isWuxi = ["P07","P08"].includes(state.viewer);
+    if (isWuxi || state.decision?.authorization) return {label:text.portal.resourceDue,at:data.events.resourceConfirmationDeadline.at,zone:data.calendars.base.timezone,status:state.decision?.authorization ? text.decision.authorized : text.overview.riskState};
+    return {label:text.overview.decisionBy,at:data.events.latestAuthorization.at,zone:data.baseline.timezone,status:text.overview.riskState};
+  }
+
+  function renderManagementBrief(state) {
+    if (!briefOpen) return "";
+    return global.DEMO_BRIEF_VIEW.render({brief:managementBrief,loading:briefLoading,state,text,helpers:{escape},staleReasons:global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}),preview:briefPreview,copied:briefCopied});
+  }
+
+  function clearBrief() {
+    managementBrief = null; briefOpen = false; briefLoading = false; briefPreview = false; briefCopied = false; briefGeneration++; briefMilestones.clear();
   }
 
   function actionTitle(action) {
@@ -110,7 +139,7 @@
       ${actions.length ? `<div class="table-wrap actions-wrap"><table class="actions-table"><thead><tr><th scope="col">${text.overview.person}</th><th scope="col">${text.overview.action}</th><th scope="col">${text.overview.deadline}</th><th scope="col">${text.overview.status}</th></tr></thead><tbody>${actions.map(action => {
         const owner = data.people[action.owner];
         const title = actionTitle(action);
-        return `<tr id="task-${action.key}" data-task="${action.key}" data-owner="${owner.id}" tabindex="-1"${location.hash === `#task-${action.key}` ? ' class="task-highlight"' : ""}><td class="task-person">${escape(owner.name)}</td><td class="task-description"><span>${state.decision ? `<a href="${["resource","schedule","monitor","receipt","reschedule"].includes(action.key) ? "#wuxi" : "#decision"}">${escape(title)}</a>` : escape(title)}</span>${actionInfo(action)}</td><td class="action-due" data-label="${escape(text.overview.deadline)}">${actionDue(action, person)}</td><td data-task-status="${action.status}">${badge(action.status)}</td></tr>`;
+        return `<tr id="task-${action.key}" data-task="${action.key}" data-owner="${owner.id}" tabindex="-1"${location.hash === `#task-${action.key}` ? ' class="task-highlight"' : ""}><td class="task-person">${escape(owner.name)}</td><td class="task-description"><span>${state.decision ? `<a href="${(["resource","schedule","monitor","receipt"].includes(action.key) || action.key.startsWith("reschedule")) ? "#wuxi" : "#decision"}">${escape(title)}</a>` : escape(title)}</span>${actionInfo(action)}</td><td class="action-due" data-label="${escape(text.overview.deadline)}">${actionDue(action, person)}</td><td data-task-status="${action.status}">${badge(action.status)}</td></tr>`;
       }).join("")}</tbody></table></div>` : `<div class="empty-actions"><strong>${text.actions.noTasks}</strong>${info("unassigned", text.overview.coverageInfo, note(person.id === "P05" ? text.actions.backupNote : text.actions.alternateNote))}</div>`}
     </section>`;
   }
@@ -122,19 +151,48 @@
   function renderAdvance(state, person) {
     const step = session.getAdvanceInfo();
     const guide = nextGuidedAction(state);
+    const guideButton = guide && guide.key !== "advancePublication";
     const stepZone = state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone;
-    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guide ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guide ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${step.done && !guide ? text.portal.terminal : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
+    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
   }
 
+  function briefMilestone(state) {
+    if (state.publication?.status !== "published") return null;
+    const view = workflow.project(data,state,"P01");
+    if (view.rescheduleConfirmed) return "rescheduleConfirmed";
+    if (view.rescheduleQuoteReturned && !view.rescheduleDecisionCreated) return "rescheduleQuote";
+    if (view.resourceConfirmed) return "held";
+    if (view.resourceRejected) return "unavailable";
+    if (view.authorized) return "authorized";
+    if (state.decision?.tasksCreated) return "beforeAuthorization";
+    return null;
+  }
   function nextGuidedAction(state) {
     const d = state.decision;
     const step = (key, role, target) => ({key,role,target});
-    if (state.publication?.status === "draft") return step(Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? "publishRisk" : "editRisk","P07",Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? "#publish-risk" : '#risk-publication-form select[name="certainty"]');
+    if (state.publication?.status === "draft") {
+      if (!state.publication.reviewedAt) return step("editRisk","P07","#review-publication-draft");
+      return Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? step("publishRisk","P07","#publish-risk") : step("advancePublication","P07","#advance-event");
+    }
+    const milestone = briefMilestone(state);
+    if (milestone && !briefMilestones.has(milestone)) {
+      const current = managementBrief && !global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length;
+      if (!current || !managementBrief.previewed) return current ? step("previewBrief","P01","#preview-management-brief") : step("managementBrief","P01","#generate-management-brief");
+    }
     if (!d) return step("select","P01","#comparison");
     if (!d.tasksCreated) return Object.values(d.drafts).every(value => value.trim()) ? step("confirm","P01","#confirm-task-briefs") : step("draft","P01","#draft-task-briefs");
     if (d.authorization) {
       const r = d.resource;
-      if (r?.rescheduleRequest || r?.receipt?.outcome === "held") return null;
+      const q = r?.rescheduleRequest;
+      if (q) {
+        if (q.confirmation) return null;
+        if (q.authorization) return step("confirmReschedule","P07","#confirm-reschedule");
+        if (q.decision) return step("rescheduleAuthorization","P06",'#reschedule-authorization-form input[name="signature"]');
+        if (q.quoteReceipt) return step("rescheduleDecision","P01","#launch-reschedule-decision");
+        if (q.quote) return step("returnQuote","P07","#return-reschedule-quote");
+        return step("rescheduleQuote","P08","#record-reschedule-quote");
+      }
+      if (r?.receipt?.outcome === "held") return null;
       if (r?.receipt?.outcome === "unavailable" || d.planId === "B") return step("reschedule","P07","#request-reschedule");
       if (r?.scheduling && !r.receipt) return step("replyReceipt","P07","#return-resource-receipt");
       if (!r?.startedAt) return Date.parse(state.clock) >= Date.parse(data.events.resourceReviewStart.at) ? step("startResources","P07","#start-resource-review") : null;
@@ -166,7 +224,7 @@
     field.style.height = `${field.scrollHeight + border + 1}px`;
   }
   function refreshLayout() {
-    document.querySelectorAll("[data-draft-role], .decision-form textarea").forEach(fitDraft);
+    document.querySelectorAll("[data-draft-role], .decision-form textarea, #management-brief-editor").forEach(fitDraft);
     reserveFooterSpace();
   }
   function focusOperation(target) {
@@ -178,10 +236,11 @@
   }
   function openGuidedAction() {
     const guide = nextGuidedAction(session.getState());
-    if (!guide || draftLoading) return;
+    if (!guide || draftLoading || briefLoading) return;
     session.setViewer(guide.role); decisionError = ""; notificationsOpen = false;
     activePage = "overview";
-    history.pushState(null,"",guide.key === "select" ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
+    if (["managementBrief","previewBrief"].includes(guide.key)) briefOpen = Boolean(managementBrief);
+    history.pushState(null,"",["managementBrief","previewBrief"].includes(guide.key) ? (guide.key === "previewBrief" ? "#management-brief" : "#decision") : guide.key === "select" ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
     render();
     focusOperation(document.querySelector(guide.target));
   }
@@ -200,7 +259,7 @@
       const message = text.wuxi.notifications[item.kind] || t.kinds[item.kind];
       const owner = data.people[item.task.owner];
       const isRead = read.has(item.id);
-      return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div><time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time></a></li>`;
+      return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div>${item.at ? `<time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time>` : `<span class="notification-sequence">${text.portal.sequenceOnly}</span>`}</a></li>`;
     }).join("")}</ul>` : `<p class="notifications-empty">${t.empty}</p>`}<div class="notifications-footer"><span class="data-tag">${text.common.assumption}</span><p>${t.readBoundary}</p></div></section></div>`;
   }
   function updateNotifications(open, restoreFocus = false) {
@@ -211,7 +270,7 @@
   }
 
   function gapMarkup(plan, state) {
-    if (workflow.project(data,state).resourceRejected) return `<span class="gap gap-risk" data-gap="${plan.id}">${text.portal.reassessment}</span>`;
+    if (workflow.project(data,state).forecastReassessmentRequired) return `<span class="gap gap-risk" data-gap="${plan.id}">${text.portal.reassessment}</span>`;
     const gap = core.calendarGap(state.needByLocalDate, plan.forecast.localDate);
     const copy = gap === 1 ? text.overview.beforeOne : gap === -1 ? text.overview.afterOne : gap > 0 ? interpolate(text.overview.before, { days: gap }) : gap < 0 ? interpolate(text.overview.after, { days: -gap }) : text.overview.onDate;
     return `<span class="gap ${gap < 0 ? "gap-risk" : ""}" data-gap="${plan.id}">${gap < 0 ? icon("risk") : ""}${escape(copy)}</span>`;
@@ -263,7 +322,7 @@
   function renderComparison(state) {
     const a = data.plans.A;
     const b = data.plans.B;
-    const reassess = workflow.project(data,state).resourceRejected;
+    const reassess = workflow.project(data,state).forecastReassessmentRequired;
     const select = plan => state.viewer === "P01" ? `<button class="button button-secondary select-plan" data-select-plan="${plan}"${state.decision?.tasksCreated || draftLoading ? " disabled" : ""}>${state.decision?.planId === plan ? text.decision.selected : interpolate(text.decision.choose, {plan})}</button>` : "";
     const requirement = `<dl class="info-facts"><dt>${text.delivery.deliveryItem}</dt><dd id="requirement-item-display">${escape(state.deliverableOverride || text.project.released)}</dd><dt>${text.delivery.destination}</dt><dd id="requirement-destination-display">${escape(state.destinationOverride || text.project.newJerseyFormulationSite)}</dd><dt>${text.delivery.needBy}</dt><dd>${core.formatLocalDate(state.needByLocalDate)} · ${text.common.newYork}</dd></dl>${note(text.delivery.calendarNote)}`;
     const row = (key, heading, content, help = "") => `<tr data-metric="${key}"><th scope="row"><div class="metric-label">${heading}${help}</div></th>${[a,b].map(plan => `<td data-plan="${plan.id}"${key === "delivery" ? ` data-forecast="${plan.id}"` : ""}>${content(plan)}</td>`).join("")}</tr>`;
@@ -281,11 +340,14 @@
   }
 
   function renderContext(state) {
-    const reassess = workflow.project(data,state).resourceRejected;
-    const milestones = `${note(text.overview.developmentScope)}<dl class="info-facts"><dt>${text.context.gmp}</dt><dd>${dateOnly(data.plans.A.window.at, data.calendars.base.timezone)} · ${text.common.shanghai}</dd><dt>${text.context.releasedDS}</dt><dd>${reassess ? text.portal.reassessment + " · " + text.portal.previousEstimate + " · " : ""}${core.formatLocalDate(data.plans.A.forecast.localDate)} · ${text.common.newYork} · ${text.common.estimated}</dd><dt>${text.context.ind}</dt><dd>${text.context.noDate}</dd></dl>${note(text.context.shipmentNote)}<button class="text-button" data-open-report>${text.context.study} · ${data.reports["SEC-001"].id}</button>`;
+    const contextView = workflow.project(data,state);
+    const reassess = contextView.forecastReassessmentRequired;
+    const milestoneWindow = contextView.rescheduleConfirmed ? data.plans.B.window.at : data.plans.A.window.at;
+    const milestoneWindowLabel = contextView.rescheduleConfirmed ? text.portal.confirmedWindow : text.decision.original;
+    const milestones = `${note(text.overview.developmentScope)}<dl class="info-facts"><dt>${text.context.gmp}</dt><dd>${dateOnly(milestoneWindow, data.calendars.base.timezone)} · ${text.common.shanghai}</dd><dt>${text.context.releasedDS}</dt><dd>${reassess ? text.portal.reassessment + " · " + text.portal.previousEstimate + " · " : ""}${core.formatLocalDate(data.plans.A.forecast.localDate)} · ${text.common.newYork} · ${text.common.estimated}</dd><dt>${text.context.ind}</dt><dd>${text.context.noDate}</dd></dl>${note(text.context.shipmentNote)}<button class="text-button" data-open-report>${text.context.study} · ${data.reports["SEC-001"].id}</button>`;
     return `<section id="context" class="section context-section" aria-labelledby="context-title"><div class="section-heading"><div class="heading-with-info"><h2 id="context-title">${text.context.title}</h2>${info("program", text.overview.contextInfo, milestones)}</div></div>
       <ol class="progress-track" aria-label="${escape(text.context.milestones)}"><li class="research-complete" data-research-status="${data.project.researchStatusKey}"><span class="progress-node">${icon("check")}</span><span>R · ${text.context.research}</span><span class="current-label research-status">${text.common.researchComplete}</span></li><li aria-current="step"><span class="progress-node"></span><strong>D · ${text.context.development}</strong><span class="current-label">${text.context.current}</span></li><li><span class="progress-node"></span><span>M · ${text.context.manufacturing}</span><span class="current-label">${text.common.notStarted}</span></li></ol>
-      <div id="milestone-strip"><div><span>${text.context.gmp}</span><strong>${dateOnly(data.plans.A.window.at, data.calendars.base.timezone)}</strong><small>${text.decision.original} · ${text.common.shanghai}</small></div><div><span>${text.context.releasedDS}</span><strong>${reassess ? text.portal.reassessment : core.formatLocalDate(data.plans.A.forecast.localDate)}</strong><small>${reassess ? text.portal.previousEstimate + " · " + core.formatLocalDate(data.plans.A.forecast.localDate) : text.common.estimated} · ${text.common.newYork}</small></div><div><span>${text.context.ind}</span><strong>${text.context.noDate}</strong></div></div>
+      <div id="milestone-strip"><div><span>${text.context.gmp}</span><strong>${dateOnly(milestoneWindow, data.calendars.base.timezone)}</strong><small>${milestoneWindowLabel} · ${text.common.shanghai}</small></div><div><span>${text.context.releasedDS}</span><strong>${reassess ? text.portal.reassessment : core.formatLocalDate(data.plans.A.forecast.localDate)}</strong><small>${reassess ? text.portal.previousEstimate + " · " + core.formatLocalDate(data.plans.A.forecast.localDate) : text.common.estimated} · ${text.common.newYork}</small></div><div><span>${text.context.ind}</span><strong>${text.context.noDate}</strong></div></div>
       <div class="table-wrap development-wrap"><table class="development-table" aria-label="${escape(text.context.developmentWorkstreams)}"><thead><tr>${data.project.developmentWorkstreams.map(stream => `<th scope="col">${text.context.workstreamNames[stream.id]}</th>`).join("")}</tr></thead><tbody><tr>${data.project.developmentWorkstreams.map(stream => `<td data-workstream="${stream.id}" data-status="${stream.statusKey}" data-label="${escape(text.context.workstreamNames[stream.id])}">${badge(stream.statusKey)}</td>`).join("")}</tr></tbody></table></div>
     </section>`;
   }
@@ -305,17 +367,15 @@
     const unpublished = state.publication?.status === "draft";
     const view = workflow.project(data,state);
     const isWuxi = ["P07","P08"].includes(state.viewer);
-    const deadlineAt = isWuxi ? data.events.resourceConfirmationDeadline.at : state.decision?.authorization?.at || data.events.latestAuthorization.at;
-    const deadlineZone = isWuxi ? data.calendars.base.timezone : data.baseline.timezone;
-    const deadlineLabel = isWuxi ? text.portal.resourceDue : state.decision?.authorization ? text.decision.authorizedAt : text.overview.decisionBy;
+    const banner = bannerState(state);
     const finding = interpolate(text.overview.finding, { measured: data.risk.hmwPct.toFixed(1), target: data.risk.targetPct.toFixed(1) });
     const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : state.decision?.authorization && state.decision.planId === "B" ? note(interpolate(text.portal.updateUnscheduled,{owner:data.people.P07.name})) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
     root.innerHTML = `<a class="skip-link" href="#main">${text.nav.skip}</a>
       <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools"><details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.english}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="true">${text.overview.languageCurrent}</button><button type="button" data-language="zh" disabled>${text.overview.languagePending}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
       <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
-      <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${view.rescheduleRequested ? text.portal.pendingReschedule : view.resourceConfirmed ? text.portal.held : view.resourceRejected ? text.portal.unavailable : state.decision?.authorization ? text.decision.statuses.ready : text.overview.riskState}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline"><span>${deadlineLabel}${info("decision", isWuxi ? text.portal.resourceDue : text.overview.decisionInfo, note(isWuxi ? text.portal.resourceDueInfo : text.overview.decisionExplanation), "end")}</span><time datetime="${deadlineAt}">${instant(deadlineAt, deadlineZone, { weekday: "short" })} ${zoneLabel(deadlineZone)}</time></div></section>${renderRoleAction(person, state)}
+      <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
       ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement}})}${renderWuxi(state)}${renderContext(state)}`}
-      ${renderAdvance(state,person)}
+      ${renderManagementBrief(state)}${renderAdvance(state,person)}
       <footer class="page-footer">${text.overview.footer}</footer></main>`;
     footerObserver.disconnect();
     refreshLayout();
@@ -381,7 +441,7 @@
     };
     if (!performDecision(() => session.enterChapter(id,fixtures))) return;
     formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false;
-    notificationsOpen = false; notificationReads.clear(); dialog.close(); activePage = "overview";
+    notificationsOpen = false; notificationReads.clear(); dialog.close(); clearBrief(); activePage = "overview";
     history.replaceState(null,"",["prepublication","hold","unavailable"].includes(id) ? "#wuxi" : id === "selection" ? "#comparison" : "#decision");
     render(); notify(interpolate(text.portal.chapterReset,{chapter:text.portal.chapters[id]}));
     focusRouteTarget();
@@ -406,12 +466,72 @@
     openDialog(`${dialogHeading(`${id} · v${data.reports[id].version}`,text.decision.sourceTitle)}<span class="data-tag">${text.common.demo}</span><span class="data-tag">${text.common.assumption}</span>${id === "EXP-001" ? `<p class="dialog-intro">${text.decision.experimentScope}</p><p>${text.delivery.assumptions}</p>` : renderFeeBreakdown("source-cost-detail")}<div class="dialog-actions"><button class="button button-primary" data-close>${text.common.close}</button></div>`);
   }
 
+  function requestBriefUpdate() {
+    if (session.getState().viewer !== "P01") return;
+    openDialog(`${dialogHeading(text.brief.regenerateTitle)}<p class="dialog-intro">${text.brief.regenerateBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-regenerate-brief">${text.brief.regenerateConfirm}</button></div>`);
+  }
+  function generateManagementBrief(replace = false) {
+    const state = session.getState();
+    if (briefLoading || state.viewer !== "P01" || state.publication.status !== "published") return;
+    briefOpen = true;
+    if (managementBrief && !replace) {
+      render(); focusOperation(document.getElementById("management-brief"));
+      if (global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length) requestBriefUpdate();
+      return;
+    }
+    const generation = ++briefGeneration;
+    briefLoading = true; briefPreview = false; briefCopied = false; render(); focusOperation(document.getElementById("management-brief"));
+    setTimeout(() => {
+      if (generation !== briefGeneration) return;
+      briefLoading = false;
+      const current = session.getState();
+      if (current.viewer !== "P01" || current.publication.status !== "published") { render(); return; }
+      managementBrief = global.DEMO_BRIEF.generate({data,core,state:current,text});
+      render(); focusOperation(document.getElementById("management-brief-editor"));
+    },650);
+  }
+  async function copyManagementBrief(allowStale = false) {
+    const state = session.getState();
+    if (state.viewer !== "P01" || state.publication.status !== "published" || !managementBrief || !briefPreview) return;
+    const staleReasons = global.DEMO_BRIEF.staleReasons(managementBrief,{data,state});
+    if (staleReasons.length && !allowStale) {
+      openDialog(`${dialogHeading(text.brief.staleCopyTitle)}<p class="dialog-intro">${text.brief.staleCopyBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-copy-stale-brief">${text.brief.staleCopyConfirm}</button></div>`); return;
+    }
+    const content = global.DEMO_BRIEF.copyText(managementBrief,text,{staleReasons});
+    let copied = false;
+    try { await navigator.clipboard.writeText(content); copied = true; } catch (_) {
+      const field = document.createElement("textarea"); field.value = content;
+      field.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.append(field); field.select();
+      try { copied = document.execCommand("copy"); } catch (_) { copied = false; } finally { field.remove(); }
+    }
+    briefCopied = copied; render();
+    notify(copied ? text.brief.copied : text.brief.copyFailed);
+    const preview = document.getElementById("management-brief-preview");
+    if (!copied && preview) { const range = document.createRange(); range.selectNodeContents(preview); const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); }
+  }
+
   document.addEventListener("click", event => {
+    if (event.target.closest("#generate-management-brief")) { generateManagementBrief(); return; }
+    if (event.target.closest("#regenerate-management-brief")) { requestBriefUpdate(); return; }
+    if (event.target.closest("#confirm-regenerate-brief")) { dialog.close(); generateManagementBrief(true); return; }
+    if (event.target.closest("#preview-management-brief")) {
+      if (session.getState().viewer !== "P01" || !managementBrief) return;
+      briefPreview = true; managementBrief.previewed = true;
+      if (!global.DEMO_BRIEF.staleReasons(managementBrief,{data,state:session.getState()}).length) briefMilestones.add(briefMilestone(session.getState()));
+      render(); focusOperation(document.getElementById("management-brief-preview")); return;
+    }
+    if (event.target.closest("#edit-management-brief")) { briefPreview = false; briefCopied = false; render(); focusOperation(document.getElementById("management-brief-editor")); return; }
+    if (event.target.closest("#copy-management-brief")) { void copyManagementBrief(); return; }
+    if (event.target.closest("#confirm-copy-stale-brief")) { dialog.close(); void copyManagementBrief(true); return; }
     if (event.target.closest("#demo-next-step:not(:disabled)")) { openGuidedAction(); return; }
     if (event.target.closest("#fill-example-signature:not(:disabled)")) {
       const input = document.querySelector('#authorization-form input[name="signature"]');
       if (input && !input.disabled) { input.value = data.people.P06.name; formValues.signature = input.value; focusOperation(input); }
       return;
+    }
+    if (event.target.closest("#fill-reschedule-signature:not(:disabled)")) {
+      const input = document.querySelector('#reschedule-authorization-form input[name="signature"]');
+      if (input && !input.disabled) { input.value = data.people.P06.name; formValues.rescheduleSignature = input.value; focusOperation(input); } return;
     }
     const selection = event.target.closest("[data-select-plan]");
     if (selection && !selection.disabled) {
@@ -427,6 +547,11 @@
       "start-resource-review": [() => session.startResourceReview()],
       "return-resource-receipt": [() => session.returnResourceReceipt()],
       "request-reschedule": [() => session.requestReschedule()],
+      "review-publication-draft": [() => session.reviewRiskDraft()],
+      "record-reschedule-quote": [() => session.respondRescheduleQuote()],
+      "return-reschedule-quote": [() => session.returnRescheduleQuote()],
+      "launch-reschedule-decision": [() => session.createRescheduleDecision()],
+      "confirm-reschedule": [() => session.confirmReschedule()],
       "advance-event": [() => session.advanceNext(),text.decision.advanceNotice]
     };
     const button = event.target.closest("button");
@@ -477,7 +602,7 @@
     if (event.target.closest("[data-close]")) dialog.close();
     if (event.target.closest("#reset-demo")) openDialog(`${dialogHeading(text.common.resetTitle)}<p class="dialog-intro">${text.common.resetBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-reset">${text.common.resetConfirm}</button></div>`);
     if (event.target.closest("#confirm-reset")) {
-      session.reset("customer"); formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false; notificationsOpen = false; notificationReads.clear(); dialog.close(); render();
+      session.reset("customer"); clearBrief(); formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false; notificationsOpen = false; notificationReads.clear(); dialog.close(); render();
       notify(text.common.resetNotice); document.getElementById("reset-demo").focus();
     }
   });
@@ -492,12 +617,15 @@
     }
     if (event.target.closest("#resource-response-form") && event.target.name === "outcome") {
       formValues.resourceOutcome = event.target.value;
-      if (!formValues.resourceReason || Object.values(text.wuxi.examples).includes(formValues.resourceReason)) formValues.resourceReason = text.wuxi.examples[event.target.value];
+      const defaults = ["held","unavailable"].map(outcome => global.DEMO_WUXI_VIEW.defaultReason({data,core,text,outcome}));
+      if (!formValues.resourceReason || defaults.includes(formValues.resourceReason)) formValues.resourceReason = global.DEMO_WUXI_VIEW.defaultReason({data,core,text,outcome:event.target.value});
       render(); document.querySelector('#resource-response-form select[name="outcome"]')?.focus({preventScroll:true}); return;
     }
     if (event.target.id === "fallback-authorization") { draftGeneration++; draftLoading = false; performDecision(() => session.setFallback(event.target.checked)); return; }
     if (event.target.id === "viewer") {
       notificationsOpen = false; decisionError = ""; draftGeneration++; draftLoading = false;
+      if (briefLoading && !managementBrief) briefOpen = false;
+      briefGeneration++; briefLoading = false;
       session.setViewer(event.target.value); render();
       document.getElementById("viewer").focus();
     }
@@ -505,6 +633,10 @@
   document.addEventListener("input", event => {
     const field = event.target;
     const form = field.closest("form");
+    if (field.id === "management-brief-editor") {
+      if (session.getState().viewer !== "P01" || !managementBrief) return;
+      managementBrief.content = field.value; managementBrief.edited = true; managementBrief.previewed = false; briefPreview = false; briefCopied = false; fitDraft(field); return;
+    }
     if (field.matches(".decision-form textarea")) fitDraft(field);
     if (form?.id === "resource-response-form" && field.name === "reason") formValues.resourceReason = field.value;
     if (form?.id === "review-technical-form" && field.name === "reason") formValues.technicalReason = field.value;
@@ -514,12 +646,21 @@
       if (field.name === "signature") formValues.signature = field.value;
       if (field.name === "acknowledged") formValues.acknowledged = field.checked;
     }
+    if (form?.id === "reschedule-authorization-form") {
+      if (field.name === "reason") formValues.rescheduleAuthorizationReason = field.value;
+      if (field.name === "signature") formValues.rescheduleSignature = field.value;
+      if (field.name === "acknowledged") formValues.rescheduleAcknowledged = field.checked;
+    }
     if (!event.target.matches("[data-draft-role]")) return;
     fitDraft(event.target);
     try { session.saveDrafts(Object.fromEntries([...document.querySelectorAll("[data-draft-role]")].map(field => [field.dataset.draftRole,field.value]))); }
     catch (error) { notify(text.wuxi.errors[error.message] || text.decision.errors[error.message] || text.decision.errors.default); }
   });
   document.addEventListener("submit", event => {
+    if (event.target.id === "reschedule-authorization-form") {
+      event.preventDefault(); const form = new FormData(event.target);
+      performDecision(() => session.authorizeReschedule({signature:String(form.get("signature")),reason:String(form.get("reason")),acknowledged:form.get("acknowledged") === "on"})); return;
+    }
     if (event.target.id === "risk-publication-form") {
       event.preventDefault();
       if (performDecision(() => session.publishRisk())) { activePage = "overview"; history.replaceState(null,"","#main"); render(); focusRouteTarget(); }

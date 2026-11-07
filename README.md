@@ -1,6 +1,6 @@
 # DaVinci delivery decisions — concept demo
 
-Stage 5 adds Alex’s private risk draft and publication, WuXi resource coordination, Mei’s scheduling response and Alex’s client receipt. The successful path ends at **Additional study authorized; original window held; process lock pending assessment**. The unavailable path ends at **Rescheduling requested – awaiting WuXi confirmation**, with no alternate window confirmed. All dates, costs and people remain frozen. Editable management briefs and Chinese translation belong to stage 6.
+The demo now covers the complete customer decision, WuXi publication and resource response, a separately authorized rescheduling process, and editable simulated management briefs. The successful hold ends with this coordination round complete while the aggregate issue and process readiness remain under assessment. The unavailable path proceeds through a candidate quotation, a new customer decision and authorization, and Alex's formal rescheduling confirmation. All scenario dates, costs and people remain frozen. The interface and briefs are English; full Chinese language acceptance remains a later step.
 
 ## Open the demo
 
@@ -38,11 +38,24 @@ The bottom **Jump to chapter** selector explicitly resets the scenario. It offer
 
 | Path | Clicks and result |
 | --- | --- |
-| Publish | Choose **Before risk publication**. As Alex, edit certainty and the next update and review the preview. Customer roles cannot see the draft. Advance to the existing material-ready event, then **Publish to client**. The published context is now shared with customer views and new task briefs. |
-| Success | Continue after customer authorization, or choose **WuXi hold confirmation**. Use the guide to Alex, then **Start resource review**. Advance to the next event, use the guide to Mei, select the held outcome, review/edit the response and submit it. Use the guide to Alex and return the response to the client. The original window is held until **Dec 9, 5:00 PM Shanghai**; the study is authorized but has not started, and process lock remains pending assessment. |
-| Unable to hold | Choose **WuXi unable to hold**. Use the guide to Mei and explicitly submit the unavailable outcome with its editable reason. Use the guide to Alex and return the response. The reason, Feb 15 candidate window and Alex as next owner appear. Use the next guide and request rescheduling. It stops awaiting WuXi confirmation; no alternative window, revised delivery or rescheduling charge is confirmed. |
+| Publish | Choose **Before risk publication**. As Alex, edit certainty and the next update, then explicitly finish draft review. The publish button explains that the study proposal and evidence package are due at 16:00 Shanghai. The guide now points to **Advance to next event**. Once the package is ready, **Publish to client** makes the record visible to customer roles. |
+| Successful hold | Continue after customer authorization, or choose **WuXi hold confirmation**. Follow the guide to generate and preview the authorized-state brief. Alex starts resource review; advance time; Mei records the held outcome; Alex returns it. The banner now shows **Dec 9, 5:00 PM Shanghai**, the hold expiry, and states that coordination is complete while the aggregate issue and process readiness remain under assessment. Follow the guide to refresh and preview the management brief. |
+| Unavailable resources | Choose **WuXi unable to hold**. Mei's editable example explains that the Nov 17 expedited experiment and supporting analysis slots cannot be arranged, so the original window cannot be supported. Submit the response and follow the guide to Alex to return it. Emma can generate and preview the unavailable-state brief. The delivery forecast requires reassessment. |
+| Request a quote | Alex clicks **Request next available window and rescheduling quote**. No new window is confirmed and no fee is incurred. The guide switches to Mei to record the frozen candidate window and $10,000 quote, then to Alex to return it. The customer sees **Waiting for customer decision**. |
+| Obtain a fresh decision | Emma launches the rescheduling decision. Elena reviews the returned quote, enters or fills her example signature, reviews the reason, checks the scope acknowledgement and explicitly authorizes. Until she submits, the customer decision remains pending and no fee is incurred. The earlier fallback checkbox does not bypass this approval. |
+| Formally confirm | After Elena's authorization, the guide switches to Alex for **Confirm rescheduling**. Only this action confirms the quoted replacement window and incurs the $10,000 rescheduling fee. Technical readiness and delivery remain under assessment; option B's former delivery estimate is not adopted. The guide offers a refreshed management brief. |
 
-WuXi banners show **Nov 16, 5:00 PM Shanghai**, the resource response deadline. The frozen main path returns its response on Nov 13. Mei’s explicit confirmation commits the quoted $50,000 in resource and hold fees; Alex’s subsequent return makes the named response visible to the client. Customer authorization alone does not incur fees. Until the response is returned, the customer sees that the named response is pending. If resources cannot be held, the active delivery forecast requires reassessment; previous conditional estimates are retained only as reference.
+The six chapter entries remain available. Quotation and approval steps after the resource response have no agreed business times: they are shown as ordered actions with timing unassigned, never as an invented immediate approval turnaround. The frozen simulation clock does not move backwards.
+
+Before a completed response, WuXi banners show the existing resource-response deadline. After a successful hold, the next key date is the hold expiry. Exception banners reflect the actual owner and state: waiting for WuXi feedback, customer decision, customer authorization, or formal confirmation. Mei's explicit original-resource confirmation commits $50,000 in resource/hold fees; the failed original-resource branch does not incur those fees.
+
+## Generate a management brief
+
+As Emma, open the risk page or decision request and click **Generate management brief**. A short simulated loading state produces a concise brief with the management decision, known facts, option costs and conditional delivery effects, uncertainties, next update, source versions and data-as-of time. Amounts, dates and percentages are deterministically read from the shared data.
+
+Edit the content, choose **Preview recipient content**, then **Copy brief**. Copying never sends a message. The recipient preview exactly matches the copied text, including synthetic/AI labels and captured source metadata. Editing again requires another preview. A requirement, published business state or source-version change preserves the edited draft and shows why it may be stale. **Update from current records** asks before replacing edits. Copying an earlier version requires explicit confirmation and keeps a visible outdated warning in the copied content. Internal Mei responses and quotations do not leak into a client brief before Alex returns them.
+
+The guide offers briefs before authorization, after authorization, after a hold, after unavailable resources, and at later rescheduling decision points. Preview completes a brief checkpoint without authorizing, sending or charging anything.
 
 The homepage includes overall project risk, frozen original-window milestones, role actions and shared notifications. The risk page includes evidence, known/unknown/possible impacts, role context, named updates, recorded versus pending timeline rows, and owners with the next action. Fee details and forecast phases remain expandable. Changing the customer requirement updates only the forecast gap.
 
@@ -57,8 +70,8 @@ node scripts/audit-public.mjs
 
 - `src/data.js` is the frozen scenario; `scripts/validate.mjs` checks dates, calendars, dependencies, fees and authority without rewriting them.
 - `src/core.js` owns the monotonic clock and explicit decision actions. `src/workflow.js` derives tasks, confirmations and notifications from that same record.
-- `src/app.js`, `src/decision-view.js`, `src/wuxi-view.js` and `src/risk-view.js` render the shared record. Drafts are editable only until confirmation; rendering never creates tasks.
-- `scripts/test-core.mjs`, `scripts/test-workflow.mjs`, `scripts/test-decision.mjs` and `scripts/test-wuxi.mjs` cover role limits, clock-only advancement, drafts, idempotence, review prerequisites, signatures, frozen values and reset.
+- `src/app.js`, `src/decision-view.js`, `src/wuxi-view.js`, `src/risk-view.js` and `src/brief-view.js` render the shared record. Drafts are editable only until confirmation; rendering never creates tasks.
+- `scripts/test-core.mjs`, `scripts/test-workflow.mjs`, `scripts/test-decision.mjs`, `scripts/test-wuxi.mjs` and `scripts/test-brief.mjs` cover role limits, clock-only advancement, drafts, idempotence, review prerequisites, signatures, frozen values and reset.
 - `scripts/build.mjs` uses an explicit source allowlist to build relative-path `index.html` and standalone `dist/index.html`.
 
 Optional browser QA requires Playwright and Chromium, neither of which is bundled in the app:
@@ -75,6 +88,10 @@ node scripts/test-decision-browser.mjs
 PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
 BROWSER_EXECUTABLE=/absolute/path/to/chromium \
 node scripts/test-wuxi-browser.mjs
+
+PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
+BROWSER_EXECUTABLE=/absolute/path/to/chromium \
+node scripts/test-brief-browser.mjs
 ```
 
 Browser checks cover standalone offline execution, the relative-path source entry, desktop and mobile flows, permissions, notifications, timeline state and a locally hosted repository subpath. Review screenshots go to ignored `output/`.

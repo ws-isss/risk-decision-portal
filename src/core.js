@@ -42,7 +42,7 @@
         deliverableOverride: "", destinationOverride: "", revision: 0,
         eventIds: [], decision: null, resetNotice: false,
         chapterId: scene === "prepublication" ? "prepublication" : "selection", chapterSeeded: false, seededEventIds: [], branchIntent: null,
-        publication: { status: scene === "prepublication" ? "draft" : "published", certainty: "underAssessment", nextUpdateEvent: "reviewsComplete", publishedAt: scene === "prepublication" ? null : data.events.materialReady.at, updatedAt: scene === "prepublication" ? data.events.riskDiscovered.at : data.events.materialReady.at }
+        publication: { status: scene === "prepublication" ? "draft" : "published", certainty: "underAssessment", nextUpdateEvent: "reviewsComplete", reviewedAt: null, publishedAt: scene === "prepublication" ? null : data.events.materialReady.at, updatedAt: scene === "prepublication" ? data.events.riskDiscovered.at : data.events.materialReady.at }
       };
     }
     state = initial("customer");
@@ -55,16 +55,33 @@
     function at(value) { ensure(Date.parse(state.clock) >= Date.parse(value), "TOO_EARLY"); ensure(Date.parse(state.clock) === Date.parse(value), "WRONG_SCENARIO_TIME"); }
     function atEvent(id) { at(data.events[id].at); }
     function changed() { state.revision += 1; return snapshot(); }
-    function record(id, recordedAt = state.clock) {
+    function record(id, recordedAt = state.clock, timeStatus) {
       if (!state.eventIds.includes(id)) state.eventIds.push(id);
-      if (state.decision && !state.decision.audit.some(item => item.id === id)) state.decision.audit.push({ id, at: recordedAt, by: state.viewer });
+      if (!state.decision) return null;
+      let entry = state.decision.audit.find(item => item.id === id);
+      if (!entry) {
+        entry = { id, at: recordedAt, by: state.viewer, sequence: state.decision.audit.length + 1 };
+        if (timeStatus) entry.timeStatus = timeStatus;
+        state.decision.audit.push(entry);
+      }
+      return entry;
+    }
+    function orderedRecord(id, fields = {}) {
+      const entry = record(id, null, "notScheduled");
+      return Object.assign({ by: entry.by, at: null, timeStatus: "notScheduled", sequence: entry.sequence }, fields);
+    }
+    function rescheduleRequest() {
+      const d = tasksRequired();
+      ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED");
+      ensure(d.resource.rescheduleRequest, "RESCHEDULE_ENQUIRY_REQUIRED");
+      return d.resource.rescheduleRequest;
     }
     function review(kind) { ensure(Object.hasOwn(reviewOwners, kind), "UNKNOWN_REVIEW"); role(reviewOwners[kind]); return tasksRequired().reviews[kind]; }
     function bothReviews(d) { return d.reviews.technical.status === "completed" && d.reviews.quality.status === "completed"; }
     function getAdvanceInfo() {
       if (state.publication.status === "draft") {
         return Date.parse(state.clock) < Date.parse(data.events.materialReady.at)
-          ? Object.freeze({ nextEvent: "materialReady", blockKey: null, done: false })
+          ? Object.freeze({ nextEvent: "materialReady", blockKey: state.publication.reviewedAt ? null : "reviewRiskDraft", done: false })
           : Object.freeze({ nextEvent: null, blockKey: "publishRisk", done: true });
       }
       customer();
@@ -228,13 +245,21 @@
         ensure(["reviewsComplete", "resourceConfirmed"].includes(values.nextUpdateEvent), "INVALID_UPDATE_EVENT");
         if (state.publication.certainty === values.certainty && state.publication.nextUpdateEvent === values.nextUpdateEvent) return snapshot();
         state.publication.certainty = values.certainty; state.publication.nextUpdateEvent = values.nextUpdateEvent;
-        state.publication.updatedAt = state.clock;
+        state.publication.updatedAt = state.clock; state.publication.reviewedAt = null;
+        return changed();
+      },
+      reviewRiskDraft() {
+        ensure(state.viewer === "P07", "ROLE_NOT_ALLOWED");
+        ensure(state.publication.status === "draft", "RISK_ALREADY_PUBLISHED");
+        if (state.publication.reviewedAt) return snapshot();
+        state.publication.reviewedAt = state.clock; record("riskDraftReviewed");
         return changed();
       },
       publishRisk() {
         ensure(state.viewer === "P07", "ROLE_NOT_ALLOWED");
         if (state.publication.status === "published") return snapshot();
         atEvent("materialReady");
+        ensure(state.publication.reviewedAt, "RISK_REVIEW_REQUIRED");
         state.publication.status = "published"; state.publication.publishedAt = state.clock; state.publication.updatedAt = state.clock;
         record("riskPublished");
         state.scene = "customer";
@@ -276,12 +301,50 @@
         return changed();
       },
       requestReschedule() {
-        customer(); ensure(["P01", "P07"].includes(state.viewer), "ROLE_NOT_ALLOWED"); const d = tasksRequired();
+        role("P07"); const d = tasksRequired();
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED");
         ensure(d.planId === "B" || (d.resource.receipt && d.resource.receipt.outcome === "unavailable"), "RESCHEDULE_NOT_AVAILABLE");
         if (d.resource.rescheduleRequest) return snapshot();
-        d.resource.rescheduleRequest = { by: state.viewer, at: state.clock };
-        record("rescheduleRequested");
+        d.resource.rescheduleRequest = orderedRecord("rescheduleRequested", { quote: null, quoteReceipt: null, decision: null, authorization: null, confirmation: null });
+        return changed();
+      },
+      respondRescheduleQuote() {
+        role("P08"); const r = rescheduleRequest();
+        if (r.quote) return snapshot();
+        r.quote = orderedRecord("rescheduleQuotePrepared", { candidateWindow: data.plans.B.window.at, amount: data.fees.reschedule, quoteRef: "Q-B", version: data.reports["Q-B"].version });
+        return changed();
+      },
+      returnRescheduleQuote() {
+        role("P07"); const r = rescheduleRequest();
+        ensure(r.quote, "RESCHEDULE_QUOTE_REQUIRED");
+        if (r.quoteReceipt) return snapshot();
+        r.quoteReceipt = orderedRecord("rescheduleQuoteReturned");
+        return changed();
+      },
+      createRescheduleDecision() {
+        role("P01"); const r = rescheduleRequest();
+        ensure(r.quoteReceipt, "RESCHEDULE_QUOTE_RETURN_REQUIRED");
+        if (r.decision) return snapshot();
+        r.decision = orderedRecord("rescheduleDecisionCreated", { amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
+        return changed();
+      },
+      authorizeReschedule(values) {
+        role("P06"); const r = rescheduleRequest();
+        ensure(r.decision, "RESCHEDULE_DECISION_REQUIRED");
+        ensure(state.decision.approver.id === "P06", "APPROVER_REQUIRED");
+        if (r.authorization) return snapshot();
+        ensure(values && typeof values.signature === "string" && values.signature.trim() === data.people.P06.name, "INVALID_SIGNATURE");
+        ensure(typeof values.reason === "string" && values.reason.trim(), "REASON_REQUIRED");
+        ensure(values.acknowledged === true, "ACKNOWLEDGEMENT_REQUIRED");
+        ensure(r.quote.amount <= data.people.P06.budgetLimit, "BUDGET_LIMIT_EXCEEDED");
+        r.authorization = orderedRecord("rescheduleAuthorized", { signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
+        return changed();
+      },
+      confirmReschedule() {
+        role("P07"); const r = rescheduleRequest();
+        ensure(r.authorization, "RESCHEDULE_AUTHORIZATION_REQUIRED");
+        if (r.confirmation) return snapshot();
+        r.confirmation = orderedRecord("rescheduleConfirmed", { candidateWindow: r.quote.candidateWindow, amount: r.authorization.amount });
         return changed();
       },
       enterChapter(id, fixtures = {}) {

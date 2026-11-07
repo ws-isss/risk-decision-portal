@@ -14,7 +14,7 @@
     const audit = d && d.audit || [];
     const recorded = id => {
       const record = audit.find(item => item.id === id);
-      return !!record && explicitRecords.has(id) && Date.parse(record.at) <= clock;
+      return !!record && explicitRecords.has(id) && ((record.at === null && record.timeStatus === "notScheduled" && Number.isInteger(record.sequence)) || Date.parse(record.at) <= clock);
     };
     const supportAssigned = !!(d && d.support.assignedAt && recorded("backupAssigned"));
     const supportAccepted = supportAssigned && !!(d.support.acceptedAt && recorded("supportAccepted"));
@@ -32,7 +32,18 @@
     const schedulingOutcome = resourceStarted && resource.scheduling && schedulingVisible ? resource.scheduling.outcome : null;
     const schedulingReason = schedulingOutcome ? resource.scheduling.reason : "";
     const rescheduleRequested = !!(authorized && resource && resource.rescheduleRequest && recorded("rescheduleRequested"));
-    const committedFees = schedulingOutcome === "held" ? data.fees.resourceCommitment : 0;
+    const r = rescheduleRequested ? resource.rescheduleRequest : null;
+    const quotePrepared = !!(r && r.quote && recorded("rescheduleQuotePrepared"));
+    const rescheduleQuoteReturned = !!(quotePrepared && r.quoteReceipt && recorded("rescheduleQuoteReturned"));
+    const rescheduleQuoteReady = quotePrepared && (internalViewer || rescheduleQuoteReturned);
+    const rescheduleQuote = rescheduleQuoteReady ? r.quote : null;
+    const rescheduleDecisionCreated = !!(rescheduleQuoteReturned && r.decision && recorded("rescheduleDecisionCreated"));
+    const rescheduleAuthorized = !!(rescheduleDecisionCreated && r.authorization && r.authorization.by === "P06" && r.authorization.amount === r.quote.amount && recorded("rescheduleAuthorized"));
+    const rescheduleConfirmed = !!(rescheduleAuthorized && r.confirmation && r.confirmation.by === "P07" && r.confirmation.amount === r.authorization.amount && recorded("rescheduleConfirmed"));
+    const rescheduleStage = rescheduleConfirmed ? "confirmed" : rescheduleAuthorized ? "awaitingWuXiConfirmation" : rescheduleDecisionCreated ? "awaitingCustomerAuthorization" : rescheduleQuoteReturned ? "awaitingCustomerDecision" : rescheduleQuoteReady ? "quoteReadyInternal" : rescheduleRequested ? "awaitingWuXiQuote" : "none";
+    const resourceFees = schedulingOutcome === "held" ? data.fees.resourceCommitment : 0;
+    const rescheduleFees = rescheduleConfirmed ? data.fees.reschedule : 0;
+    const committedFees = resourceFees + rescheduleFees;
     const privateEventIds = new Set(["schedulingHeld", "schedulingUnavailable", "resourceSlotsConfirmed", "windowHoldConfirmed"]);
     const occurred = id => {
       if (id === "backupAssigned") return supportAssigned;
@@ -44,6 +55,12 @@
       if (id === "resourceRejected") return resourceRejected;
       if (id === "resourceReviewStarted") return resourceStarted;
       if (id === "rescheduleRequested") return rescheduleRequested;
+      if (id === "rescheduleQuotePrepared") return rescheduleQuoteReady;
+      if (id === "rescheduleQuoteReturned") return rescheduleQuoteReturned;
+      if (id === "rescheduleDecisionCreated") return rescheduleDecisionCreated;
+      if (id === "rescheduleAuthorized") return rescheduleAuthorized;
+      if (id === "rescheduleConfirmed") return rescheduleConfirmed;
+      if (id === "riskDraftReviewed") return internalViewer && state.publication && state.publication.reviewedAt && explicitRecords.has(id);
       if (privateEventIds.has(id) && !schedulingVisible) return false;
       if (id === "riskPublished") return published && explicitRecords.has(id) && state.publication && Date.parse(state.publication.publishedAt) <= clock;
       const event = data.events[id];
@@ -79,9 +96,14 @@
       const receiptStatus = resourceConfirmed ? "taskCompleted" : resourceRejected ? "resourceUnavailable" : schedulingOutcome ? "ready" : resourceStarted ? "inProgress" : authorized ? "ready" : "waiting";
       add({ key: "receipt", owner: "P07", event: "resourceReviewStart", status: receiptStatus, info: "receipt", dependencyKeys: ["budget"] }, authorized ? ["P07", "P01"] : ["P07"]);
       add({ key: "schedule", owner: "P08", event: "resourceReviewStart", status: schedulingOutcome === "held" ? "taskCompleted" : schedulingOutcome === "unavailable" ? "resourceUnavailable" : resourceStarted ? "inProgress" : authorized ? "ready" : "nonbinding", info: "schedule", dependencyKeys: ["budget"] }, ["P08"]);
-      if (authorized && (d.planId === "B" || resourceRejected)) add({ key: "reschedule", owner: "P07", event: null, timingKey: "notScheduled", status: rescheduleRequested ? "reschedulePending" : "ready", info: "reschedule", dependencyKeys: ["budget"] }, ["P01", "P07"]);
+      if (authorized && (d.planId === "B" || resourceRejected)) add({ key: "reschedule", owner: "P07", event: null, timingKey: "notScheduled", status: rescheduleRequested ? "taskCompleted" : "ready", info: "reschedule", dependencyKeys: ["budget"] }, ["P01", "P07"]);
+      if (rescheduleRequested) add({ key: "rescheduleQuote", owner: "P08", event: null, timingKey: "notScheduled", status: rescheduleQuoteReady ? "taskCompleted" : "ready", info: "rescheduleQuote", dependencyKeys: ["reschedule"] }, internalViewer ? ["P07", "P08"] : []);
+      if (rescheduleQuoteReady) add({ key: "rescheduleQuoteReceipt", owner: "P07", event: null, timingKey: "notScheduled", status: rescheduleQuoteReturned ? "taskCompleted" : "ready", info: "rescheduleQuoteReceipt", dependencyKeys: ["rescheduleQuote"] }, ["P07"]);
+      if (rescheduleQuoteReturned) add({ key: "rescheduleDecision", owner: "P01", event: null, timingKey: "notScheduled", status: rescheduleDecisionCreated ? "taskCompleted" : "ready", info: "rescheduleDecision", dependencyKeys: ["rescheduleQuoteReceipt"] }, ["P01", "P07"]);
+      if (rescheduleDecisionCreated) add({ key: "rescheduleAuthorization", owner: "P06", event: null, timingKey: "notScheduled", status: rescheduleAuthorized ? "taskCompleted" : "readyForAuthorization", info: "rescheduleAuthorization", dependencyKeys: ["rescheduleDecision"] }, ["P01", "P06"]);
+      if (rescheduleAuthorized) add({ key: "rescheduleConfirmation", owner: "P07", event: null, timingKey: "notScheduled", status: rescheduleConfirmed ? "taskCompleted" : "ready", info: "rescheduleConfirmation", dependencyKeys: ["rescheduleAuthorization"] }, ["P01", "P07"]);
     }
-    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, authorized, published, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, committedFees, customerRejected: false, tasksCreated };
+    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, authorized, published, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, rescheduleQuoteReady, rescheduleQuoteReturned, rescheduleQuote, rescheduleDecisionCreated, rescheduleAuthorized, rescheduleConfirmed, rescheduleStage, rescheduleAuthorization: rescheduleAuthorized ? r.authorization : null, rescheduleConfirmation: rescheduleConfirmed ? r.confirmation : null, resourceFees, rescheduleFees, committedFees, forecastReassessmentRequired: resourceRejected || rescheduleRequested, customerRejected: false, tasksCreated };
   }
 
   function tasks(data, state, viewerId = state.viewer) {
@@ -97,7 +119,7 @@
       Object.freeze({ key: "technical", owner: "P02", status: status("startTechnical"), dependencies: [], taskKey: "startTechnical" }),
       Object.freeze({ key: "quality", owner: "P03", status: status("startQuality"), dependencies: [], taskKey: "startQuality" }),
       Object.freeze({ key: "budget", owner: "P06", status: view.authorized ? "taskCompleted" : !view.approverDesignated ? "pendingDesignation" : !view.reviewsComplete ? "pendingReview" : "readyForAuthorization", dependencies: ["technical", "quality"], taskKey: "budget", designated: view.approverDesignated }),
-      Object.freeze({ key: "schedule", owner: "P08", status: view.rescheduleRequested ? "reschedulePending" : view.resourceConfirmed || view.schedulingOutcome === "held" ? "taskCompleted" : view.resourceRejected || view.schedulingOutcome === "unavailable" ? "resourceUnavailable" : view.resourceStarted ? "inProgress" : view.authorized ? "ready" : "waiting", dependencies: ["budget"], taskKey: "schedule", requested: !!(d && view.authorized) })
+      Object.freeze({ key: "schedule", owner: "P08", status: view.resourceConfirmed || view.schedulingOutcome === "held" ? "taskCompleted" : view.resourceRejected || view.schedulingOutcome === "unavailable" ? "resourceUnavailable" : view.resourceStarted ? "inProgress" : view.authorized ? "ready" : "waiting", dependencies: ["budget"], taskKey: "schedule", requested: !!(d && view.authorized) })
     ]);
   }
 
@@ -111,7 +133,7 @@
       const record = d && d.audit.find(item => item.id === eventId);
       const at = record ? record.at : data.events[eventId].at;
       const suffix = versioned ? `:${evidenceVersion}` : "";
-      items.push(Object.freeze({ id: `${eventId}:${task.key}:${kind}${suffix}`, taskKey: task.key, kind, at, task }));
+      items.push(Object.freeze({ id: `${eventId}:${task.key}:${kind}${suffix}`, taskKey: task.key, kind, at, timeStatus: record && record.timeStatus || "recorded", sequence: record && record.sequence || 0, task }));
     };
     for (const key of view.roleKeys[viewerId] || []) {
       const task = view.records[key];
@@ -164,9 +186,27 @@
           else if (view.resourceRejected) add(task, "resourceUnavailable", "resourceRejected");
           else add(task, "rescheduleReady", "budgetAuthorized");
           break;
+        case "rescheduleQuote":
+          add(task, view.rescheduleQuoteReady ? "rescheduleQuotePrepared" : "rescheduleRequested", view.rescheduleQuoteReady ? "rescheduleQuotePrepared" : "rescheduleRequested");
+          break;
+        case "rescheduleQuoteReceipt":
+          add(task, view.rescheduleQuoteReturned ? "rescheduleQuoteReturned" : "rescheduleQuotePrepared", view.rescheduleQuoteReturned ? "rescheduleQuoteReturned" : "rescheduleQuotePrepared");
+          break;
+        case "rescheduleDecision":
+          add(task, view.rescheduleDecisionCreated ? "rescheduleDecisionCreated" : "rescheduleQuoteReturned", view.rescheduleDecisionCreated ? "rescheduleDecisionCreated" : "rescheduleQuoteReturned");
+          break;
+        case "rescheduleAuthorization":
+          add(task, view.rescheduleAuthorized ? "rescheduleAuthorized" : "rescheduleDecisionCreated", view.rescheduleAuthorized ? "rescheduleAuthorized" : "rescheduleDecisionCreated");
+          break;
+        case "rescheduleConfirmation":
+          add(task, view.rescheduleConfirmed ? "rescheduleConfirmed" : "rescheduleAuthorized", view.rescheduleConfirmed ? "rescheduleConfirmed" : "rescheduleAuthorized");
+          break;
       }
     }
-    return Object.freeze(items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
+    return Object.freeze(items.sort((a, b) => {
+      if (a.at === null || b.at === null) return a.at === null && b.at === null ? b.sequence - a.sequence : a.at === null ? -1 : 1;
+      return Date.parse(b.at) - Date.parse(a.at) || b.sequence - a.sequence;
+    }));
   }
 
   global.DEMO_WORKFLOW = Object.freeze({ project, tasks, confirmations, notifications });

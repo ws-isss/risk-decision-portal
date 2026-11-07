@@ -4,6 +4,15 @@
     chapter: "Jump to chapter · resets scenario",
     chooseChapter: "Choose a chapter…",
     notScheduled: "To be agreed",
+    sequenceOnly: "Sequence recorded · turnaround not scheduled",
+    awaitingUpdate: "Next update to be agreed",
+    holdExpiry: "Original window held until",
+    confirmedWindow: "Confirmed revised window · readiness pending",
+    confirmationRecorded: "Rescheduling confirmed; process readiness and delivery remain under assessment",
+    rescheduleCommitted: "The {amount} rescheduling fee is incurred following Alex’s formal confirmation. No expedited-resource or hold fee is incurred; the {study} study has not started.",
+    reschedulePendingFee: "The quoted {amount} rescheduling fee is not incurred yet. A quotation, decision request or customer authorization does not confirm the window or trigger this fee.",
+    originalRequest: "Original decision request",
+    rescheduleStages: { awaitingWuXiQuote: "Waiting for WuXi feedback", quoteReadyInternal: "Quote ready · awaiting Alex’s return", awaitingCustomerDecision: "Waiting for customer decision", awaitingCustomerAuthorization: "Waiting for customer authorization", awaitingWuXiConfirmation: "Customer authorized · waiting for formal WuXi confirmation", confirmed: "Rescheduling confirmed · readiness pending" },
     updateUnscheduled: "Next update to be agreed with {owner}; the candidate window remains unconfirmed.",
     chapters: { prepublication: "Before risk publication", selection: "Option selection & AI briefs", coverage: "Budget approver on leave", authorization: "Customer authorization", hold: "WuXi hold confirmation", unavailable: "WuXi unable to hold" },
     chapterSeeded: "Chapter reset · preceding actions are preset demo records.",
@@ -24,9 +33,9 @@
     reassessment: "Reassessment required",
     previousEstimate: "Previous conditional estimate",
     forecastInvalid: "The original resource assumption is no longer valid. Both delivery estimates need reassessment; requesting another window does not adopt its previous forecast.",
-    pendingReschedule: "Rescheduling requested – awaiting WuXi confirmation",
-    success: "Additional study authorized; original window held; process lock pending assessment",
-    successNote: "The additional experiment has not started. Process readiness, GMP start and batch release remain separate decisions.",
+    pendingReschedule: "Waiting for WuXi feedback",
+    success: "Coordination complete: original window held; the aggregate issue and process readiness remain under assessment",
+    successNote: "This coordination round is complete. The aggregate issue and process readiness remain under assessment; the additional experiment has not started.",
     committed: "{amount} in resource and hold fees is now non-refundable under the confirmed quote. The {study} study has not started; no rescheduling fee is incurred.",
     internalReceipt: "Scheduling response recorded internally; Alex must return the named response to the client.",
     failureNote: "No resource or hold fee is committed. Alex coordinates the next candidate window; any rescheduling remains unconfirmed.",
@@ -36,9 +45,14 @@
     certainty: { underAssessment: "Impact on process readiness is under assessment.", potentialImpact: "Process readiness may affect the original production window; this remains conditional." },
     actions: {
       publication: { title: "Publish the risk update", detail: "Alex reviews the certainty and next-update commitment before publishing the client-visible evidence." },
-      reschedule: { title: "Coordinate the rescheduling request", detail: "Alex reviews the request against the candidate window. No alternate window or delivery date is confirmed by the request." }
+      reschedule: { title: "Request the next window and quote", detail: "Alex requests availability and a rescheduling quote. This enquiry does not confirm a window or incur a fee." },
+      rescheduleQuote: { title: "Prepare the candidate window and quote", detail: "Mei replies with the candidate window and quoted rescheduling fee; the quotation is not a confirmation." },
+      rescheduleQuoteReceipt: { title: "Return the window and quote to the customer", detail: "Alex shares Mei’s quotation so Emma can organize a customer decision." },
+      rescheduleDecision: { title: "Initiate the rescheduling decision", detail: "Emma creates a new decision request for Elena to authorize the returned quotation." },
+      rescheduleAuthorization: { title: "Authorize the rescheduling quote", detail: "Elena reviews the returned scope and signs a separate authorization. The fee is incurred only on Alex’s later formal confirmation." },
+      rescheduleConfirmation: { title: "Formally confirm the authorized rescheduling", detail: "Alex confirms the quoted window within the new customer authorization. This is the fee-triggering step; technical readiness and delivery require reassessment." }
     },
     statuses: { draft: "Draft", resourceReview: "Resource review in progress", responseReady: "Response ready for Alex", holdConfirmed: "Hold confirmed", resourceUnavailable: "Unable to hold", reschedulePending: "Awaiting WuXi confirmation", pendingReschedule: "Awaiting WuXi confirmation", published: "Published" },
-    guides: { editRisk: "Switch to Alex · review risk draft", publishRisk: "Switch to Alex · publish to client", startResources: "Switch to Alex · start resource review", scheduling: "Switch to Mei · record resource response", replyReceipt: "Switch to Alex · return response to client", reschedule: "Switch to Alex · request rescheduling" }
+    guides: { editRisk: "Switch to Alex · review risk draft", advancePublication: "Advance time to the evidence package", publishRisk: "Switch to Alex · publish to client", startResources: "Switch to Alex · start resource review", scheduling: "Switch to Mei · record resource response", replyReceipt: "Switch to Alex · return response to client", reschedule: "Switch to Alex · request next window and quote", rescheduleQuote: "Switch to Mei · reply with window and quote", returnQuote: "Switch to Alex · return quote to customer", rescheduleDecision: "Switch to Emma · initiate rescheduling decision", rescheduleAuthorization: "Switch to Elena · authorize rescheduling", confirmReschedule: "Switch to Alex · formally confirm rescheduling", managementBrief: "Switch to Emma · generate management brief", previewBrief: "Switch to Emma · preview management brief" }
   };
 })(globalThis);

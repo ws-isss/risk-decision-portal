@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = relative => readFile(path.join(root, relative), 'utf8');
-const assetFiles = ['src/data.js', 'src/locales/en.js', 'src/locales/risk-en.js', 'src/locales/decision-en.js', 'src/locales/wuxi-en.js', 'src/locales/portal-en.js', 'src/core.js', 'src/workflow.js', 'src/decision-view.js', 'src/wuxi-view.js', 'src/risk-view.js', 'src/app.js'];
+const assetFiles = ['src/data.js', 'src/locales/en.js', 'src/locales/risk-en.js', 'src/locales/decision-en.js', 'src/locales/wuxi-en.js', 'src/locales/portal-en.js', 'src/locales/brief-en.js', 'src/core.js', 'src/workflow.js', 'src/brief.js', 'src/brief-view.js', 'src/decision-view.js', 'src/wuxi-view.js', 'src/risk-view.js', 'src/app.js'];
 const [shell, css, ...scripts] = await Promise.all([read('src/shell.html'), read('src/styles.css'), ...assetFiles.map(read)]);
 const localeContext = {};
 vm.runInNewContext(scripts[1], localeContext);

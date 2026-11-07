@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const endpointsOnly = process.argv.includes('--endpoints-only');
+const authorizationVersionsOnly = process.argv.includes('--authorization-versions-only');
 const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : require('playwright');
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath: process.env.BROWSER_EXECUTABLE } : {}) });
 const output = path.join(root, 'output');
@@ -79,12 +80,13 @@ async function role(page, id) {
 }
 async function privateFromElena(page, { content, checkRisk = false, state } = {}) {
   await role(page, 'P06');
-  assert.equal(await page.locator('#management-brief, #management-brief-editor, #management-brief-preview, #view-management-brief').count(), 0, 'No private draft or view link is exposed to Elena before an explicit attachment');
+  assert.equal(await page.locator('#management-brief-editor, #management-brief-preview, #view-management-brief').count(), 0, 'No current draft or attachment is exposed to Elena before explicit attachment to this request');
+  if (await page.locator('#management-brief').count()) assert.ok(await page.locator('#brief-version-history').count(),'Only previous-request attachment history may remain visible');
   if (content) assert.ok(!(await page.locator('body').innerText()).includes(content), 'Emma’s private wording is absent from Elena’s rendered page');
   if (state) assert.equal(await page.locator('#authorization-brief-status').getAttribute('data-brief-state'), state);
   if (checkRisk) {
     await page.locator('#risk-title a').click();
-    assert.equal(await page.locator('#management-brief, #management-brief-editor, #management-brief-preview').count(), 0, 'Risk-page navigation does not reveal the private draft');
+    assert.equal(await page.locator('#management-brief-editor, #management-brief-preview').count(), 0, 'Risk-page navigation does not reveal the private draft');
     if (content) assert.ok(!(await page.locator('body').innerText()).includes(content));
     await page.locator('.risk-back').click();
   }
@@ -217,10 +219,74 @@ async function fee(page, expected) {
   assert.equal(await page.locator('#wuxi [data-fee-incurred]').getAttribute('data-fee-incurred'), String(expected));
 }
 
+async function authorizationVersionScenario(page) {
+  await chapter(page, 'authorization');
+  await generate(page, 'beforeAuthorization');
+  const v1 = await preview(page);
+  await attach(page);
+  await page.locator('#edit-management-brief').click();
+  const v2Note = 'Emma’s reviewed coordination note for the authorization package.';
+  await page.locator('#management-brief-editor').fill(`${await page.locator('#management-brief-editor').inputValue()}\n\n${v2Note}`);
+  await sharedReadonly(page, { state:'current', version:1 });
+  assert.ok(!(await page.locator('body').innerText()).includes(v2Note),'Unattached v2 is private');
+  await role(page, 'P01');
+  const v2 = await preview(page, { generated:false });
+  await attach(page);
+  await sharedReadonly(page, { state:'current', version:2 });
+  assert.equal(await page.locator('#brief-version-history').getAttribute('open'), null,'Version history is collapsed by default');
+  await page.locator('#brief-version-history > summary').click();
+  const oldVersion = page.locator('[data-brief-history-version="1"]');
+  assert.match(await oldVersion.locator('summary').innerText(),/Superseded by v2/);
+  assert.match(await oldVersion.locator('summary').innerText(),/Emma Chen[\s\S]*Nov 12, 2026, 5:00 PM ET/);
+  await oldVersion.locator('summary').click();
+  assert.equal(await page.locator('[data-brief-history-content="1"]').innerText(),v1);
+  assert.equal(await oldVersion.locator('textarea,input,button,[contenteditable="true"]').count(),0,'Historical versions have no edit, restore or comparison actions');
+  await page.locator('#fill-example-signature').click();
+  await page.locator('#authorization-form input[name="acknowledged"]').check();
+  await page.locator('#authorize-budget').click();
+  const basis = page.locator('[data-authorization-basis="main"]');
+  assert.equal(await basis.getAttribute('data-authorized-brief-version'),'2');
+  assert.match(await basis.innerText(),/Original decision request[\s\S]*Q-A v1[\s\S]*\$80,000[\s\S]*brief v2[\s\S]*Emma Chen[\s\S]*Nov 12, 2026, 5:00 PM ET/);
+  assert.match(await basis.innerText(),/supporting material only/);
+  assert.match(await basis.innerText(),/new decision request and authorization/);
+  const signedRecord = await basis.innerText();
+  const signedBusiness = await businessSnapshot(page);
+  await generate(page,'authorized');
+  const v3Note = 'Progress update: Alex is coordinating the authorized resource assessment.';
+  await page.locator('#management-brief-editor').fill(`${await page.locator('#management-brief-editor').inputValue()}\n\n${v3Note}`);
+  await preview(page,{generated:false});
+  await attach(page);
+  assert.deepEqual(await businessSnapshot(page),signedBusiness,'Attaching progress v3 changes neither approval nor charges');
+  assert.equal(await basis.innerText(),signedRecord,'The signed decision, quote and brief-v2 metadata are immutable after v3');
+  assert.equal(await page.locator('#fallback-authorization').isDisabled(),true,'Signed scope cannot be enlarged by a later brief');
+  assert.equal(await page.locator('[data-select-plan="B"]').isDisabled(),true);
+  await sharedReadonly(page,{version:3});
+  assert.equal(await basis.getAttribute('data-authorized-brief-version'),'2');
+  assert.equal(await basis.innerText(),signedRecord);
+  assert.ok((await page.locator('#management-brief-preview').innerText()).includes(v3Note));
+  await page.locator('#brief-version-history > summary').click();
+  assert.equal(await page.locator('[data-brief-history-version]').count(),3);
+  assert.match(await page.locator('[data-brief-history-version="2"] > summary').innerText(),/Superseded by v3/);
+  await page.locator('[data-brief-history-version="2"] > summary').click();
+  assert.equal(await page.locator('[data-brief-history-content="2"]').innerText(),v2,'Version v2 retains exactly the signed supporting content');
+  await basis.screenshot({path:path.join(output,'authorization-bound-to-v2.png')});
+  await page.locator('#brief-version-history').screenshot({path:path.join(output,'brief-version-history.png'),style:'.demo-timeline, .topbar, #notice {visibility:hidden !important}'});
+  await role(page,'P01');
+  await page.locator('#edit-management-brief').click();
+  const privateNote = 'Private unfinished fourth draft should never be in attachment history.';
+  await page.locator('#management-brief-editor').fill(`${await page.locator('#management-brief-editor').inputValue()}\n\n${privateNote}`);
+  await sharedReadonly(page,{version:3});
+  assert.ok(!(await page.locator('body').textContent()).includes(privateNote));
+  assert.equal(await basis.innerText(),signedRecord);
+}
+
 try {
   const { page } = await makePage();
   const frozen = await page.evaluate(() => JSON.stringify(globalThis.DEMO_DATA));
 
+  if (authorizationVersionsOnly) {
+    await authorizationVersionScenario(page);
+  } else {
   if (!endpointsOnly) {
   // Publication and role boundaries also apply to direct links and an in-flight
   // simulated generation; a delayed callback must not reveal a private brief.
@@ -662,9 +728,11 @@ try {
   assert.deepEqual(await plainFallback.evaluate(() => globalThis.testRichCopies), [], 'A browser without rich clipboard support receives the same readable plain brief');
   await plainContext.close();
   }
+  }
+  assert.equal(await page.evaluate(() => JSON.stringify(globalThis.DEMO_DATA)),frozen);
   assert.deepEqual(errors, []);
   assert.deepEqual(network, [], 'The brief, clipboard fallback and full follow-up flow work without external requests');
-  console.log(endpointsOnly ? 'Endpoint brief browser checks passed: generated and regenerated held and separately authorized rescheduling outcomes, current amounts and windows, outstanding assessments and next updates, no post-authorization A/B table, preview and rich/plain copy parity, frozen source data, zero external requests. Recipient texts and screenshots saved under output/.' : 'Management brief browser checks passed: Emma-only private drafts on both pages, explicit immutable v1/v2 attachments and metadata, read-only Elena permissions, plan/amount/state staleness until reattachment, no approval changes or duplicate attachments, request-specific attachment isolation, one generate–preview–attach–authorize guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with before-authorization comparison tables, current-result summaries and bold titles, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
+  console.log(authorizationVersionsOnly ? 'Authorization version checks passed: attach v1, edit and attach v2, sign against request + Q-A v1 + brief v2, attach progress v3; signed basis remains v2, old versions are read-only, private drafts stay hidden, no scope or fee changes.' : endpointsOnly ? 'Endpoint brief browser checks passed: generated and regenerated held and separately authorized rescheduling outcomes, current amounts and windows, outstanding assessments and next updates, no post-authorization A/B table, preview and rich/plain copy parity, frozen source data, zero external requests. Recipient texts and screenshots saved under output/.' : 'Management brief browser checks passed: Emma-only private drafts on both pages, explicit immutable v1/v2 attachments and metadata, read-only Elena permissions, plan/amount/state staleness until reattachment, no approval changes or duplicate attachments, request-specific attachment isolation, one generate–preview–attach–authorize guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with before-authorization comparison tables, current-result summaries and bold titles, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

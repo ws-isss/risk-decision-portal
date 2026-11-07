@@ -98,10 +98,21 @@
 
   function renderManagementBrief(state) {
     const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
-    if (state.viewer === "P06" && !attachment) return "";
-    if (!briefOpen && !(state.viewer === "P06" && attachment)) return "";
+    if (state.viewer === "P06" && !briefAttachments.length) return "";
+    if (!briefOpen && !(state.viewer === "P06" && briefAttachments.length)) return "";
     const draft = state.viewer === "P01" ? managementBrief : null;
-    return global.DEMO_BRIEF_VIEW.render({brief:draft,attachment,loading:briefLoading,state,text,helpers:{escape},staleReasons:global.DEMO_BRIEF.staleReasons(draft,{data,state}),attachmentStaleReasons:global.DEMO_BRIEF.staleReasons(attachment?.brief,{data,state}),preview:briefPreview,copied:briefCopied});
+    return global.DEMO_BRIEF_VIEW.render({brief:draft,attachment,attachments:briefAttachments,loading:briefLoading,state,text,helpers:{escape,requestTime:at=>`${core.formatInstant(at,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`},staleReasons:global.DEMO_BRIEF.staleReasons(draft,{data,state}),attachmentStaleReasons:global.DEMO_BRIEF.staleReasons(attachment?.brief,{data,state}),preview:briefPreview,copied:briefCopied});
+  }
+
+  function renderAuthorizationBasis(state, authorization, kind = "main") {
+    if (!authorization?.basis) return "";
+    const t = text.brief.authorizationBasis;
+    const basis = authorization.basis;
+    const brief = basis.brief;
+    const changed = !core.authorizationMatches(data,state,kind);
+    const requestTime = `${core.formatInstant(basis.request.createdAt,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`;
+    const briefLabel = brief ? interpolate(t.briefBasis,{version:brief.version,name:brief.attachedBy.name,attachedAt:brief.attachedAtLabel,dataAsOf:brief.dataAsOfLabel}) : t.noBriefAtSigning;
+    return `<section class="authorization-basis" data-authorization-basis="${kind}" data-authorization-request-key="${escape(basis.request.key)}" data-authorized-brief-version="${brief ? brief.version : "none"}" data-authorization-current="${!changed}"><h4>${t.title}</h4><dl class="info-facts"><dt>${t.boundRequest}</dt><dd>${escape(t.requestKinds[basis.request.kind])} · ${escape(data.project.id)} · ${escape(requestTime)}</dd><dt>${t.amount}</dt><dd>${money(basis.scope.amount)}</dd><dt>${t.boundQuote}</dt><dd>${basis.quotes.map(quote=>`${escape(quote.id)} v${escape(quote.version)} · ${money(quote.amount)} · ${escape(t.quoteScopes[quote.scopeKey])}`).join("<br>")}</dd><dt>${t.supportingBrief}</dt><dd>${escape(briefLabel)}</dd></dl><p class="decision-note">${t.boundary}</p><p class="decision-note">${t.progressOnly}</p>${changed ? `<p class="brief-stale" role="status"><strong>${t.newAuthorization}</strong> · ${t.scopeChanged}</p>` : `<p class="decision-note">${t.scopeChanged}</p>`}</section>`;
   }
 
   function renderAuthorizationBrief(state) {
@@ -112,7 +123,7 @@
     const status = !attachment ? "missing" : reasons.length ? "stale" : "current";
     const title = {missing:t.authorizationBriefMissing,stale:t.authorizationBriefStale,current:t.authorizationBriefCurrent}[status];
     const hint = {missing:t.authorizationBriefMissingHint,stale:t.authorizationBriefStaleHint}[status];
-    return `<aside id="authorization-brief-status" class="authorization-brief-status" data-brief-state="${status}" role="status"><strong>${title}${attachment ? ` · v${attachment.version}` : ""}</strong>${hint ? `<p>${hint}</p>` : ""}${reasons.length ? `<ul>${reasons.map(reason=>`<li>${escape(t.staleReasons[reason])}</li>`).join("")}</ul>` : ""}<div class="decision-action-group">${attachment ? `<button type="button" id="view-management-brief" class="button button-secondary">${t.viewShared}</button>` : ""}${status !== "current" ? `<button type="button" id="update-shared-brief" class="button button-secondary">${attachment ? t.updateShared : t.prepareShared}</button>` : ""}</div></aside>`;
+    return `<aside id="authorization-brief-status" class="authorization-brief-status" data-brief-state="${status}" role="status"><strong>${title}${attachment ? ` · v${attachment.version}` : ""}</strong>${hint ? `<p>${hint}</p>` : ""}${reasons.length ? `<ul>${reasons.map(reason=>`<li>${escape(t.staleReasons[reason])}</li>`).join("")}</ul>` : ""}<p class="decision-note">${t.authorizationBasis.boundary}</p><div class="decision-action-group">${attachment ? `<button type="button" id="view-management-brief" class="button button-secondary">${t.viewShared}</button>` : ""}${status !== "current" ? `<button type="button" id="update-shared-brief" class="button button-secondary">${attachment ? t.updateShared : t.prepareShared}</button>` : ""}</div></aside>`;
   }
 
   function clearBrief() {
@@ -364,7 +375,7 @@
   }
 
   function renderWuxi(state) {
-    return global.DEMO_WUXI_VIEW.render({data,core,state,text,formValues,helpers:{escape,interpolate,money,instant,dateOnly,zoneLabel,city,icon,info,note,badge,renderFeeBreakdown,renderAuthorizationBrief}});
+    return global.DEMO_WUXI_VIEW.render({data,core,state,text,formValues,helpers:{escape,interpolate,money,instant,dateOnly,zoneLabel,city,icon,info,note,badge,renderFeeBreakdown,renderAuthorizationBrief,renderAuthorizationBasis}});
   }
   function renderUnpublished(state, person) {
     return `<div class="page-heading"><h1>${state.viewer === "P07" ? text.portal.privateDraft : text.project.title}</h1><div class="snapshot"><span>${text.overview.snapshot}</span> <time id="snapshot-time" datetime="${state.clock}">${instant(state.clock,person.timezone)}</time> ${zoneLabel(person.timezone)}</div></div>${state.viewer === "P07" ? renderWuxi(state) : `<section class="unpublished-state"><h2>${text.portal.hiddenTitle}</h2><p>${text.portal.hiddenBody}</p></section>`}`;
@@ -386,7 +397,7 @@
       <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools"><details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.english}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="true">${text.overview.languageCurrent}</button><button type="button" data-language="zh" disabled>${text.overview.languagePending}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
       <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
       <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-timing-kind="${banner.kind || "milestone"}" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
-      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief}})}${renderWuxi(state)}${renderContext(state)}`}
+      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief,renderAuthorizationBasis}})}${renderWuxi(state)}${renderContext(state)}`}
       ${renderManagementBrief(state)}${renderAdvance(state,person)}
       <footer class="page-footer">${text.overview.footer}</footer></main>`;
     footerObserver.disconnect();
@@ -425,7 +436,7 @@
       if (message) notify(message);
       return true;
     } catch (error) {
-      decisionError = text.wuxi.errors[error.message] || text.decision.errors[error.message] || text.decision.errors.default;
+      decisionError = text.brief.errors[error.message] || text.wuxi.errors[error.message] || text.decision.errors[error.message] || text.decision.errors.default;
       // Keep the current form and its rationale intact when validation fails.
       const target = document.getElementById("decision-error");
       if (target) { target.textContent = decisionError; target.hidden = false; target.scrollIntoView({block:"nearest"}); }
@@ -708,7 +719,7 @@
   document.addEventListener("submit", event => {
     if (event.target.id === "reschedule-authorization-form") {
       event.preventDefault(); const form = new FormData(event.target);
-      performDecision(() => session.authorizeReschedule({signature:String(form.get("signature")),reason:String(form.get("reason")),acknowledged:form.get("acknowledged") === "on"})); return;
+      performDecision(() => session.authorizeReschedule({signature:String(form.get("signature")),reason:String(form.get("reason")),acknowledged:form.get("acknowledged") === "on",briefAttachment:global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state:session.getState()})})); return;
     }
     if (event.target.id === "risk-publication-form") {
       event.preventDefault();
@@ -727,7 +738,7 @@
     }
     if (event.target.id === "authorization-form") {
       event.preventDefault(); const form = new FormData(event.target);
-      performDecision(() => session.authorize({signature: String(form.get("signature")),reason: String(form.get("reason")),acknowledged: form.get("acknowledged") === "on"}),text.decision.authorizationNotice);
+      performDecision(() => session.authorize({signature: String(form.get("signature")),reason: String(form.get("reason")),acknowledged: form.get("acknowledged") === "on",briefAttachment:global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state:session.getState()})}),text.decision.authorizationNotice);
       return;
     }
     if (event.target.id !== "requirement-form") return;

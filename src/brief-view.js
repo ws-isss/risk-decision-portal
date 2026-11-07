@@ -43,17 +43,45 @@
     return `<div style="font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#20262e">${renderMarkdown(global.DEMO_BRIEF.recipientMarkdown(brief,text,options))}</div>`;
   }
 
-  function render({ brief, attachment = null, loading = false, state, text, helpers, staleReasons = [], attachmentStaleReasons = [], preview = false, copied = false }) {
+  function renderVersionHistory({ attachments, state, text, helpers }) {
+    if (!["P01", "P06"].includes(state.viewer) || state.publication?.status !== "published" || state.scene === "prepublication") return "";
+    const model = global.DEMO_BRIEF;
+    const t = text.brief;
+    const { escape } = helpers;
+    const currentKey = model.requestKey({ state });
+    const groups = [...new Set((attachments || []).map(item => item.requestKey))]
+      .map(key => ({ key, history: model.history(attachments, { state, requestKey: key }) }))
+      .filter(group => group.history.length)
+      .sort((a, b) => (a.key === currentKey ? -1 : b.key === currentKey ? 1 : a.key.localeCompare(b.key)));
+    if (!groups.length) return "";
+    const contents = groups.map(({ key, history }) => {
+      const separator = key.indexOf(":"), kind = key.slice(0, separator), createdAt = key.slice(separator + 1);
+      const requestName = t.authorizationBasis.requestKinds[kind];
+      const requestTime = helpers.requestTime ? helpers.requestTime(createdAt) : createdAt;
+      const entries = history.map((item, index) => {
+        const next = history[index + 1];
+        const status = next ? t.historySuperseded.replace("{version}", next.version) : t.historyCurrent;
+        const title = t.historyContent.replace("{version}", item.version);
+        return `<details class="brief-history-version" data-brief-history-version="${escape(item.version)}"><summary><strong>v${escape(item.version)}</strong><span>${t.attachedBy}: ${escape(item.attachedBy.name)}</span><span>${t.attachedAt}: <time datetime="${escape(item.attachedAt)}">${escape(item.attachedAtLabel)}</time></span><span class="brief-history-status">${escape(status)}</span></summary><div class="brief-history-body"><div class="brief-metadata"><span>${t.asOf}: <time datetime="${escape(item.brief.generatedAt)}">${escape(item.brief.metadata.asOf)}</time></span><span>${t.versions}: ${item.brief.metadata.sourceVersions.map(escape).join(" · ")}</span></div><article class="brief-history-content" data-brief-history-content="${escape(item.version)}" tabindex="0" aria-label="${escape(title)}">${renderMarkdown(model.recipientMarkdown(item.brief, text))}</article></div></details>`;
+      }).join("");
+      return `<div class="brief-history-group" data-brief-history-request="${escape(key)}" data-brief-request-kind="${escape(kind)}" data-current-request="${key === currentKey}"><h3>${escape(requestName)}<span>${escape(t.historyRequestCreated.replace("{time}", requestTime))}</span>${key === currentKey ? `<span>${t.historyCurrentRequest}</span>` : ""}</h3>${entries}</div>`;
+    }).join("");
+    const count = groups.reduce((sum, group) => sum + group.history.length, 0);
+    return `<details id="brief-version-history" class="brief-version-history"><summary>${t.historyTitle.replace("{count}", count)}</summary><p class="decision-note">${t.historyHint}</p>${contents}</details>`;
+  }
+
+  function render({ brief, attachment = null, attachments = [], loading = false, state, text, helpers, staleReasons = [], attachmentStaleReasons = [], preview = false, copied = false }) {
     if (!["P01", "P06"].includes(state.viewer) || state.publication?.status !== "published" || state.scene === "prepublication") return "";
     const readonly = state.viewer === "P06";
-    if (readonly && !attachment) return "";
     const t = text.brief;
     const { escape } = helpers;
     const model = global.DEMO_BRIEF;
     const heading = `<div class="section-heading"><h2>${t.title}</h2><span class="data-tag">${t.simulated}</span></div>`;
+    const history = renderVersionHistory({ attachments, state, text, helpers });
+    if (readonly && !attachment) return history ? `<section id="management-brief" class="section management-brief" data-brief-readonly="true">${heading}<p>${t.historyOnlyIntro}</p>${history}</section>` : "";
     const attachedMetadata = attachment ? `<div class="brief-metadata brief-attachment-metadata"><span>${t.version}: v${escape(attachment.version)}</span><span>${t.attachedBy}: ${escape(attachment.attachedBy.name)}</span><span>${t.attachedAt}: <time datetime="${escape(attachment.attachedAt)}">${escape(attachment.attachedAtLabel)}</time></span><span>${t.asOf}: <time datetime="${escape(attachment.brief.generatedAt)}">${escape(attachment.brief.metadata.asOf)}</time></span></div>` : "";
     const attachmentStatus = !readonly && attachment ? `<aside id="brief-attachment-status" class="authorization-brief-status" data-brief-version="${escape(attachment.version)}" data-brief-stale="${attachmentStaleReasons.length > 0}" role="status"><strong>${attachmentStaleReasons.length ? t.authorizationBriefStale : t.attachmentCurrent.replace("{version}",attachment.version)}</strong>${attachedMetadata}${attachmentStaleReasons.length ? `<ul>${attachmentStaleReasons.map(key => `<li>${escape(t.staleReasons[key])}</li>`).join("")}</ul>` : ""}<p>${t.attachmentFrozenHint}</p></aside>` : "";
-    if (!readonly && (loading || !brief)) return `<section id="management-brief" class="section management-brief" aria-busy="${loading}">${heading}<p>${t.intro}</p>${attachmentStatus}<p role="status">${loading ? t.generating : t.noPrivateDraft}</p></section>`;
+    if (!readonly && (loading || !brief)) return `<section id="management-brief" class="section management-brief" aria-busy="${loading}">${heading}<p>${t.intro}</p>${attachmentStatus}${history}<p role="status">${loading ? t.generating : t.noPrivateDraft}</p></section>`;
     // Elena only receives the captured attachment. The private editor can keep
     // changing without changing this rendered source or its original metadata.
     if (readonly) { brief = attachment.brief; staleReasons = attachmentStaleReasons; }
@@ -70,8 +98,8 @@
     const attachHint = !readonly && preview ? noRequest ? t.attachRequiresRequest : staleReasons.length ? t.attachRequiresCurrent : !brief.previewed ? t.attachRequiresPreview : alreadyAttached ? t.attachmentFrozenHint : t.attachHint : "";
     const attachButton = !readonly && preview ? `<button id="attach-management-brief" class="button button-primary"${attachmentBlocked ? " disabled" : ""} aria-describedby="brief-attach-hint">${alreadyAttached ? t.attachAlready.replace("{version}",attachment.version) : attachment ? t.reattach : t.attach}</button>` : "";
     const controls = readonly ? "" : `<div class="brief-controls">${preview ? `<button id="edit-management-brief" class="button button-secondary">${t.edit}</button>${attachButton}<button id="copy-management-brief" class="button button-secondary">${t.copy}</button>` : `<button id="preview-management-brief" class="button button-primary">${t.preview}</button>`}<button id="regenerate-management-brief" class="button button-secondary">${t.regenerate}</button></div>${attachHint ? `<p id="brief-attach-hint" class="decision-note">${attachHint}</p>` : ""}`;
-    return `<section id="management-brief" class="section management-brief" data-brief-status="${escape(brief.statusKey)}" data-brief-stale="${staleReasons.length > 0}" data-brief-preview="${showPreview}" data-brief-readonly="${readonly}"${readonly ? ` data-brief-version="${escape(attachment.version)}"` : ""}>${heading}<p>${readonly ? t.readonlyIntro : t.intro}</p>${attachmentStatus}<p class="status">${escape(meta.status)}</p>${brief.edited ? `<span class="data-tag">${t.edited}</span>` : ""}${metadata}${stale}${body}${counter}${controls}${!readonly && copied ? `<p id="management-brief-copied" role="status">${t.copied}</p>` : ""}</section>`;
+    return `<section id="management-brief" class="section management-brief" data-brief-status="${escape(brief.statusKey)}" data-brief-stale="${staleReasons.length > 0}" data-brief-preview="${showPreview}" data-brief-readonly="${readonly}"${readonly ? ` data-brief-version="${escape(attachment.version)}"` : ""}>${heading}<p>${readonly ? t.readonlyIntro : t.intro}</p>${attachmentStatus}${readonly ? "" : history}<p class="status">${escape(meta.status)}</p>${brief.edited ? `<span class="data-tag">${t.edited}</span>` : ""}${metadata}${readonly ? history : ""}${stale}${body}${counter}${controls}${!readonly && copied ? `<p id="management-brief-copied" role="status">${t.copied}</p>` : ""}</section>`;
   }
 
-  global.DEMO_BRIEF_VIEW = Object.freeze({ render, renderMarkdown, copyHtml });
+  global.DEMO_BRIEF_VIEW = Object.freeze({ render, renderVersionHistory, renderMarkdown, copyHtml });
 })(globalThis);

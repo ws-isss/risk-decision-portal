@@ -30,6 +30,67 @@
     return value;
   }
 
+  // Commercial authority is captured from the structured request and quotation,
+  // never from the editable management brief or the current progress narrative.
+  function authorizationContext(data, state, kind) {
+    const d = state.decision;
+    if (!d) return null;
+    const r = d.resource?.rescheduleRequest;
+    const selectedKind = kind || (r?.decision ? "reschedule" : "main");
+    if (!["main", "reschedule"].includes(selectedKind)) throw new Error("UNKNOWN_AUTHORIZATION_KIND");
+    if (selectedKind === "reschedule") {
+      if (!r?.decision || !r.quote) return null;
+      return deepFreeze({
+        request: { key: `reschedule:${r.decision.at}`, kind: "reschedule", planId: d.planId, createdAt: r.decision.at },
+        quotes: [{ id: r.quote.quoteRef, version: r.quote.version, amount: r.quote.amount, scopeKey: "reschedulingOnly" }],
+        scope: {
+          currency: data.fees.currency, amount: r.decision.amount, quoteAmount: r.quote.amount,
+          decisionQuote: { id: r.decision.quoteRef, version: r.decision.version },
+          fallbackCap: 0, window: r.quote.candidateWindow,
+          items: [{ feeKey: "reschedule", amount: r.quote.amount, chargeTrigger: data.fees.chargeTriggers.reschedule }]
+        }
+      });
+    }
+    const plan = data.plans[d.planId];
+    const fallbackCap = d.fallbackSelected ? data.fees.fallbackCap : 0;
+    const quote = data.reports[plan.quoteRef];
+    const quotes = [{ id: plan.quoteRef, version: quote.version, amount: plan.total, scopeKey: "mainPlan" }];
+    if (d.fallbackSelected) quotes.push({ id: data.plans.B.quoteRef, version: data.reports[data.plans.B.quoteRef].version, amount: fallbackCap, scopeKey: "fallbackRescheduling" });
+    const feeKeys = d.planId === "A" ? ["shared", "expedite", "hold"] : ["shared", "reschedule"];
+    return deepFreeze({
+      request: { key: `main:${d.createdAt}`, kind: "main", planId: d.planId, createdAt: d.createdAt },
+      quotes,
+      scope: {
+        currency: data.fees.currency,
+        amount: d.fallbackSelected ? data.fees.totals.AWithFallback : data.fees.totals[d.planId],
+        planAmount: data.fees.totals[d.planId], fallbackCap, window: plan.window.at,
+        studyPlan: { id: "EXP-001", version: data.reports["EXP-001"].version },
+        items: feeKeys.map(feeKey => ({ feeKey, amount: data.fees[feeKey], chargeTrigger: data.fees.chargeTriggers[feeKey] })),
+        fallback: d.fallbackSelected ? { feeKey: "reschedule", amount: fallbackCap, chargeTrigger: data.fees.chargeTriggers.reschedule } : null
+      }
+    });
+  }
+
+  function authorizationMatches(data, state, kind) {
+    const context = authorizationContext(data, state, kind);
+    if (!context) return false;
+    const authorization = context.request.kind === "reschedule" ? state.decision.resource.rescheduleRequest.authorization : state.decision.authorization;
+    if (!authorization?.basis) return false;
+    return ["request", "quotes", "scope"].every(key => JSON.stringify(context[key]) === JSON.stringify(authorization.basis[key]));
+  }
+
+  function authorizationBasis(data, state, kind, attachment) {
+    const context = authorizationContext(data, state, kind);
+    if (!context) throw new Error("DECISION_REQUIRED");
+    if (attachment && attachment.requestKey !== context.request.key) throw new Error("BRIEF_REQUEST_MISMATCH");
+    if (attachment && (!Number.isInteger(attachment.version) || attachment.version < 1 || attachment.attachedBy?.id !== "P01" || !attachment.attachedAt || !attachment.brief?.generatedAt || !attachment.brief?.metadata?.asOf)) throw new Error("INVALID_BRIEF_ATTACHMENT");
+    return deepFreeze(JSON.parse(JSON.stringify({ ...context, brief: attachment ? {
+      requestKey: attachment.requestKey, version: attachment.version,
+      attachedBy: attachment.attachedBy, attachedAt: attachment.attachedAt, attachedAtLabel: attachment.attachedAtLabel,
+      dataAsOf: attachment.brief.generatedAt, dataAsOfLabel: attachment.brief.metadata.asOf
+    } : null })));
+  }
+
   function createSession(data) {
     let state;
     const steps = ["backupAssigned", "alternateAssigned", "reviewsComplete", "budgetAuthorized", "resourceReviewStart", "resourceConfirmed"];
@@ -240,7 +301,7 @@
       },
       authorize(values) {
         role("P06"); const d = tasksRequired();
-        if (d.authorization) return snapshot();
+        if (d.authorization) { ensure(authorizationMatches(data, state, "main"), "NEW_AUTHORIZATION_REQUIRED"); return snapshot(); }
         ensure(d.approver.id === "P06", "APPROVER_REQUIRED");
         ensure(bothReviews(d), "REVIEWS_REQUIRED");
         ensure(d.support.acceptedAt, "SUPPORT_ACCEPTANCE_REQUIRED");
@@ -250,7 +311,8 @@
         ensure(values.acknowledged === true, "ACKNOWLEDGEMENT_REQUIRED");
         const total = d.fallbackSelected ? data.fees.totals.AWithFallback : data.fees.totals[d.planId];
         ensure(total <= data.people.P06.budgetLimit, "BUDGET_LIMIT_EXCEEDED");
-        d.authorization = { by: "P06", at: state.clock, signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, total, fallbackCap: d.fallbackSelected ? data.fees.fallbackCap : 0, budgetReviewStartedAt: data.events.budgetStart.at };
+        const basis = authorizationBasis(data, state, "main", values.briefAttachment);
+        d.authorization = { by: "P06", at: state.clock, signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, total, fallbackCap: d.fallbackSelected ? data.fees.fallbackCap : 0, budgetReviewStartedAt: data.events.budgetStart.at, basis };
         record("budgetStart", data.events.budgetStart.at); record("budgetAuthorized");
         return changed();
       },
@@ -285,6 +347,7 @@
       startResourceReview() {
         role("P07"); const d = tasksRequired();
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED"); ensure(d.planId === "A", "ORIGINAL_WINDOW_ONLY");
+        ensure(authorizationMatches(data, state, "main"), "NEW_AUTHORIZATION_REQUIRED");
         if (d.resource.startedAt) return snapshot();
         atEvent("resourceReviewStart");
         d.resource.startedAt = state.clock; record("resourceReviewStarted");
@@ -293,6 +356,7 @@
       respondScheduling(values) {
         role("P08"); const d = tasksRequired();
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED"); ensure(d.planId === "A", "ORIGINAL_WINDOW_ONLY");
+        ensure(authorizationMatches(data, state, "main"), "NEW_AUTHORIZATION_REQUIRED");
         ensure(d.resource.startedAt, "RESOURCE_REVIEW_REQUIRED");
         ensure(values && ["held", "unavailable"].includes(values.outcome), "INVALID_RESOURCE_OUTCOME");
         if (d.resource.scheduling) {
@@ -319,6 +383,7 @@
       requestReschedule() {
         role("P07"); const d = tasksRequired();
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED");
+        ensure(authorizationMatches(data, state, "main"), "NEW_AUTHORIZATION_REQUIRED");
         ensure(d.planId === "B" || (d.resource.receipt && d.resource.receipt.outcome === "unavailable"), "RESCHEDULE_NOT_AVAILABLE");
         if (d.resource.rescheduleRequest) return snapshot();
         d.resource.rescheduleRequest = rescheduleRecord("rescheduleRequested", { quote: null, quoteReceipt: null, decision: null, authorization: null, confirmation: null });
@@ -348,17 +413,20 @@
         role("P06"); const r = rescheduleRequest();
         ensure(r.decision, "RESCHEDULE_DECISION_REQUIRED");
         ensure(state.decision.approver.id === "P06", "APPROVER_REQUIRED");
-        if (r.authorization) return snapshot();
+        if (r.authorization) { ensure(authorizationMatches(data, state, "reschedule"), "NEW_AUTHORIZATION_REQUIRED"); return snapshot(); }
         ensure(values && typeof values.signature === "string" && values.signature.trim() === data.people.P06.name, "INVALID_SIGNATURE");
         ensure(typeof values.reason === "string" && values.reason.trim(), "REASON_REQUIRED");
         ensure(values.acknowledged === true, "ACKNOWLEDGEMENT_REQUIRED");
         ensure(r.quote.amount <= data.people.P06.budgetLimit, "BUDGET_LIMIT_EXCEEDED");
-        r.authorization = rescheduleRecord("rescheduleAuthorized", { signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version });
+        const basis = authorizationBasis(data, state, "reschedule", values.briefAttachment);
+        ensure(basis.scope.amount === basis.scope.quoteAmount && basis.scope.decisionQuote.id === r.quote.quoteRef && basis.scope.decisionQuote.version === r.quote.version, "NEW_AUTHORIZATION_REQUIRED");
+        r.authorization = rescheduleRecord("rescheduleAuthorized", { signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, amount: r.quote.amount, quoteRef: r.quote.quoteRef, version: r.quote.version, basis });
         return changed();
       },
       confirmReschedule() {
         role("P07"); const r = rescheduleRequest();
         ensure(r.authorization, "RESCHEDULE_AUTHORIZATION_REQUIRED");
+        ensure(authorizationMatches(data, state, "reschedule"), "NEW_AUTHORIZATION_REQUIRED");
         if (r.confirmation) return snapshot();
         r.confirmation = rescheduleRecord("rescheduleConfirmed", { candidateWindow: r.quote.candidateWindow, amount: r.authorization.amount });
         return changed();
@@ -402,5 +470,5 @@
     return Object.freeze(api);
   }
 
-  global.DEMO_CORE = Object.freeze({ validLocalDate, calendarGap, formatInstant, formatLocalDate, createSession });
+  global.DEMO_CORE = Object.freeze({ validLocalDate, calendarGap, formatInstant, formatLocalDate, authorizationContext, authorizationMatches, createSession });
 })(globalThis);

@@ -304,6 +304,109 @@ assert.equal(JSON.stringify(v1),frozenV1,'The old request record remains unchang
 attachmentSession.enterChapter('prepublication');attachmentSession.setViewer('P01');
 assert.throws(()=>attach(attachmentDraft,attachments),/UNPUBLISHED_RISK/);
 
+// A signature binds the commercial request and quotation together with the
+// exact supporting attachment. Later progress publications cannot rewrite it.
+{
+  const s=core.createSession(data);s.enterChapter('authorization',fixtures);s.setViewer('P01');
+  const versions=[];
+  const publish=draft=>briefModel.attach({brief:{...draft,previewed:true},attachments:versions,data,core,state:s.getState()});
+  const firstDraft=generate(s);const first=publish(firstDraft);versions.push(first);
+  const second=publish({...firstDraft,content:firstDraft.content+'\n\nEmma: use the defined quotation and study scope.',edited:true});versions.push(second);
+  assert.deepEqual(plain(briefModel.history([second,first],{state:s.getState()})).map(item=>item.version),[1,2],'History orders attached snapshots, never the private draft');
+  const preSignature=JSON.stringify(s.getState());
+  s.setViewer('P06');
+  assert.deepEqual(plain(briefModel.history(versions,{state:s.getState()})).map(item=>item.version),[1,2],'Elena can read the same attached history as Emma');
+  const signature={signature:data.people.P06.name,reason:'Approve the request and quotation, with v2 as supporting material.',acknowledged:true,briefAttachment:second};
+  assert.throws(()=>s.authorize({...signature,briefAttachment:{...second,requestKey:'reschedule:another-request'}}),/BRIEF_REQUEST_MISMATCH/,'An attachment from another request cannot become the approval basis');
+  assert.equal(s.getState().decision.authorization,null,'A mismatched brief cannot partly create a signature');
+  s.authorize(signature);
+  const signed=s.getState().decision.authorization;
+  const signedRecord=JSON.stringify(signed);
+  assert.equal(signed.basis.request.key,second.requestKey);
+  assert.equal(signed.basis.request.kind,'main');
+  assert.deepEqual(plain(signed.basis.quotes),[{id:'Q-A',version:1,amount:80000,scopeKey:'mainPlan'}]);
+  assert.equal(signed.basis.scope.amount,80000);
+  assert.equal(signed.basis.brief.version,2);
+  assert.equal(signed.basis.brief.attachedAtLabel,second.attachedAtLabel);
+  assert.deepEqual(plain(signed.basis.brief.attachedBy),plain(second.attachedBy));
+  assert.equal(signed.basis.brief.dataAsOf,second.brief.generatedAt);
+  assert.equal(signed.basis.brief.dataAsOfLabel,second.brief.metadata.asOf);
+  assert.equal(core.authorizationMatches(data,s.getState()),true);
+  for(const value of [signed.basis,signed.basis.request,signed.basis.quotes,signed.basis.quotes[0],signed.basis.scope,signed.basis.scope.items,signed.basis.brief,signed.basis.brief.attachedBy])assert.ok(Object.isFrozen(value));
+  s.setViewer('P01');
+  const third=publish(generate(s));versions.push(third);
+  assert.equal(third.version,3);
+  assert.equal(JSON.stringify(s.getState().decision.authorization),signedRecord,'Attaching a progress update as v3 never rewrites the v2 authorization basis');
+  s.setViewer('P06');s.authorize({...signature,briefAttachment:third});
+  assert.equal(JSON.stringify(s.getState().decision.authorization),signedRecord,'Retrying a signed action with v3 cannot replace its captured basis');
+  s.setViewer('P01');
+  assert.notEqual(JSON.stringify(s.getState()),preSignature,'Only explicit authorization changed business state');
+  assert.deepEqual(plain(briefModel.history(versions,{state:s.getState()})).map(item=>item.version),[1,2,3]);
+  assert.equal(briefModel.history(versions,{state:{...s.getState(),viewer:'P02'}}).length,0,'Other roles cannot request the attached history');
+  assert.equal(briefModel.history(versions,{state:{...s.getState(),publication:{status:'draft'}}}).length,0,'History never exposes unpublished risk content');
+  assert.equal(briefModel.history(versions,{state:s.getState(),requestKey:'main:unknown'}).length,0,'History cannot access a different scene request');
+  const commercialChanges=[
+    ['plan',(changedData,state)=>{state.decision.planId='B';}],
+    ['quoted amount',changedData=>{changedData.plans.A.total+=1000;}],
+    ['authorized amount',changedData=>{changedData.fees.totals.A+=1000;}],
+    ['quotation version',changedData=>{changedData.reports['Q-A'].version++;}],
+    ['fallback scope',(changedData,state)=>{state.decision.fallbackSelected=true;}],
+    ['fee condition',changedData=>{changedData.fees.chargeTriggers.shared='newCondition';}],
+    ['study scope version',changedData=>{changedData.reports['EXP-001'].version++;}]
+  ];
+  for(const [label,change] of commercialChanges){
+    const changedData=plain(data);const state=plain(s.getState());change(changedData,state);
+    assert.equal(core.authorizationMatches(changedData,state),false,`${label} cannot inherit the original authorization`);
+    const draft={...briefModel.generate({data:changedData,core,state,text}),previewed:true};
+    assert.throws(()=>briefModel.attach({brief:draft,attachments:versions,data:changedData,core,state}),/NEW_AUTHORIZATION_REQUIRED/,`${label} requires a separate authorization before attaching to a signed request`);
+    assert.equal(JSON.stringify(state.decision.authorization),signedRecord,'A rejected update preserves the original signature');
+  }
+  const progressed=plain(s.getState());progressed.clock=data.events.resourceConfirmed.at;progressed.decision.resource.startedAt=data.events.resourceReviewStart.at;
+  assert.equal(core.authorizationMatches(data,progressed),true,'Progress and clock changes do not alter authorized commercial scope');
+  const progressedBrief={...briefModel.generate({data,core,state:progressed,text}),previewed:true};
+  assert.equal(briefModel.attach({brief:progressedBrief,attachments:versions,data,core,state:progressed}).version,4,'A further progress-only update can be attached normally');
+
+  const noBrief=authorizedSession('A');
+  assert.equal(noBrief.getState().decision.authorization.basis.brief,null,'A signature without an attached brief states no brief, rather than inventing a version');
+  const fallbackBasis=authorizedSession('A',true).getState().decision.authorization.basis;
+  assert.equal(fallbackBasis.scope.amount,90000);assert.equal(fallbackBasis.scope.fallbackCap,10000);
+  assert.deepEqual(plain(fallbackBasis.quotes).map(q=>[q.id,q.amount,q.scopeKey]),[['Q-A',80000,'mainPlan'],['Q-B',10000,'fallbackRescheduling']],'The fallback quotes only its separate cap, never the full B package');
+
+  const exception=core.createSession(data);exception.enterChapter('unavailable',fixtures);
+  exception.respondScheduling({outcome:'unavailable',reason:'Resource slots unavailable.'});exception.setViewer('P07');exception.returnResourceReceipt();exception.advanceTo('rescheduleRequested');exception.requestReschedule();
+  exception.setViewer('P08');exception.advanceTo('rescheduleQuotePrepared');exception.respondRescheduleQuote();exception.setViewer('P07');exception.advanceTo('rescheduleQuoteReturned');exception.returnRescheduleQuote();
+  exception.setViewer('P01');exception.advanceTo('rescheduleDecisionCreated');exception.createRescheduleDecision();
+  const reschedule=briefModel.attach({brief:{...generate(exception),previewed:true},attachments:versions,data,core,state:exception.getState()});
+  assert.equal(reschedule.version,1,'A separate request has its own attachment numbering');
+  assert.equal(core.authorizationMatches(data,exception.getState()),false,'The main request signature cannot authorize the reschedule request');
+  assert.equal(core.authorizationMatches(data,exception.getState(),'main'),true,'The historical main request signature remains valid for its own scope');
+  exception.setViewer('P06');exception.advanceTo('rescheduleAuthorized');
+  assert.throws(()=>exception.authorizeReschedule({...signature,briefAttachment:second}),/BRIEF_REQUEST_MISMATCH/);
+  exception.authorizeReschedule({...signature,briefAttachment:reschedule});
+  const rescheduledBasis=exception.getState().decision.resource.rescheduleRequest.authorization.basis;
+  assert.equal(rescheduledBasis.request.kind,'reschedule');
+  assert.equal(rescheduledBasis.scope.amount,10000);
+  assert.deepEqual(plain(rescheduledBasis.quotes),[{id:'Q-B',version:1,amount:10000,scopeKey:'reschedulingOnly'}]);
+  assert.equal(rescheduledBasis.brief.version,1);
+  for(const change of [state=>{state.decision.resource.rescheduleRequest.quote.version++;},state=>{state.decision.resource.rescheduleRequest.quote.amount+=1000;},state=>{state.decision.resource.rescheduleRequest.quote.candidateWindow=data.plans.A.window.at;}]){
+    const state=plain(exception.getState());state.viewer='P01';change(state);
+    assert.equal(core.authorizationMatches(data,state),false,'A changed rescheduling quotation, amount or window requires another authorization');
+    const draft={...briefModel.generate({data,core,state,text}),previewed:true};
+    assert.throws(()=>briefModel.attach({brief:draft,attachments:[reschedule],data,core,state}),/NEW_AUTHORIZATION_REQUIRED/);
+  }
+  const allVersions=[...versions,reschedule];
+  assert.deepEqual(plain(briefModel.history(allVersions,{state:exception.getState(),requestKey:second.requestKey})).map(item=>item.version),[1,2,3],'The earlier request’s attached versions remain accessible under that request');
+  assert.deepEqual(plain(briefModel.history(allVersions,{state:exception.getState()})).map(item=>item.version),[1],'The current request history never mixes versions from the original request');
+
+  const changedPricing=plain(data);const guarded=core.createSession(changedPricing);guarded.enterChapter('hold',fixtures);
+  changedPricing.fees.totals.A+=1000;
+  assert.throws(()=>guarded.startResourceReview(),/NEW_AUTHORIZATION_REQUIRED/,'An old signature cannot start resource action after its amount changes');
+  changedPricing.fees.totals.A=data.fees.totals.A;guarded.startResourceReview();guarded.advanceNext();guarded.setViewer('P08');
+  changedPricing.reports['Q-A'].version++;
+  assert.throws(()=>guarded.respondScheduling({outcome:'held',reason:'Confirm resources.'}),/NEW_AUTHORIZATION_REQUIRED/,'Changed quotations cannot incur resource fees under an old signature');
+  assert.equal(guarded.getState().decision.resource.scheduling,null);
+}
+
 const editedPreview={...brief,content:'**Emma note** <script>unsafe()</script>\n\n| Cost | Scope |\n| --- | --- |\n| $10,000 | A \\| B |',edited:true};
 let html=briefView.render({brief:editedPreview,state:session.getState(),text,helpers:{escape},preview:false});
 assert.ok(html.includes('id="management-brief-editor"'));
@@ -340,4 +443,4 @@ assert.equal(html.includes('id="management-brief-unreviewed"'),false);
 session.enterChapter('prepublication');session.setViewer('P06');
 assert.equal(briefView.render({brief:editedPreview,attachment:previewAttachment,state:session.getState(),text,helpers:{escape}}),'','Attached brief remains hidden before risk publication');
 assert.equal(JSON.stringify(data),originalData,'Brief generation and copying never change scenario data');
-console.log('Management brief checks passed: private drafts, frozen request-scoped attachments and versions, explicit preview/attach guards, stale attachment isolation; 150–200 recipient words across all states, quote privacy and safe formatted preview/copy.',Object.fromEntries(checked));
+console.log('Management brief checks passed: private drafts, frozen request-scoped attachments and history, v2 signature basis unchanged after v3, request/quotation/scope binding and new-authorization guards; 150–200 recipient words across all states, quote privacy and safe formatted preview/copy.',Object.fromEntries(checked));

@@ -18,6 +18,14 @@
     return (attachments || []).filter(item => item.requestKey === key).reduce((latest, item) => !latest || item.version > latest.version ? item : latest, null);
   }
 
+  function history(attachments, { state, requestKey: key = requestKey({ state }) }) {
+    if (!["P01", "P06"].includes(state.viewer) || state.publication?.status !== "published") return [];
+    const d = state.decision;
+    const keys = d ? [`main:${d.createdAt}`, d.resource?.rescheduleRequest?.decision?.at ? `reschedule:${d.resource.rescheduleRequest.decision.at}` : null] : [];
+    if (!key || !keys.includes(key)) return [];
+    return (attachments || []).filter(item => item.requestKey === key).slice().sort((a, b) => a.version - b.version);
+  }
+
   // Preview/edit flags belong to Emma's workspace. An attachment only changes
   // when the authored content or its captured source snapshot actually changes.
   function isAttachedDraft(brief, attachment) {
@@ -38,6 +46,8 @@
     if (!customerView(data, state).clientVisible || state.publication?.status !== "published") throw new Error("UNPUBLISHED_RISK");
     const key = requestKey({ state });
     if (!key) throw new Error("DECISION_REQUIRED");
+    const authorization = key.startsWith("reschedule:") ? state.decision.resource.rescheduleRequest.authorization : state.decision.authorization;
+    if (authorization && !core.authorizationMatches(data, state)) throw new Error("NEW_AUTHORIZATION_REQUIRED");
     if (!brief?.previewed) throw new Error("PREVIEW_REQUIRED");
     if (!brief.snapshot || staleReasons(brief, { data, state }).length) throw new Error("STALE_BRIEF");
     const previous = currentAttachment(attachments, { state });
@@ -239,5 +249,5 @@
   function copyText(brief, text, options) { return plainText(recipientMarkdown(brief, text, options)); }
   function wordCount(brief, text, options) { return copyText(brief, text, options).trim().split(/\s+/).filter(Boolean).length; }
 
-  global.DEMO_BRIEF = Object.freeze({ generate, fingerprint, staleReasons, recipientMarkdown, plainText, copyText, wordCount, statusKey, requestKey, currentAttachment, attach, isAttachedDraft });
+  global.DEMO_BRIEF = Object.freeze({ generate, fingerprint, staleReasons, recipientMarkdown, plainText, copyText, wordCount, statusKey, requestKey, currentAttachment, history, attach, isAttachedDraft });
 })(globalThis);

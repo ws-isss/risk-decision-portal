@@ -39,6 +39,29 @@
     version: "Version",
     attachedBy: "Attached by",
     attachedAt: "Attached at",
+    historyTitle: "Attached version history ({count})",
+    historyHint: "Frozen attachments only. Each version keeps the content and data-as-of time that were shared; Emma’s private drafts are not included.",
+    historySuperseded: "Superseded by v{version}",
+    historyCurrent: "Latest attached version",
+    historyContent: "Brief v{version} · read only",
+    historyRequestCreated: "Created {time}",
+    historyCurrentRequest: "Current request",
+    historyOnlyIntro: "No brief is attached to the current decision request. Previously attached versions remain available below.",
+    authorizationBasis: {
+      title: "Authorization basis",
+      boundRequest: "Decision request",
+      boundQuote: "Quote",
+      supportingBrief: "Supporting brief at signing",
+      noBriefAtSigning: "No brief was attached at signing.",
+      briefBasis: "Based on brief v{version} · attached by {name} at {attachedAt} · data as of {dataAsOf}.",
+      boundary: "Authorization binds the decision request and quote; the brief is supporting material only.",
+      progressOnly: "Later progress updates can be attached without changing this recorded authorization.",
+      scopeChanged: "A change to the plan, amount, quote or authorization scope requires a new decision request and authorization; the original signature cannot be reused.",
+      requestKinds: { main: "Original decision request", reschedule: "Rescheduling decision request" },
+      quoteScopes: { mainPlan: "Study and resource scope", fallbackRescheduling: "Conditional fallback only", reschedulingOnly: "Rescheduling only" },
+      amount: "Authorized amount",
+      newAuthorization: "New authorization required"
+    },
     noPrivateDraft: "Generate a private draft to prepare an updated version.",
     regenerate: "Update from current records",
     regenerateTitle: "Replace this brief with an updated draft?",
@@ -144,7 +167,9 @@
       DECISION_REQUIRED: "Create a decision request before attaching the brief.",
       PREVIEW_REQUIRED: "Preview the current private draft before attaching it.",
       STALE_BRIEF: "Update this private draft from current records and preview it before attaching.",
-      NO_BRIEF: "Generate and preview a private brief before attaching it."
+      NO_BRIEF: "Generate and preview a private brief before attaching it.",
+      NEW_AUTHORIZATION_REQUIRED: "The plan, amount, quote or authorization scope has changed. Create a new decision request and obtain a new authorization; the existing signature cannot be reused.",
+      INVALID_BRIEF_ATTACHMENT: "Use a frozen brief attached to this decision request. A private draft or an attachment from another request cannot be recorded as the authorization basis."
     }
   };
 })(globalThis);

@@ -646,6 +646,21 @@ main { padding-bottom: var(--demo-bar-space); }
 .brief-options-table { table-layout: fixed; }
 .brief-options-table th:first-child, .brief-options-table td:first-child { width: 8%; }
 .brief-word-count { color: var(--muted); font-size: 11px; }
+.brief-version-history { margin: 16px 0; border: 1px solid var(--strong-line); background: #fff; }
+.brief-version-history > summary { padding: 12px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.brief-version-history > .decision-note { padding: 0 16px; }
+.brief-history-group { padding: 0 16px 12px; }
+.brief-history-group h3 { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; margin: 16px 0 10px; font-size: 13px; }
+.brief-history-group h3 > span { color: var(--muted); font-size: 11px; font-weight: 400; }
+.brief-history-version { border-top: 1px solid var(--line); }
+.brief-history-version > summary { padding: 12px 0; font-size: 12px; cursor: pointer; }
+.brief-history-version > summary > * { margin-right: 14px; }
+.brief-history-version > summary > strong { display: inline-block; }
+.brief-history-status { color: var(--muted); font-size: 11px; }
+.brief-history-body { padding-bottom: 16px; }
+.brief-history-content { max-width: 820px; padding: 24px; border: 1px solid var(--line); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.brief-history-content > p:first-child { font-size: 15px; line-height: 1.5; }
+.brief-history-content li { margin: 5px 0; }
 .brief-stale { border-left: 3px solid var(--risk); background: #fff; padding: 12px 16px; margin: 14px 0; }
 .brief-stale strong { color: var(--risk); }
 .brief-stale ul { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
@@ -667,6 +682,8 @@ main { padding-bottom: var(--demo-bar-space); }
 @media (max-width: 600px) {
   #management-brief-editor { padding: 12px; font-size: 12px; }
   #management-brief-preview { padding: 16px; }
+  .brief-history-content { padding: 14px; }
+  .brief-history-version > summary > span { display: block; margin: 6px 0 0 14px; }
   .brief-options-table { min-width: 600px; font-size: 12px !important; }
   .brief-options-table th:first-child, .brief-options-table td:first-child { width: 10%; }
   .brief-options-table th, .brief-options-table td { padding: 8px !important; }

@@ -182,6 +182,7 @@ try {
   await visibleWithinWidth(mobile, '#language-menu, #viewer, #risk-next-steps a', 'Chinese mobile controls fit');
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await mobile.locator('#risk-compare-options').click();
+  await mobile.locator('#comparison').waitFor();
   await visibleWithinWidth(mobile, '[data-gap], [data-task] .action-due, [data-task] [data-task-status]', 'Chinese mobile comparison and tasks fit');
   await mobile.screenshot({ path: path.join(output, 'deployed-chinese-mobile.png'), fullPage: true });
   assert.deepEqual(failures, [], 'No runtime, console, failed resource or out-of-subpath requests.');

@@ -206,8 +206,9 @@ try {
     await assertNotificationsForTasks(page, expected);
     assert.equal(await page.locator('.role-next-action').getAttribute('data-role-action'), role);
     assert.equal(await page.locator('#snapshot-time').getAttribute('datetime'), baselineClock, 'Viewer switching must not move time');
-    assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), '2026-11-13T17:00:00-05:00');
-    assert.match(await page.locator('#decision-deadline').innerText(), /Fri, Nov 13, 5:00 PM\s+ET/);
+    const wuXiViewer = ['P07', 'P08'].includes(role);
+    assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), wuXiViewer ? '2026-11-16T17:00:00+08:00' : '2026-11-13T17:00:00-05:00');
+    assert.match(await page.locator('#decision-deadline').innerText(), wuXiViewer ? /Mon, Nov 16, 5:00 PM\s+Shanghai/ : /Fri, Nov 13, 5:00 PM\s+ET/);
     assert.match(await page.locator('[data-gap="A"]').innerText(), /8 days/);
     assert.match(await page.locator('[data-gap="B"]').innerText(), /34 days/);
     assert.equal(await page.locator('#forecast-basis table').textContent(), fixedBasis, 'Execution dates must not follow the viewer timezone');

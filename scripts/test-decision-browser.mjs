@@ -322,19 +322,18 @@ try {
   assert.match(await page.locator('#priority-risk .risk-status:not(#project-status)').innerText(), /awaiting WuXi confirmation/i, 'The homepage banner no longer asks for a customer decision after authorization');
   assert.match(await page.locator('#decision-deadline').innerText(), /Customer authorized at/);
   assert.equal(await page.locator('#decision-deadline time').getAttribute('datetime'), stops[3]);
-  assert.equal(await page.locator('#advance-event').isDisabled(), true, 'This stage stops before any WuXi resource receipt');
+  assert.equal(await page.locator('#advance-event').isEnabled(), true, 'A valid authorization unlocks the next WuXi work event, without confirming resources');
   await capture(page, 'decision-authorized.png');
-  await guide(page, 'reviewWuXi', 'P07', '#task-receipt');
   for (const [id, task] of [['P07', 'receipt'], ['P08', 'schedule']]) {
     await role(page, id);
     await notificationToTask(page, task, 'authorizationReceived');
-    assert.equal(await page.locator('[data-resource-confirm]:enabled').count(), 0, 'The current stage cannot confirm resources');
+    assert.equal(await page.locator('#confirm-resource-response:enabled').count(), 0, 'Authorization alone cannot confirm resources before WuXi review and its response event');
   }
   await role(page, 'P01');
   assert.match(await page.locator('#decision-status').innerText(), /Customer authorized.*awaiting WuXi confirmation/i);
   assert.match(await page.locator('[data-metric="confirmation"] [data-plan="A"]').innerText(), /awaiting|pending|requested/i);
   await page.locator('#toggle-costs').click();
-  assert.match(await page.locator('.fee-current-state').innerText(), /No fees committed|No paid commitment|not.*charged/i);
+  assert.match(await page.locator('.fee-current-state').innerText(), /No fees committed|No paid commitment|not.*charged|fee status awaits|authorization alone does not incur|awaiting WuXi.*named resource response/i);
   await page.locator('#toggle-costs').click();
   await page.locator('#risk-title a').click();
   assert.match(await page.locator('.risk-request-state').innerText(), /Customer authorized.*awaiting WuXi confirmation/i);

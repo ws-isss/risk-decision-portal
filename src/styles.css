@@ -590,6 +590,51 @@ main { padding-bottom: 130px; }
 :root { --demo-bar-space: 180px; scroll-padding-top: 85px; scroll-padding-bottom: var(--demo-bar-space); }
 main { padding-bottom: var(--demo-bar-space); }
 .decision-form input, .decision-form textarea, .decision-form button, .decision-action-group button { scroll-margin-block: 90px var(--demo-bar-space); }
+
+.chapter-picker { display: grid; gap: 3px; font-size: 10px; color: var(--muted); }
+.chapter-picker select { max-width: 240px; width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--strong-line); background: #fff; border-radius: 2px; color: var(--ink); font-size: 12px; }
+.demo-timeline .demo-clock { flex-wrap: wrap; gap: 6px 14px; }
+#chapter-notice { border-top: 1px solid var(--line); padding-top: 5px; }
+.unpublished-state { padding: 24px; border: 1px solid var(--line); background: var(--paper); }
+.unpublished-state p { margin-top: 10px; }
+.wuxi-workspace { border-top: 1px solid var(--strong-line); padding-top: 22px; }
+.wuxi-workspace .section-heading { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+.wuxi-workspace .section-heading h2 { margin-right: auto; }
+.wuxi-workspace p { margin: 9px 0; max-width: 900px; line-height: 1.6; }
+.wuxi-workspace h3 { margin: 14px 0 8px; }
+.wuxi-workspace h4 { font-size: 14px; margin: 10px 0; }
+.wuxi-form { margin-top: 18px; max-width: 850px; }
+.wuxi-form select { width: 100%; min-width: 0; padding: 9px; border: 1px solid var(--strong-line); border-radius: 2px; background: #fff; font-weight: 400; }
+.wuxi-form textarea, .decision-form textarea { resize: none; overflow-y: hidden; }
+.wuxi-preview { border: 1px solid var(--line); border-left: 3px solid var(--strong-line); padding: 4px 18px 12px; background: #fafbfc; }
+.wuxi-facts { display: flex; flex-wrap: wrap; gap: 12px 34px; margin: 14px 0 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.wuxi-facts dt { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.wuxi-facts dd { margin: 0; font-size: 13px; }
+.wuxi-receipt, .wuxi-internal-response, .wuxi-branch-outcome { padding: 8px 18px 16px; border: 1px solid var(--line); background: #fff; }
+.wuxi-hold-until { font-size: 16px; }
+.wuxi-conclusion { font-size: 15px; font-weight: 600; }
+.wuxi-fees, .wuxi-next-step { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); }
+.wuxi-next-step .button, .wuxi-internal-response .button { margin: 10px 0; }
+.wuxi-published-summary { margin: 10px 0 18px; font-size: 12px; }
+.wuxi-published-summary summary { text-decoration: underline; text-underline-offset: 3px; }
+.risk-resource-deadline { border: 1px solid var(--line); padding: 12px 16px; margin-bottom: 16px; color: var(--risk); }
+.risk-resource-deadline strong { display: block; font-size: 17px; margin-top: 4px; }
+.risk-forecast-warning { border-left: 3px solid var(--risk); padding: 10px 14px; margin: 12px 0; }
+.risk-publication-assessment { margin: 10px 0; padding: 10px 0; border-top: 1px solid var(--line); }
+#comparison-table td > small { display: block; margin: 5px 0 2px; color: var(--muted); font-size: 11px; }
+@media (max-width: 1000px) {
+  .demo-timeline { grid-template-columns: 1fr; }
+  .demo-timeline .demo-clock { justify-content: flex-start; }
+  .demo-controls { justify-content: flex-start; }
+}
+@media (max-width: 600px) {
+  .chapter-picker { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px; }
+  .chapter-picker select { font-size: 11px; max-width: 54%; padding: 5px 3px; }
+  .wuxi-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wuxi-workspace .section-heading h2 { width: 100%; }
+  .wuxi-form select { font-size: 12px; }
+  .wuxi-receipt, .wuxi-internal-response, .wuxi-branch-outcome, .wuxi-preview { padding-left: 12px; padding-right: 12px; }
+}
 .signature-entry { display: flex; align-items: center; gap: 10px; }
 .signature-entry input { flex: 1; }
 .signature-entry button { flex-shrink: 0; }

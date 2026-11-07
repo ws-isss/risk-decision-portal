@@ -3,9 +3,11 @@
 
   // Tasks, confirmation slots and notifications are projections of one explicit
   // decision record. Advancing the scenario clock cannot execute any action.
-  function project(data, state) {
+  function project(data, state, viewerId = state.viewer) {
     const clock = Date.parse(state.clock);
-    const customerVisible = state.scene !== "prepublication" && data.risk.publicationStatusKey === "published";
+    const published = state.publication ? state.publication.status === "published" : data.risk.publicationStatusKey === "published";
+    const customerVisible = state.scene !== "prepublication" && published;
+    const internalViewer = ["P07", "P08"].includes(viewerId);
     const d = customerVisible ? state.decision : null;
     const initialRecords = new Set(data.risk.timeline.filter(item => item.statusKey === "recorded" && item.eventRef).map(item => item.eventRef));
     const explicitRecords = new Set(state.eventIds || []);
@@ -21,7 +23,17 @@
     const qualityComplete = !!(d && d.reviews.quality.status === "completed" && recorded("qualityCompleted"));
     const reviewsComplete = technicalComplete && qualityComplete && recorded("reviewsComplete");
     const authorized = !!(d && d.authorization && d.authorization.by === "P06" && d.authorization.total <= data.people.P06.budgetLimit && approverDesignated && reviewsComplete && recorded("budgetAuthorized"));
-    const resourceConfirmed = false; // WuXi response belongs to the next reviewed phase.
+    const resource = d && d.resource;
+    const resourceStarted = !!(authorized && resource && resource.startedAt && recorded("resourceReviewStarted"));
+    const receipt = resource && resource.receipt;
+    const resourceConfirmed = !!(resourceStarted && receipt && receipt.outcome === "held" && recorded("resourceConfirmed"));
+    const resourceRejected = !!(resourceStarted && receipt && receipt.outcome === "unavailable" && recorded("resourceRejected"));
+    const schedulingVisible = internalViewer || resourceConfirmed || resourceRejected;
+    const schedulingOutcome = resourceStarted && resource.scheduling && schedulingVisible ? resource.scheduling.outcome : null;
+    const schedulingReason = schedulingOutcome ? resource.scheduling.reason : "";
+    const rescheduleRequested = !!(authorized && resource && resource.rescheduleRequest && recorded("rescheduleRequested"));
+    const committedFees = schedulingOutcome === "held" ? data.fees.resourceCommitment : 0;
+    const privateEventIds = new Set(["schedulingHeld", "schedulingUnavailable", "resourceSlotsConfirmed", "windowHoldConfirmed"]);
     const occurred = id => {
       if (id === "backupAssigned") return supportAssigned;
       if (id === "supportAccepted") return supportAccepted;
@@ -29,6 +41,11 @@
       if (id === "reviewsComplete") return reviewsComplete;
       if (id === "budgetAuthorized" || id === "budgetStart") return authorized && recorded(id);
       if (id === "resourceConfirmed") return resourceConfirmed;
+      if (id === "resourceRejected") return resourceRejected;
+      if (id === "resourceReviewStarted") return resourceStarted;
+      if (id === "rescheduleRequested") return rescheduleRequested;
+      if (privateEventIds.has(id) && !schedulingVisible) return false;
+      if (id === "riskPublished") return published && explicitRecords.has(id) && state.publication && Date.parse(state.publication.publishedAt) <= clock;
       const event = data.events[id];
       return (initialRecords.has(id) && event && Date.parse(event.at) <= clock) || recorded(id);
     };
@@ -58,15 +75,17 @@
     }
     if (supportAssigned) add({ key: "support", owner: "P05", event: "backupAssigned", status: supportAccepted ? "inProgress" : "assigned", info: "supportPreparation", created: true, dependencyKeys: ["assignBen"] }, ["P05"]);
     if (evidenceAvailable) {
-      add({ key: "monitor", owner: "P07", event: "resourceReviewStart", status: "nonbinding", info: "monitor" }, ["P07"]);
-      add({ key: "receipt", owner: "P07", event: "resourceReviewStart", status: authorized ? "ready" : "waiting", info: "receipt", dependencyKeys: ["budget"] }, ["P07"]);
-      add({ key: "schedule", owner: "P08", event: "resourceReviewStart", status: authorized ? "ready" : "nonbinding", info: "schedule", dependencyKeys: ["budget"] }, ["P08"]);
+      add({ key: "monitor", owner: "P07", event: "resourceReviewStart", status: resourceConfirmed || resourceRejected ? "taskCompleted" : resourceStarted ? "inProgress" : "nonbinding", info: "monitor" }, ["P07"]);
+      const receiptStatus = resourceConfirmed ? "taskCompleted" : resourceRejected ? "resourceUnavailable" : schedulingOutcome ? "ready" : resourceStarted ? "inProgress" : authorized ? "ready" : "waiting";
+      add({ key: "receipt", owner: "P07", event: "resourceReviewStart", status: receiptStatus, info: "receipt", dependencyKeys: ["budget"] }, authorized ? ["P07", "P01"] : ["P07"]);
+      add({ key: "schedule", owner: "P08", event: "resourceReviewStart", status: schedulingOutcome === "held" ? "taskCompleted" : schedulingOutcome === "unavailable" ? "resourceUnavailable" : resourceStarted ? "inProgress" : authorized ? "ready" : "nonbinding", info: "schedule", dependencyKeys: ["budget"] }, ["P08"]);
+      if (authorized && (d.planId === "B" || resourceRejected)) add({ key: "reschedule", owner: "P07", event: null, timingKey: "notScheduled", status: rescheduleRequested ? "reschedulePending" : "ready", info: "reschedule", dependencyKeys: ["budget"] }, ["P01", "P07"]);
     }
-    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, authorized, resourceConfirmed, tasksCreated };
+    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, authorized, published, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, committedFees, customerRejected: false, tasksCreated };
   }
 
   function tasks(data, state, viewerId = state.viewer) {
-    const view = project(data, state);
+    const view = project(data, state, viewerId);
     return Object.freeze((view.roleKeys[viewerId] || []).map(key => view.records[key]));
   }
 
@@ -78,12 +97,12 @@
       Object.freeze({ key: "technical", owner: "P02", status: status("startTechnical"), dependencies: [], taskKey: "startTechnical" }),
       Object.freeze({ key: "quality", owner: "P03", status: status("startQuality"), dependencies: [], taskKey: "startQuality" }),
       Object.freeze({ key: "budget", owner: "P06", status: view.authorized ? "taskCompleted" : !view.approverDesignated ? "pendingDesignation" : !view.reviewsComplete ? "pendingReview" : "readyForAuthorization", dependencies: ["technical", "quality"], taskKey: "budget", designated: view.approverDesignated }),
-      Object.freeze({ key: "schedule", owner: "P08", status: view.authorized ? "ready" : "waiting", dependencies: ["budget"], taskKey: "schedule", requested: !!(d && view.authorized) })
+      Object.freeze({ key: "schedule", owner: "P08", status: view.rescheduleRequested ? "reschedulePending" : view.resourceConfirmed || view.schedulingOutcome === "held" ? "taskCompleted" : view.resourceRejected || view.schedulingOutcome === "unavailable" ? "resourceUnavailable" : view.resourceStarted ? "inProgress" : view.authorized ? "ready" : "waiting", dependencies: ["budget"], taskKey: "schedule", requested: !!(d && view.authorized) })
     ]);
   }
 
   function notifications(data, state, viewerId = state.viewer) {
-    const view = project(data, state);
+    const view = project(data, state, viewerId);
     const items = [];
     const d = state.scene === "customer" ? state.decision : null;
     const evidenceVersion = data.risk.reportRefs.map(id => `${id}:v${data.reports[id].version}`).join("|");
@@ -127,12 +146,23 @@
           if (!view.authorized) add(task, "evidenceReady", "materialReady", true);
           break;
         case "receipt":
-          if (view.authorized) add(task, "authorizationReceived", "budgetAuthorized");
+          if (view.resourceConfirmed) add(task, "resourceConfirmed", "resourceConfirmed");
+          else if (view.resourceRejected) add(task, "resourceUnavailable", "resourceRejected");
+          else if (view.schedulingOutcome) add(task, "schedulingResponded", view.schedulingOutcome === "held" ? "schedulingHeld" : "schedulingUnavailable");
+          else if (view.resourceStarted) add(task, "resourceStarted", "resourceReviewStarted");
+          else if (view.authorized) add(task, "authorizationReceived", "budgetAuthorized");
           else add(task, "authorizationWaiting", "materialReady");
           break;
         case "schedule":
-          if (view.authorized) add(task, "authorizationReceived", "budgetAuthorized");
+          if (view.schedulingOutcome) add(task, "schedulingResponded", view.schedulingOutcome === "held" ? "schedulingHeld" : "schedulingUnavailable");
+          else if (view.resourceStarted) add(task, "resourceStarted", "resourceReviewStarted");
+          else if (view.authorized) add(task, "authorizationReceived", "budgetAuthorized");
           else add(task, "evidenceReady", "materialReady", true);
+          break;
+        case "reschedule":
+          if (view.rescheduleRequested) add(task, "rescheduleRequested", "rescheduleRequested");
+          else if (view.resourceRejected) add(task, "resourceUnavailable", "resourceRejected");
+          else add(task, "rescheduleReady", "budgetAuthorized");
           break;
       }
     }

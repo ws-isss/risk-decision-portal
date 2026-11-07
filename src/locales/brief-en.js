@@ -17,7 +17,7 @@
     updateShared: "Switch to Emma · update attached brief",
     prepareShared: "Switch to Emma · prepare and attach brief",
     editLabel: "Brief content",
-    editHint: "Use bold headings and the A/B table. Draft edits stay private until you preview and attach a new version.",
+    editHint: "Keep the current decision or result prominent. Use the A/B table only before authorization. Draft edits stay private until you preview and attach a new version.",
     wordCount: "{count} words · draft target 150–200",
     preview: "Preview recipient content",
     edit: "Edit brief",
@@ -64,7 +64,7 @@
     guide: "Switch to Emma · generate management brief",
     guideReview: "Switch to Emma · review management brief",
     guideAttach: "Switch to Emma · attach brief to decision request",
-    sections: { unknowns: "Still uncertain", update: "Next update" },
+    sections: { result: "Current result", unknowns: "Still uncertain", update: "Next update" },
     status: {
       beforeAuthorization: "Customer decision pending",
       authorized: "Customer authorized · awaiting WuXi response",
@@ -95,18 +95,22 @@
     prerequisites: { technical: "technical study-scope review", quality: "QA study-scope review", approver: "approver designation" },
     prerequisitesPending: "Pending before authorization: {items}.",
     prerequisitesComplete: "Technical and QA study-scope reviews and approver designation: completed.",
-    heldScope: "The {shared} study has not started; its fee becomes non-cancellable at experiment start.",
-    heldFallbackScope: "The {shared} study has not started; the separate {fallbackCap} fallback cap does not approve a replacement window.",
+    heldFallbackScope: "The separate {fallbackCap} fallback cap does not approve a replacement window.",
     enquiryScope: "The planned expedited experiment and analysis slots are unavailable. The enquiry has no financial commitment; replacement resources need confirmation.",
     optionBEnquiryScope: "Option B is selected; its replacement resource arrangement still needs a named WuXi response. The enquiry creates no financial commitment.",
-    rescheduleScope: "The amount covers rescheduling only; any additional technical work needs separate scope and authorization. The study has not started.",
+    results: {
+      authorized: "Technical and QA study-scope reviews are complete; Elena’s authorization is recorded. Await Alex’s named response for the resource assessment outcome and confirmation of any incurred fees. The additional study has not started.",
+      held: "{mainAuthorized} authorized; {committed} incurred for the confirmed resources and hold. The {shared} additional study has not started; its fee becomes non-cancellable at experiment start.",
+      unavailable: "No replacement window is confirmed and no rescheduling fee has been incurred. Delivery requires reassessment after the new resource proposal and technical scope are reviewed.",
+      awaitingWuXiQuote: "No replacement window is confirmed and no rescheduling fee has been incurred. Delivery requires reassessment after the new resource proposal and technical scope are reviewed.",
+      awaitingCustomerDecision: "{rescheduleFee} rescheduling quoted for the candidate window; no fee is incurred. Delivery requires reassessment. The quotation does not authorize additional technical work or put resources on hold.",
+      awaitingCustomerAuthorization: "{rescheduleFee} rescheduling quoted for the candidate window; no fee is incurred. Delivery requires reassessment. The quotation does not authorize additional technical work or put resources on hold.",
+      awaitingWuXiConfirmation: "Rescheduling is authorized, but the candidate window is not yet confirmed. Delivery requires reassessment. Alex’s explicit formal confirmation is required before the quoted rescheduling fee is incurred.",
+      confirmed: "The fee was incurred only when Alex formally confirmed the separately authorized window change. Delivery requires reassessment; the additional study has not started, and additional technical work needs separate scope and authorization."
+    },
     table: {
       headers: ["Option", "Current cost", "Production window", "Estimated delivery", "Status"],
-      notApplicable: "—", unavailable: "Unavailable", notCurrent: "Not current", closed: "Closed",
-      awaitingQuote: "Awaiting quote", reassessment: "Reassessment required", pending: "Pending",
-      feeIncurred: "{rescheduleFee} rescheduling incurred", feeQuoted: "{rescheduleFee} rescheduling quoted",
-      confirmed: "Confirmed", candidate: "Candidate only", notSelected: "Not selected", outsideDecision: "Outside current decision",
-      heldCost: "{aTotal} authorized; {committed} incurred", authorized: "authorized", quoted: "quoted", held: "Held", unconfirmed: "Unconfirmed"
+      quoted: "quoted", unconfirmed: "Unconfirmed"
     },
     beforeNeed: "{days} days early", afterNeed: "{days} days late", onNeed: "on requirement date",
     unknowns: [

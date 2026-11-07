@@ -1,12 +1,13 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { mkdir, mkdtemp, copyFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, copyFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
+const endpointsOnly = process.argv.includes('--endpoints-only');
 const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : require('playwright');
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath: process.env.BROWSER_EXECUTABLE } : {}) });
 const output = path.join(root, 'output');
@@ -157,11 +158,12 @@ async function preview(page, { generated = true } = {}) {
   assert.match(content, /Demo data[\s\S]*Case design assumption[\s\S]*AI draft \(simulated\)/);
   assert.match(content, /Data as of:/);
   assert.match(content, /Source versions:[\s\S]*SEC-001 v1/);
-  assert.equal(await recipient.locator('table').count(), 1, 'A/B information is a real table in the recipient preview');
-  assert.equal(await recipient.locator('table tbody tr').count(), 2);
+  const beforeAuthorization = await page.locator('#management-brief').getAttribute('data-brief-status') === 'beforeAuthorization';
+  assert.equal(await recipient.locator('table').count(), beforeAuthorization ? 1 : 0, 'A/B comparison belongs only in an authorization-before brief; later states summarize the current result');
+  if (beforeAuthorization) assert.equal(await recipient.locator('table tbody tr').count(), 2);
   assert.ok(await recipient.locator('strong, h1, h2, h3, h4').count() > 0, 'The recipient preview has a bold title');
   assert.ok(await recipient.locator('li').count() <= 3, 'At most three unresolved items are shown');
-  assert.equal(await recipient.evaluate(node => Boolean(node.querySelector('table').compareDocumentPosition(node.querySelector('ul')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'The A/B table appears before unresolved items');
+  if (beforeAuthorization) assert.equal(await recipient.evaluate(node => Boolean(node.querySelector('table').compareDocumentPosition(node.querySelector('ul')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'The A/B table appears before unresolved items');
   assert.match(await page.locator('#management-brief-word-count').innerText(), new RegExp(`^${wordCount(content)} words`), 'The displayed count covers exactly the recipient text');
   if (generated) {
     assert.ok(wordCount(content) >= 150 && wordCount(content) <= 200, `The complete generated recipient brief is 150–200 English words; got ${wordCount(content)}`);
@@ -183,7 +185,7 @@ async function copyFresh(page) {
   if (richCopies.length) {
     const rich = richCopies.at(-1);
     assert.equal(normalized(rich.plain), normalized(expected));
-    assert.match(rich.html, /<table[\s>]/);
+    assert.equal(/<table[\s>]/.test(rich.html), await page.locator('#management-brief-preview table').count() > 0, 'The rich clipboard preserves the preview’s comparison or current-result structure');
     assert.match(rich.html, /<(?:strong|h[1-4])[\s>]/);
     assert.doesNotMatch(rich.html, /<script|<img|<iframe|<a\s[^>]*href="javascript:/i, 'Copying user-edited content never turns raw HTML into active content');
   }
@@ -194,12 +196,14 @@ async function capture(page, name) {
   await page.screenshot({ path: path.join(output, name), fullPage: true, style: '#notice { visibility: hidden !important; }' });
   if (await page.locator('#management-brief-preview').isVisible()) await page.locator('#management-brief').screenshot({ path: path.join(output, name.replace('.png', '-panel.png')), style: '.demo-timeline, .topbar, .skip-link, #notice { visibility: hidden !important; }' });
 }
-async function mobileTable(page) {
+async function mobileLayout(page) {
   const table = page.locator('#management-brief-preview .brief-table-wrap');
-  assert.equal(await table.evaluate(node => node.scrollWidth > node.clientWidth), true, 'The small-screen A/B table keeps readable columns inside its own scroll region');
-  assert.equal(await table.evaluate(node => { node.scrollLeft = node.scrollWidth; return node.scrollLeft > 0; }), true, 'All A/B columns remain reachable on mobile');
-  await table.evaluate(node => { node.scrollLeft = 0; });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'The table does not create horizontal page overflow');
+  if (await table.count()) {
+    assert.equal(await table.evaluate(node => node.scrollWidth > node.clientWidth), true, 'The small-screen A/B table keeps readable columns inside its own scroll region');
+    assert.equal(await table.evaluate(node => { node.scrollLeft = node.scrollWidth; return node.scrollLeft > 0; }), true, 'All A/B columns remain reachable on mobile');
+    await table.evaluate(node => { node.scrollLeft = 0; });
+  }
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'The brief does not create horizontal page overflow');
 }
 async function returnResource(page, outcome) {
   await chapter(page, 'unavailable');
@@ -217,6 +221,7 @@ try {
   const { page } = await makePage();
   const frozen = await page.evaluate(() => JSON.stringify(globalThis.DEMO_DATA));
 
+  if (!endpointsOnly) {
   // Publication and role boundaries also apply to direct links and an in-flight
   // simulated generation; a delayed callback must not reveal a private brief.
   await chapter(page, 'prepublication');
@@ -443,6 +448,8 @@ try {
   await capture(page, 'brief-elena-current.png');
   await page.locator('#authorization-brief-status').screenshot({ path: path.join(output, 'brief-elena-current-status.png') });
 
+  }
+
   // A customer authorization is not a resource receipt. An internal Mei result
   // must neither leak into the brief nor invalidate it until Alex returns it.
   await chapter(page, 'hold');
@@ -477,13 +484,18 @@ try {
   assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true');
   content = await generate(page, 'held');
   assert.match(content, /Dec 9, 2026, 5:00 PM Shanghai/);
+  assert.match(content, /\$80,000/);
   assert.match(content, /\$50,000/);
+  assert.match(content, /\$30,000/);
+  assert.match(content, /not (?:yet )?started|has(?:n’t| not) started/i, 'The $30,000 additional study has not begun at the hold endpoint');
+  assert.match(content, /Next update/i);
   assert.match(content.split('\n')[0], /held|hold|coordination complete/i);
   assert.match(content.split('\n')[0], /readiness|process|assess|study/i);
   assert.doesNotMatch(content, /please approve|approval requested|\bauthorize\b/i);
   assert.doesNotMatch(content, /\$40,000|Apr 22|34 (?:calendar )?days (?:after|late)/, 'Unselected B history is absent from a held-state management brief');
   await preview(page);
   await copyFresh(page);
+  await writeFile(path.join(output, 'brief-held-recipient.txt'), await page.locator('#management-brief-preview').innerText());
   await capture(page, 'brief-held.png');
 
   // The exception brief distinguishes historical forecasts, new quotes,
@@ -554,15 +566,21 @@ try {
   assert.match(content.split('\n')[0], /Feb 15, 2027/);
   assert.match(content.split('\n')[0], /\$10,000/);
   assert.match(content.split('\n')[0], /incurred/i);
+  assert.match(content, /Feb 15, 2027[\s\S]*Shanghai|Shanghai[\s\S]*Feb 15, 2027/);
+  assert.match(content, /delivery[\s\S]*(?:reassess|re-assess)|(?:reassess|re-assess)[\s\S]*delivery/i);
+  assert.match(content, /Next update/i);
+  assert.doesNotMatch(content, /B Confirmed|\|\s*[AB]\s*\|/i, 'The separately authorized reschedule does not masquerade as a selected A/B plan');
   assert.match(content.split('\n')[0], /assess|readiness|technical/i);
   assert.doesNotMatch(content, /please approve|approval requested|\bauthorize\b/i);
   assert.ok(!/To be agreed|timing unassigned|last scheduled snapshot/i.test(content));
   assert.equal(await page.locator('#management-brief > .brief-metadata time').getAttribute('datetime'), exceptionTimes.confirmed);
   await preview(page);
   await copyFresh(page);
+  await writeFile(path.join(output, 'brief-rescheduled-recipient.txt'), await page.locator('#management-brief-preview').innerText());
   await capture(page, 'brief-rescheduled.png');
   assert.equal(await page.evaluate(() => JSON.stringify(globalThis.DEMO_DATA)), frozen, 'Brief generation never modifies frozen facts, dates, fees or source versions');
 
+  if (!endpointsOnly) {
   const { page: mobile, context: mobileContext } = await makePage(true);
   await generate(mobile, 'beforeAuthorization');
   const longCopy = `${await mobile.locator('#management-brief-editor').inputValue()}\n${'Additional PM note for the meeting.\n'.repeat(20)}`;
@@ -570,7 +588,7 @@ try {
   assert.equal(await mobile.locator('#management-brief-editor').evaluate(node => node.scrollHeight <= node.clientHeight + 2), true);
   await preview(mobile, { generated: false });
   await copyFresh(mobile);
-  await mobileTable(mobile);
+  await mobileLayout(mobile);
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'A long recipient preview fits a mobile viewport');
   await mobile.locator('#copy-management-brief').scrollIntoViewIfNeeded();
   await mobile.waitForFunction(() => {
@@ -584,7 +602,7 @@ try {
   const mobileV1 = await attach(mobile);
   await sharedReadonly(mobile, { state:'current', version:1 });
   assert.equal(await mobile.locator('#management-brief-preview').innerText(), mobileV1);
-  await mobileTable(mobile);
+  await mobileLayout(mobile);
   await capture(mobile, 'brief-attached-v1-mobile.png');
   await role(mobile, 'P01');
   await mobile.locator('#edit-management-brief').click();
@@ -598,14 +616,14 @@ try {
   const mobileV2 = await attach(mobile);
   await sharedReadonly(mobile, { state:'current', version:2 });
   assert.equal(await mobile.locator('#management-brief-preview').innerText(), mobileV2);
-  await mobileTable(mobile);
+  await mobileLayout(mobile);
   await capture(mobile, 'brief-attached-v2-mobile.png');
   await role(mobile, 'P01');
   await mobile.locator('#edit-requirement').click();
   await mobile.locator('#requirement-date').fill('2027-03-20');
   await mobile.locator('#requirement-form [type="submit"]').click();
   await sharedReadonly(mobile, { state:'stale', version:2 });
-  await mobileTable(mobile);
+  await mobileLayout(mobile);
   await capture(mobile, 'brief-attached-stale-mobile.png');
   await returnResource(mobile, 'unavailable');
   await role(mobile, 'P07');
@@ -633,7 +651,7 @@ try {
   await generate(mobile, 'confirmed');
   await preview(mobile);
   await copyFresh(mobile);
-  await mobileTable(mobile);
+  await mobileLayout(mobile);
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await capture(mobile, 'brief-rescheduled-mobile.png');
   await mobileContext.close();
@@ -643,9 +661,10 @@ try {
   await copyFresh(plainFallback);
   assert.deepEqual(await plainFallback.evaluate(() => globalThis.testRichCopies), [], 'A browser without rich clipboard support receives the same readable plain brief');
   await plainContext.close();
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(network, [], 'The brief, clipboard fallback and full follow-up flow work without external requests');
-  console.log('Management brief browser checks passed: Emma-only private drafts on both pages, explicit immutable v1/v2 attachments and metadata, read-only Elena permissions, plan/amount/state staleness until reattachment, no approval changes or duplicate attachments, request-specific attachment isolation, one generate–preview–attach–authorize guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with table and bold title, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
+  console.log(endpointsOnly ? 'Endpoint brief browser checks passed: generated and regenerated held and separately authorized rescheduling outcomes, current amounts and windows, outstanding assessments and next updates, no post-authorization A/B table, preview and rich/plain copy parity, frozen source data, zero external requests. Recipient texts and screenshots saved under output/.' : 'Management brief browser checks passed: Emma-only private drafts on both pages, explicit immutable v1/v2 attachments and metadata, read-only Elena permissions, plan/amount/state staleness until reattachment, no approval changes or duplicate attachments, request-specific attachment isolation, one generate–preview–attach–authorize guide checkpoint without later repeats, action-derived prerequisites, conditional resource-assessment wording, compact briefs with before-authorization comparison tables, current-result summaries and bold titles, safe HTML/plain clipboard parity, independent edits and captured metadata, private-result isolation, generation cancellation, all main states and full rescheduling, frozen data, offline clipboard fallbacks and mobile layout.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

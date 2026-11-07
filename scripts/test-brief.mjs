@@ -25,7 +25,16 @@ const generate = (s = session) => {
   assert.ok(words >= 150 && words <= 200, `${brief.statusKey}: ${words} recipient words, expected 150–200`);
   checked.set(brief.statusKey,words);
   const copied = briefModel.copyText(brief,text);
-  assert.match(brief.content,/^\*\*[^\n]+\*\*\n\n\|/,'The first line is a bold state-specific summary, followed directly by the options table');
+  assert.match(brief.content,/^\*\*[^\n]+\*\*\n\n/,'The first line is a bold state-specific decision or result');
+  const previewHtml = briefView.renderMarkdown(brief.content);
+  if (brief.statusKey === 'beforeAuthorization') {
+    assert.match(previewHtml,/<table[\s>]/,'Only the initial authorization decision compares A and B');
+    assert.match(brief.content,/\| A \|/);
+    assert.match(brief.content,/\| B \|/);
+  } else {
+    assert.doesNotMatch(previewHtml,/<table[\s>]/,'After authorization the brief summarizes current records instead of an A/B table');
+    assert.doesNotMatch(brief.content,/\| [AB] \||B Confirmed|A Closed/i,'A separately authorized reschedule must not masquerade as option B');
+  }
   assert.equal(brief.content.split('\n').filter(line => line.startsWith('- ')).length,3,'At most three unresolved items');
   assert.equal((copied.match(/case design assumption/gi)||[]).length,1);
   assert.equal((copied.match(/not a delivery commitment/gi)||[]).length,1);
@@ -99,7 +108,9 @@ session.setViewer('P01');brief=generate();
 assert.equal(brief.statusKey,'held');
 assert.match(firstLine(brief),/Coordination complete.*Dec 9, 2026, 5:00 PM Shanghai.*Next decision: process readiness/);
 assert.equal(/please approve|must authorize|authorize selected/i.test(firstLine(brief)),false);
-assert.ok(brief.content.includes('$80,000 authorized; $50,000 incurred'));
+assert.match(brief.content,/\$80,000 authorized/);
+assert.match(brief.content,/\$50,000 incurred/);
+assert.match(brief.content,/\$30,000[\s\S]*study[\s\S]*not started/);
 for(const old of ['$40,000','Apr 22, 2027','34 days late'])assert.equal(brief.content.includes(old),false,'Unselected B is not a live comparison after successful hold');
 assert.ok(brief.content.includes('first-round analysis expected Nov 25, 2026, 5:00 PM Shanghai'));
 assert.deepEqual(plain(brief.metadata.sourceVersions),['SEC-001 v1','EXP-001 v1','Q-A v1']);
@@ -137,6 +148,9 @@ assert.match(firstLine(brief),/new window is confirmed for Feb 15, 2027.*\$10,00
 assert.equal(/please approve|must authorize|authorize selected/i.test(firstLine(brief)),false);
 assert.ok(brief.content.includes('Nov 23, 2026, 5:00 PM Shanghai'));
 assert.ok(brief.content.includes('technical reassessment status update'));
+assert.match(brief.content,/Feb 15, 2027 Shanghai/,'The newly confirmed window uses the execution location');
+assert.match(brief.content,/separately authorized[\s\S]*reschedul|reschedul[\s\S]*separately authorized/i,'The current fee comes from the separate rescheduling decision');
+assert.match(brief.content,/delivery[\s\S]*reassess/i);
 assert.equal(brief.generatedAt,data.events.rescheduleConfirmed.at);
 assert.deepEqual(plain(brief.metadata.sourceVersions),['SEC-001 v1','EXP-001 v1','Q-B v1']);
 
@@ -207,7 +221,7 @@ const heldFallback=generate(fallback);assert.ok(heldFallback.content.includes('s
 const directB=authorizedSession('B');assert.match(firstLine(generate(directB)),/Option B.*\$40,000/);
 assert.ok(generate(directB).content.includes('Nov 17, 2026, 5:00 PM Shanghai'),'B retains its quote-response date after authorization');
 directB.setViewer('P07');directB.advanceTo('rescheduleRequested');directB.requestReschedule();directB.setViewer('P01');const directBBrief=generate(directB);
-assert.ok(directBBrief.content.includes('Not selected'));
+assert.match(directBBrief.content,/Option B is selected/);
 assert.equal(/unavailable|Closed/.test(directBBrief.content),false,'Selecting B does not invent a failed A scheduling attempt');
 assert.equal(directBBrief.content.includes('$10,000'),false,'The old B comparison is not a newly returned rescheduling quote');
 

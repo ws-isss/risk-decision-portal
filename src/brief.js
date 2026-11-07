@@ -110,6 +110,7 @@
     const localTime = (value, zone) => `${core.formatInstant(value, zone, { year: "numeric" })} ${zone === baseZone ? text.common.shanghai : text.common.easternTime}`;
     const dateOnly = (value, zone) => core.formatInstant(value, zone, { year: "numeric", hour: undefined, minute: undefined });
     const quote = view.rescheduleQuoteReturned ? view.rescheduleQuote : null;
+    const confirmation = view.rescheduleConfirmed ? d.resource.rescheduleRequest.confirmation : null;
     const reassessing = Boolean(view.forecastReassessmentRequired || view.resourceRejected || view.rescheduleRequested);
     const values = {
       aTotal: money(data.plans.A.total), bTotal: money(data.plans.B.total),
@@ -121,10 +122,11 @@
       actionDue: view.nextTiming?.kind === "customerActionDue" ? localTime(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone) : "",
       selected: d?.planId || "", selectedTotal: d ? money(data.plans[d.planId].total) : "",
       authorizedTotal: d?.authorization ? money(d.authorization.total) : "",
+      mainAuthorized: d?.authorization ? money(d.authorization.total - d.authorization.fallbackCap) : "",
       fallbackCap: money(data.fees.fallbackCap), fallbackTotal: money(data.fees.totals.AWithFallback),
       holdUntil: localTime(data.plans.A.holdUntil, baseZone),
-      candidateWindow: quote ? dateOnly(quote.candidateWindow, baseZone) : "",
-      rescheduleFee: quote ? money(quote.amount) : "",
+      candidateWindow: quote ? `${dateOnly((confirmation || quote).candidateWindow, baseZone)} ${text.common.shanghai}` : "",
+      rescheduleFee: quote ? money((confirmation || quote).amount) : "",
       measured: data.risk.hmwPct.toFixed(1), target: data.risk.targetPct.toFixed(1),
       committed: money(view.committedFees), shared: money(data.fees.shared),
       needDate: core.formatLocalDate(state.needByLocalDate),
@@ -137,21 +139,20 @@
     let opening = t.decisions[key];
     if (key === "beforeAuthorization" && d) opening = d.fallbackSelected ? t.selectedFallbackDecision : t.selectedDecision;
     if (key === "authorized" && d?.fallbackSelected) opening = t.authorizedFallbackDecision;
-    const rows = ["A", "B"].map(id => {
-      const plan = data.plans[id];
-      if (reassessing) {
-        if (id === "A") return [id, t.table.notApplicable, view.resourceRejected ? t.table.unavailable : t.table.notSelected, t.table.notCurrent, view.resourceRejected ? t.table.closed : t.table.outsideDecision];
-        if (!quote) return [id, t.table.awaitingQuote, t.table.awaitingQuote, t.table.reassessment, t.table.pending];
-        return [id, interpolate(view.rescheduleConfirmed ? t.table.feeIncurred : t.table.feeQuoted, values), values.candidateWindow, t.table.reassessment, view.rescheduleConfirmed ? t.table.confirmed : t.table.candidate];
-      }
-      if (view.resourceConfirmed && id === "B") return [id, t.table.notApplicable, t.table.notSelected, t.table.notCurrent, t.table.outsideDecision];
-      const gap = core.calendarGap(state.needByLocalDate, plan.forecast.localDate);
-      const gapText = gap === 0 ? t.onNeed : interpolate(gap > 0 ? t.beforeNeed : t.afterNeed, { days: Math.abs(gap) });
-      const delivery = `${core.formatLocalDate(plan.forecast.localDate)} (${gapText})`;
-      const cost = view.resourceConfirmed ? interpolate(t.table.heldCost, values) : `${money(plan.total)} ${view.authorized && id === d.planId ? t.table.authorized : t.table.quoted}`;
-      return [id, cost, dateOnly(plan.window.at, baseZone), delivery, view.resourceConfirmed ? t.table.held : t.table.unconfirmed];
-    });
-    const table = [t.table.headers, t.table.headers.map(() => "---"), ...rows].map(cells => `| ${cells.join(" | ")} |`).join("\n");
+    let currentSummary;
+    if (key === "beforeAuthorization") {
+      const rows = ["A", "B"].map(id => {
+        const plan = data.plans[id];
+        const gap = core.calendarGap(state.needByLocalDate, plan.forecast.localDate);
+        const gapText = gap === 0 ? t.onNeed : interpolate(gap > 0 ? t.beforeNeed : t.afterNeed, { days: Math.abs(gap) });
+        return [id, `${money(plan.total)} ${t.table.quoted}`, dateOnly(plan.window.at, baseZone), `${core.formatLocalDate(plan.forecast.localDate)} (${gapText})`, t.table.unconfirmed];
+      });
+      currentSummary = [t.table.headers, t.table.headers.map(() => "---"), ...rows].map(cells => `| ${cells.join(" | ")} |`).join("\n");
+    } else {
+      const template = t.results[key] || t.results.awaitingWuXiQuote;
+      const fallback = view.resourceConfirmed && d.fallbackSelected ? ` ${copy(t.heldFallbackScope)}` : "";
+      currentSummary = `**${t.sections.result}:** ${copy(template)}${fallback}`;
+    }
     let unknowns = reassessing ? t.unknownsUnavailable : view.resourceConfirmed ? t.unknownsHeld : t.unknowns;
     const missingPrerequisites = [
       !view.technicalComplete && t.prerequisites.technical,
@@ -177,12 +178,11 @@
       const template = resourceUpdate ? view.authorized ? t.nextResource : optionBQuote ? t.nextConditionalQuote : t.nextConditionalResource : t.nextReview;
       nextUpdate = interpolate(template, { ...values, time: localTime(data.events[eventId].at, resourceUpdate ? baseZone : customerZone) });
     }
-    const scope = view.resourceConfirmed ? copy(d?.fallbackSelected ? t.heldFallbackScope : t.heldScope)
-      : reassessing ? quote ? copy(t.rescheduleScope) : view.resourceRejected ? t.enquiryScope : t.optionBEnquiryScope
-      : copy(t.requirement);
+    const scope = key === "beforeAuthorization" ? copy(t.requirement)
+      : reassessing && !quote ? view.resourceRejected ? t.enquiryScope : t.optionBEnquiryScope : "";
     const sections = [
-      `**${data.project.id}: ${copy(opening)}**`, table,
-      `${copy(t.finding)} ${scope}${prerequisites ? ` ${prerequisites}` : ""}`,
+      `**${data.project.id}: ${copy(opening)}**`, currentSummary,
+      `${copy(t.finding)}${scope ? ` ${scope}` : ""}${prerequisites ? ` ${prerequisites}` : ""}`,
       `**${t.sections.unknowns}**\n${unknowns.map(item => `- ${item}`).join("\n")}`,
       `**${t.sections.update}:** ${nextUpdate}`
     ];

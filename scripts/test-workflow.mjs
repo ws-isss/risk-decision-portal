@@ -83,7 +83,21 @@ for (const viewer of Object.keys(data.people)) {
   assert.deepEqual(plain(workflow.notifications(data, futureIds, viewer)), plain(workflow.notifications(data, initial, viewer)));
 }
 
-session.advanceTo('backupAssigned');
+session.selectPlan('A');
+session.saveDrafts({ technical: 'Review SEC-001 v1', quality: 'Review SEC-001 v1 scope', budget: 'Review Q-001 v1 costs' });
+session.confirmTasks();
+let created = session.getState();
+assert.equal(notification(created, 'P02', 'startTechnical').kind, 'tasksAssigned');
+assert.equal(task(created, 'P01', 'budget').created, true);
+assert.equal(task(created, 'P04', 'budget').event, 'budgetStart');
+verifyLinks(created);
+session.setViewer('P02'); session.startReview('technical');
+assert.equal(notification(session.getState(), 'P02', 'startTechnical').kind, 'reviewStarted');
+assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'notStarted');
+session.setViewer('P03'); session.startReview('quality');
+session.advanceNext();
+assert.equal(task(session.getState(), 'P01', 'assignBen').status, 'pendingAssignment', 'Advancing to the handoff time does not assign Ben');
+session.setViewer('P01'); session.assignSupport();
 const supported = session.getState();
 assert.equal(task(supported, 'P01', 'assignBen').status, 'taskCompleted');
 assert.equal(notification(supported, 'P01', 'assignBen').kind, 'supportAssigned');
@@ -94,8 +108,12 @@ assert.equal(task(supported, 'P04', 'budget').status, 'blocked', 'Ben assignment
 assert.equal(notification(supported, 'P04', 'budget').kind, 'supportAssigned');
 assert.equal(data.people.P05.budgetLimit, 0);
 verifyLinks(supported);
-
-session.advanceTo('alternateAssigned');
+session.setViewer('P05'); session.acceptSupport();
+assert.equal(task(session.getState(), 'P05', 'support').status, 'inProgress');
+assert.equal(notification(session.getState(), 'P05', 'support').kind, 'supportAccepted');
+session.advanceNext();
+assert.equal(workflow.tasks(data, session.getState(), 'P06').length, 0, 'Scheduled designation alone grants no task access');
+session.setViewer('P01'); session.designateApprover();
 const designated = session.getState();
 assert.equal(task(designated, 'P01', 'designateElena').status, 'taskCompleted');
 assert.equal(task(designated, 'P06', 'budget').owner, 'P06');
@@ -104,18 +122,27 @@ assert.equal(task(designated, 'P04', 'budget').owner, 'P06', 'Olivia sees the sa
 assert.equal(notification(designated, 'P06', 'budget').kind, 'approverDesignated');
 verifyLinks(designated);
 
-session.advanceTo('reviewsComplete');
+session.advanceNext();
+assert.equal(task(session.getState(), 'P06', 'budget').status, 'pendingReview', 'Scheduled review completion is not an opinion');
+session.setViewer('P02'); session.completeReview('technical', 'Technical scope is reviewable.');
+assert.equal(task(session.getState(), 'P02', 'startTechnical').status, 'taskCompleted');
+assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'inProgress');
+assert.equal(task(session.getState(), 'P06', 'budget').status, 'pendingReview');
+session.setViewer('P03'); session.completeReview('quality', 'QA scope is acceptable for the study.');
 const reviewed = session.getState();
 for (const [viewer, key] of [['P02', 'startTechnical'], ['P03', 'startQuality']]) {
   assert.equal(task(reviewed, viewer, key).status, 'taskCompleted');
-  assert.equal(notification(reviewed, viewer, key).kind, 'reviewsCompleted');
+  assert.equal(notification(reviewed, viewer, key).kind, 'reviewCompleted');
 }
 assert.equal(task(reviewed, 'P06', 'budget').status, 'readyForAuthorization');
 assert.equal(notification(reviewed, 'P06', 'budget').kind, 'reviewsCompleted');
 assert.equal(task(reviewed, 'P07', 'receipt').status, 'waiting');
 verifyLinks(reviewed);
 
-session.advanceTo('budgetAuthorized');
+session.advanceNext();
+assert.equal(task(session.getState(), 'P07', 'receipt').status, 'waiting', 'Scheduled authorization time does not authorize');
+session.setViewer('P06');
+session.authorize({ signature: data.people.P06.name, reason: 'Reviewed the complete package and fee conditions.', acknowledged: true });
 const authorized = session.getState();
 assert.equal(task(authorized, 'P06', 'budget').status, 'taskCompleted');
 assert.equal(notification(authorized, 'P06', 'budget').kind, 'authorizationRecorded');
@@ -123,18 +150,12 @@ for (const [viewer, key] of [['P07', 'receipt'], ['P08', 'schedule']]) {
   assert.equal(task(authorized, viewer, key).status, 'ready');
   assert.equal(notification(authorized, viewer, key).kind, 'authorizationReceived');
 }
-assert.ok(!workflow.notifications(data, authorized, 'P07').some(item => item.kind === 'resourceConfirmed'), 'A customer authorization does not confirm WuXi resources');
+assert.ok(!workflow.notifications(data, authorized, 'P07').some(item => item.kind === 'resourceConfirmed'), 'Customer authorization does not confirm WuXi resources');
+assert.equal(workflow.project(data, authorized).resourceConfirmed, false);
+assert.equal(workflow.confirmations(data, authorized).find(item => item.key === 'schedule').status, 'ready');
 verifyLinks(authorized);
-
-session.advanceTo('resourceConfirmed');
-const confirmed = session.getState();
-for (const [viewer, key] of [['P07', 'receipt'], ['P08', 'schedule']]) {
-  assert.equal(task(confirmed, viewer, key).status, 'taskCompleted');
-  assert.equal(notification(confirmed, viewer, key).kind, 'resourceConfirmed');
-}
-verifyLinks(confirmed);
-const duplicateEvents = { ...confirmed, eventIds: [...confirmed.eventIds, ...confirmed.eventIds] };
-assert.deepEqual(plain(workflow.notifications(data, duplicateEvents, 'P07')), plain(workflow.notifications(data, confirmed, 'P07')));
+const duplicateEvents = { ...authorized, eventIds: [...authorized.eventIds, ...authorized.eventIds] };
+assert.deepEqual(plain(workflow.notifications(data, duplicateEvents, 'P07')), plain(workflow.notifications(data, authorized, 'P07')));
 
 // Identity is stable through viewing/requirement edits, while evidence revisions
 // create a new notification identity that can be distinguished from a read one.

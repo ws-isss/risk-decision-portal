@@ -1,57 +1,70 @@
 # DaVinci delivery decisions — concept demo
 
-Stage 2 is ready for review: the project overview and role-specific risk details share the frozen scenario, evidence, fees and timeline. Detailed option workflows, task creation/authorization, WuXi exception handling and the brief remain later stages.
+Stages 3 and 4 form one continuous workflow: option selection, editable simulated task briefs, preparation handoff, role-specific reviews and signed customer authorization. This version stops at **Customer authorized – awaiting WuXi confirmation**. The user has approved updating the existing online address with this workflow and its guided interaction refinements after verification.
 
 ## Open the demo
 
+- **Local single file:** double-click `dist/index.html`. It works when copied or renamed, without the source folder, a server or internet access.
+- **Source preview:** double-click the root `index.html`, keeping its sibling `src/` folder in place. All paths are relative.
 - **Online preview:** https://ws-isss.github.io/risk-decision-portal/
 - **Source repository:** https://github.com/ws-isss/risk-decision-portal
 
-- **Single file:** double-click `dist/index.html`. It can be copied or renamed and opened without the source folder, a server or an internet connection.
-- **Source preview:** double-click the root `index.html`, keeping its sibling `src/` folder in place. All asset paths are relative.
+The interface is English. Preset copy lives in `src/locales/`; the retained language menu explains that Chinese will become available after the core flow. Selection, drafts and actions are held in the current browser session. Reloading opens a fresh demonstration; Reset demo explicitly clears the run and shows a reset notice.
 
-The interface is English. Preset copy is centralized in `src/locales/en.js` and `src/locales/risk-en.js`. The retained language menu identifies English as current and Chinese as available after the core flow; the Chinese option is explicitly unavailable at this stage.
+## Click through the customer decision
 
-The overview leads with the risk and decision deadline, an A/B comparison, the selected role’s action list, and compact project progress. Emma’s view has four unique coordination actions. Context and authority notes open from information icons. You can switch roles, edit the customer requirement, inspect the forecast basis, open the synthetic study finding and explicitly reset the scene. Click the risk banner or role action to open the risk details, including role-specific decision context, a versioned evidence table, known/unknown/possible impacts, the named next update and a timeline with explicit recorded versus future states. Expand the cost row for fee amounts and commitment conditions. The top-right notification bell shows the selected role’s current task updates. A notification opens and highlights its task; read status is separate for each role and is cleared with the scenario reset. Pending leave coverage never appears as a completed handoff. Assignment and authorization notifications derive from explicit event records; the actual workflow controls remain scheduled for later stages. These view-only actions do not authorize spending or reserve resources. A single run cannot rewind its scenario clock; only an explicit reset can do so.
+Use the next-action guide to switch to the role responsible for the next unfinished action and focus its control. The guide does not start a review, assign or accept work, record an opinion, or authorize a request; complete each operation explicitly. The top-right **View as** selector remains available for manual exploration. The bottom **Demo timeline** control separately advances only the simulated clock and explains any missing prerequisite. All times in this walkthrough are New York time.
+
+| Step | Role and action | Visible result |
+| --- | --- | --- |
+| 1 | Emma: select A in Compare options | A decision request for $80,000, four confirmation owners and their dependencies; no approval or window hold. |
+| 2 | Leave the fallback unchecked, or opt in before creating tasks | Unchecked is $80,000. Checked adds a $10,000 conditional cap, for a known total of $90,000. |
+| 3 | Emma: Draft task briefs | A brief loading state, then three editable AI draft (simulated) instructions with scope, evidence versions, missing items and business dates. The inputs expand to show their content. No tasks yet. |
+| 4 | Edit a brief, then Confirm and create 3 tasks | Three shared tasks and role notifications. The selected request is fixed; repeated creation is unavailable. |
+| 5 | Daniel: Start review. Nina: Start review | Both reviews become In progress at the initial Monday event, preserving the frozen three-workday review interval. |
+| 6 | Advance to Nov 9, 11:00 AM. Emma: Assign preparation to Ben | Preparation assigned; budget approval is still pending. |
+| 7 | Ben: Accept preparation task | The view states: Can prepare materials, but has no approval authority. Ben accepts preparation; his approval button remains disabled. |
+| 8 | Advance to Nov 10, 9:00 AM. Emma: Designate Elena | Elena owns the budget review, which still waits for technical and QA opinions. |
+| 9 | Advance to Nov 11, 5:00 PM. Daniel and Nina: each review or edit the example rationale, then Confirm review opinion | Two recorded opinions, visible in the request. Confirmation concerns the additional study, not GMP readiness or batch release. |
+| 10 | Advance to Nov 12, 5:00 PM. Elena: review the opinions, brief, quote and fee conditions | The final budget review period is identified as the preset simulated Thursday period. Signing is now available. |
+| 11 | Elena: enter or use the shortcut to fill Elena Torres, review or edit the example reason, check the acknowledgement and Authorize request | Customer authorized – awaiting WuXi confirmation. Signature, reason, amount and scope are recorded. No fees have been incurred and no window is confirmed. |
+| 12 | Switch to Alex or Mei; open Notifications and the risk page | Customer authorization received; the linked task and risk timeline share the same state. WuXi resource confirmation remains a future step. |
+
+An explicit reset allows a fresh B request ($40,000) or another A run. This stage cannot progress to WuXi confirmation. The optional fallback never automatically confirms an alternative window. Example reasons remain editable, and filling the signature does not check the acknowledgement or submit authorization. The electronic signature is simulated, with no identity or signature service behind it.
+
+The homepage includes overall project risk, frozen original-window milestones, role actions and shared notifications. The risk page includes evidence, known/unknown/possible impacts, role context, named updates, recorded versus pending timeline rows, and owners with the next action. Fee details and forecast phases remain expandable. Changing the customer requirement updates only the forecast gap.
 
 ## Develop and verify
 
-Node.js 18 or newer is needed for development checks, not for opening the HTML. No application dependencies need to be installed.
+Node.js 18 or newer is needed for development checks, not for opening the HTML. No application dependencies are required.
 
 ```sh
-node scripts/validate.mjs
-node scripts/test-core.mjs
-node scripts/test-workflow.mjs
-node scripts/build.mjs
+npm run check
+node scripts/audit-public.mjs
 ```
 
-- `src/data.js` contains the frozen scenario keyed to the PRD. It is read-only, with no scheduling engine.
-- `scripts/validate.mjs` checks the PRD baseline, dates, calendars, dependencies, parallel phases, fees and authority limits. It fails on inconsistencies and never repairs the source data.
-- `src/core.js` provides local-date gap comparison, time-zone display and scene state with a monotonic clock. Business dates are preset; editing a customer need date never recalculates the schedule.
-- `src/workflow.js` derives role-visible tasks and notifications from the same scenario and recorded events; `scripts/test-workflow.mjs` checks synchronization, future-event suppression, permissions and stable notification identities.
-- `src/app.js` renders the overview, shared fee breakdown and hash navigation; `src/risk-view.js` renders the role-specific risk detail. `src/styles.css` provides responsive styling using system fonts.
-- `scripts/build.mjs` uses an explicit asset allowlist to generate the relative-path source entry and self-contained `dist/index.html`.
+- `src/data.js` is the frozen scenario; `scripts/validate.mjs` checks dates, calendars, dependencies, fees and authority without rewriting them.
+- `src/core.js` owns the monotonic clock and explicit decision actions. `src/workflow.js` derives tasks, confirmations and notifications from that same record.
+- `src/app.js`, `src/decision-view.js` and `src/risk-view.js` render the shared record. Drafts are editable only until confirmation; rendering never creates tasks.
+- `scripts/test-core.mjs`, `scripts/test-workflow.mjs` and `scripts/test-decision.mjs` cover role limits, clock-only advancement, drafts, idempotence, review prerequisites, signatures, frozen values and reset.
+- `scripts/build.mjs` uses an explicit source allowlist to build relative-path `index.html` and standalone `dist/index.html`.
 
-Optional browser QA uses Playwright and an installed Chromium browser. These are development tools only and are not bundled:
+Optional browser QA requires Playwright and Chromium, neither of which is bundled in the app:
 
 ```sh
-# With Playwright available to Node:
-node scripts/test-browser.mjs
-
-# Or supply existing installations:
 PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
 BROWSER_EXECUTABLE=/absolute/path/to/chromium \
 node scripts/test-browser.mjs
+
+PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
+BROWSER_EXECUTABLE=/absolute/path/to/chromium \
+node scripts/test-decision-browser.mjs
 ```
 
-Browser QA opens a standalone copy in an isolated folder with the network offline, checks the relative-path version, role views, dates, reports, reset, narrow-screen layout and a repository-prefixed HTTP path. Review screenshots are written to ignored `output/`.
+Browser checks cover standalone offline execution, the relative-path source entry, desktop and mobile flows, permissions, notifications, timeline state and a locally hosted repository subpath. Review screenshots go to ignored `output/`.
 
-## Delivery and private inputs
+## Publication and private inputs
 
-Hash routes, including a direct `#risk` entry, work offline and under the `/risk-decision-portal/` repository subpath. Pushing `main` runs `.github/workflows/pages.yml`: scenario checks and unit tests, standalone build, public-input audit, then upload and deploy only `dist/` to GitHub Pages. Later approved updates use this same repository and URL. The repository Pages source is GitHub Actions.
+The user has approved publishing this round to the same address. After the required checks, pushing `main` runs `.github/workflows/pages.yml`: validate, unit-test, build, audit and upload only `dist/` to GitHub Pages. The same repository and URL are retained. Before each push, stage only reviewed source files and run the public-input audit; never push local app snapshot refs. After deployment, `scripts/test-deployed.mjs` compares the online HTML SHA-256 with the local artifact and checks the published interface.
 
-Before each push, run `node scripts/audit-public.mjs` after staging the explicit source files and building. Research inputs, local archives and review artifacts must stay untracked. Push only the project branch, never local app snapshot refs. After deployment, `DEPLOY_URL=https://ws-isss.github.io/risk-decision-portal/ node scripts/test-deployed.mjs` (with the same optional Playwright settings above) compares the online HTML SHA-256 with `dist/index.html` and verifies role views, notifications, mobile layout and hash routes.
-
-`reference/` and all derived research files remain private and ignored. Neither the build nor browser QA reads or packages them. Public-source and output checks must still run before future publication. Real development conversation exports are a separate, private delivery item.
-
-The PRD is the specification; `AGENTS.md` carries stable business, labeling and implementation constraints. Dates and prices are synthetic assumptions, not WuXi operating commitments.
+`reference/`, derived research, local archives and conversation exports remain private and ignored. The build and browser checks neither read nor package research inputs. A real development-conversation export is a separate private deliverable. The PRD is the specification; AGENTS.md holds the stable business and implementation rules. All people, findings, dates and prices shown in the application are synthetic case assumptions.

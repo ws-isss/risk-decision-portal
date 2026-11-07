@@ -8,6 +8,9 @@
     const b = data.plans.B;
     const baseZone = data.calendars.base.timezone;
     const customerZone = data.calendars.customer.timezone;
+    const decision = state.decision;
+    const workflow = global.DEMO_WORKFLOW;
+    const view = workflow.project(data, state);
     const stage = (plan, id) => plan.stages.find(item => item.id === id);
     const copy = (template, values) => escape(interpolate(template, values));
     const time = (at, zone, options) => `<time datetime="${at}">${instant(at, zone, options)}</time>`;
@@ -19,6 +22,26 @@
     const supportBoundary = copy(t.supportBoundary, { name: data.people.P05.name });
     const assumption = `<span class="data-tag assumption-tag">${text.common.assumption}</span>`;
 
+    function requestState() {
+      if (!decision) return "";
+      const status = decision.authorization ? "authorized" : decision.tasksCreated ? "confirmationsPending" : "requestCreated";
+      return `<div class="risk-request-state" data-risk-decision-state="${status}"><strong>${copy(t.selectedOption, { option: decision.planId })}</strong><span class="status">${t.requestStatuses[status]}</span></div>`;
+    }
+
+    function reviewProgress() {
+      const review = decision?.reviews[person.id === "P03" ? "quality" : "technical"];
+      if (!review || !decision.tasksCreated) return reviewStart;
+      const at = review.completedAt || review.startedAt;
+      return `<div class="risk-review-progress" data-review-state="${review.status}"><span class="status">${t.reviewStatuses[review.status]}</span>${at ? `<span>${time(at, person.timezone)} ${zoneLabel(person.timezone)}</span>` : ""}</div>${review.status === "notStarted" ? reviewStart : ""}`;
+    }
+
+    function coverageStatus() {
+      const support = decision?.support;
+      const supportKey = support?.acceptedAt ? "supportAccepted" : support?.assignedAt ? "supportAssigned" : "supportPending";
+      const approverKey = decision?.authorization ? "approverAuthorized" : decision?.approver.id ? "approverDesignated" : "approverPending";
+      return `<p data-risk-coverage="support">${copy(t[supportKey], { name: data.people.P05.name })}</p><p data-risk-coverage="approver">${copy(t[approverKey], { name: data.people.P06.name })}</p>`;
+    }
+
     function resultFocus() {
       const review = stage(a, "customerResultReview");
       const reviewDates = {
@@ -27,17 +50,19 @@
         deadline: core.formatInstant(a.holdUntil, baseZone)
       };
       return `<div class="table-wrap risk-result-wrap"><table class="risk-result-table"><caption>${t.resultDates}</caption><thead><tr><th scope="col">${t.option}</th><th scope="col">${t.firstResults}</th><th scope="col">${t.fullReport}</th><th scope="col">${t.internalAssessment}</th></tr></thead><tbody>${[a, b].map(plan => `<tr data-result-plan="${plan.id}"><th scope="row">${plan.id}</th><td>${resultDate(plan, "firstAnalysis")}</td><td>${resultDate(plan, "finalAnalysis")}</td><td>${resultDate(plan, "internalAssessment")}</td></tr>`).join("")}</tbody></table></div>
-        <div class="risk-hold-line"><strong>${t.originalWindow}: ${dateOnly(a.window.at, baseZone)}</strong><span class="status">${t.notRequested}</span>${info("conditionalHold", t.holdUntil, note(t.holdExplanation))}<span>${t.holdUntil} <strong>${time(a.holdUntil, baseZone)} ${city(baseZone)}</strong></span></div>
+        <div class="risk-hold-line"><strong>${t.originalWindow}: ${dateOnly(a.window.at, baseZone)}</strong><span class="status">${decision?.authorization && decision.planId === "A" ? t.awaitingWuXi : t.notRequested}</span>${info("conditionalHold", t.holdUntil, note(t.holdExplanation))}<span>${t.holdUntil} <strong>${time(a.holdUntil, baseZone)} ${city(baseZone)}</strong></span></div>
         <p class="risk-focus-statement">${t.originalAvailable}</p><p class="risk-focus-detail">${copy(t.resultReview, reviewDates)}</p><p class="risk-focus-detail">${t.bWindow}</p>`;
     }
 
     function reviewFocus() {
-      return `${reviewStart}<p class="risk-focus-statement">${person.id === "P03" ? t.qualityScope : t.technicalScope}</p><ul class="risk-review-scope"><li>${copy(t.studyRuns, { screening: data.lab.scope.screeningRuns, confirmation: data.lab.scope.confirmationRuns, total: data.lab.scope.totalRuns })}</li><li>${t.allSamples}</li><li>${t.selectedSamples}</li><li>${t.evaluation}</li></ul><div class="risk-scope-boundary">${t.reviewBoundary}${info("reviewScope", t.scope, note(t.scopeExclusions))}</div>`;
+      return `${reviewProgress()}<p class="risk-focus-statement">${person.id === "P03" ? t.qualityScope : t.technicalScope}</p><ul class="risk-review-scope"><li>${copy(t.studyRuns, { screening: data.lab.scope.screeningRuns, confirmation: data.lab.scope.confirmationRuns, total: data.lab.scope.totalRuns })}</li><li>${t.allSamples}</li><li>${t.selectedSamples}</li><li>${t.evaluation}</li></ul><div class="risk-scope-boundary">${t.reviewBoundary}${info("reviewScope", t.scope, note(t.scopeExclusions))}</div>`;
     }
 
     function budgetFocus() {
-      return `<div class="risk-budget-summary"><div><span>${t.proposedCommitment} · ${t.commitmentA}</span><strong>${money(a.total)}</strong></div><div><span>${t.proposedCommitment} · ${t.commitmentB}</span><strong>${money(b.total)}</strong></div><span class="status">${t.noCommitment}</span></div>
-        <p class="risk-focus-statement">${copy(t.irreversible, { amount: money(data.fees.resourceCommitment) })}</p><p>${copy(t.commonCommitment, { amount: money(data.fees.shared) })}</p><p class="risk-focus-detail">${t.designationPending}${info("finalBudgetPackage", t.finalPackageTitle, note(t.finalPackage) + note(t.rescheduleCommitment.replace("{amount}", money(data.fees.reschedule))))}</p>
+      const designation = decision?.authorization ? t.authorizationRecorded : decision?.approver.id ? view.reviewsComplete ? t.designatedReady : t.designatedAwaitingReviews : t.designationPending;
+      const selected = decision ? `<p class="risk-selected-budget">${copy(t.selectedBudget, { option: decision.planId, amount: money(data.plans[decision.planId].total) })}${decision.fallbackSelected ? ` ${copy(t.fallbackSelected, { cap: money(data.fees.fallbackCap), total: money(data.fees.totals.AWithFallback) })}` : ` ${t.noFallback}`}</p>` : "";
+      return `<div class="risk-budget-summary"><div><span>${t.quotedAmount} · ${t.commitmentA}</span><strong>${money(a.total)}</strong></div><div><span>${t.quotedAmount} · ${t.commitmentB}</span><strong>${money(b.total)}</strong></div><span class="status">${t.noCommitment}</span></div>
+        ${selected}<p class="risk-focus-statement">${copy(t.irreversible, { amount: money(data.fees.resourceCommitment) })}</p><p>${copy(t.commonCommitment, { amount: money(data.fees.shared) })}</p><p class="risk-focus-detail" data-risk-budget-state>${designation}${decision?.authorization ? ` ${time(decision.authorization.at, person.timezone)} ${zoneLabel(person.timezone)}.` : ""}${info("finalBudgetPackage", t.finalPackageTitle, note(t.finalPackage) + note(t.rescheduleCommitment.replace("{amount}", money(data.fees.reschedule))))}</p>
         ${helpers.renderFeeBreakdown ? helpers.renderFeeBreakdown("risk-fees") : ""}`;
     }
 
@@ -46,10 +71,11 @@
       if (person.id === "P01") content = resultFocus();
       else if (["P02", "P03"].includes(person.id)) content = reviewFocus();
       else if (person.id === "P06") content = budgetFocus();
-      else if (person.id === "P04") content = `<span class="status status-onLeave">${t.leave}</span><p class="risk-focus-statement">${copy(t.leaveCoverage, { pm: data.people.P01.name, support: data.people.P05.name, approver: data.people.P06.name })}</p><p>${supportBoundary}</p>`;
-      else if (person.id === "P05") content = `<span class="status">${t.supportPending}</span><p class="risk-focus-statement">${supportBoundary}</p><p>${t.finalPackage}</p>`;
-      else content = `<p class="risk-focus-statement">${t.coordinationScope}</p><p>${t.confirmationScope}</p><div class="risk-review-start"><span>${t.confirmationDue}</span> <strong>${time(data.events.resourceConfirmationDeadline.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong></div>`;
-      return `<section id="risk-role-focus" class="section role-risk-focus" data-risk-role="${person.id}" aria-labelledby="risk-focus-title"><div class="section-heading"><h2 id="risk-focus-title">${t.focus[person.id]}</h2>${assumption}</div>${content}</section>`;
+      else if (person.id === "P04") content = `<span class="status status-onLeave">${t.leave}</span>${coverageStatus()}<p>${supportBoundary}</p>`;
+      else if (person.id === "P05") content = `${coverageStatus()}<p class="risk-focus-statement">${supportBoundary}</p><p>${t.finalPackage}</p>`;
+      else content = `<p class="risk-focus-statement">${decision?.authorization ? t.authorizedCoordination : t.coordinationScope}</p><p>${decision?.authorization ? t.receiptStillPending : t.confirmationScope}</p><div class="risk-review-start"><span>${t.confirmationDue}</span> <strong>${time(data.events.resourceConfirmationDeadline.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong></div>`;
+      const heading = person.id === "P06" && decision?.authorization ? t.authorizedFocus : t.focus[person.id];
+      return `<section id="risk-role-focus" class="section role-risk-focus" data-risk-role="${person.id}" aria-labelledby="risk-focus-title"><div class="section-heading"><h2 id="risk-focus-title">${heading}</h2>${assumption}</div>${requestState()}${content}</section>`;
     }
 
     function evidence() {
@@ -71,33 +97,77 @@
 
     function nextUpdate() {
       const owner = data.people[data.risk.nextUpdateOwnerId];
-      const update = data.events[data.risk.nextUpdateEvent];
-      return `<section class="risk-update-strip" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${t.nextUpdate}</h2><strong>${time(update.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span>${info("riskNextUpdate", t.updatePurpose, note(t.updateExplanation))}</section>`;
+      const authorized = Boolean(decision?.authorization);
+      const update = data.events[authorized ? "resourceConfirmed" : data.risk.nextUpdateEvent];
+      const updated = view.reviewsComplete && !authorized;
+      const heading = updated ? t.reviewUpdateAvailable : t.nextUpdate;
+      const explanation = authorized ? t.resourceUpdateExplanation : updated ? t.reviewUpdateExplanation : t.updateExplanation;
+      return `<section class="risk-update-strip" data-update-state="${authorized ? "resourcePlanned" : updated ? "reviewsRecorded" : "reviewsPlanned"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${heading}</h2><strong>${time(update.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span>${authorized ? `<span class="status">${t.plannedResponse}</span>` : ""}${info("riskNextUpdate", authorized ? t.resourceUpdatePurpose : t.updatePurpose, note(explanation))}</section>`;
     }
 
     function timeline() {
-      let nowInserted = false;
       const now = `<tr id="risk-timeline-now"><td colspan="4"><span>${t.now} · ${time(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</span></td></tr>`;
-      const rows = data.risk.timeline.map(entry => {
+      const audit = decision?.audit || [];
+      const auditById = new Map(audit.map(item => [item.id, item]));
+      const entries = data.risk.timeline.map(entry => {
         const event = entry.eventRef ? data.events[entry.eventRef] : null;
         const forecastStage = entry.planId ? stage(data.plans[entry.planId], entry.stageId) : null;
-        const at = event ? event.at : forecastStage[entry.endpoint];
+        const record = auditById.get(entry.eventRef);
+        const at = record ? record.at : event ? event.at : forecastStage[entry.endpoint];
         const zone = event ? person.timezone : forecastStage.executionTimezone;
-        // Completion is explicit snapshot metadata, never inferred from the displayed time.
-        const status = entry.statusKey;
+        // Advancing the clock never creates a business record.
+        let status = entry.eventRef && view.occurred(entry.eventRef) ? "recorded" : entry.statusKey;
+        const deadlineMet = entry.id === "latestReviewStart" && decision?.reviews.technical.startedAt && decision?.reviews.quality.startedAt || entry.id === "latestAuthorization" && decision?.authorization;
+        if (status === "deadline" && deadlineMet) status = "satisfiedDeadline";
+        if (status === "planned" && Date.parse(at) <= Date.parse(state.clock)) status = "pending";
+        const label = status === "recorded" && t.recordedTimelineEvents[entry.id] ? t.recordedTimelineEvents[entry.id] : t.timelineEvents[entry.id];
+        return { ...entry, at, zone, status, label };
+      });
+      const auditOwners = {
+        decisionCreated: ["P01"], tasksCreated: ["P01"], supportAccepted: ["P05"],
+        technicalStarted: ["P02"], qualityStarted: ["P03"],
+        technicalCompleted: ["P02"], qualityCompleted: ["P03"]
+      };
+      for (const record of audit) {
+        if (!auditOwners[record.id]) continue;
+        entries.push({ id: record.id, at: record.at, zone: person.timezone, status: "recorded", ownerIds: auditOwners[record.id], label: t.recordedTimelineEvents[record.id] });
+      }
+      function renderEntry(entry) {
+        const { at, zone, status, label } = entry;
         const owners = entry.ownerIds.map(id => escape(data.people[id].name)).join(" / ");
         const isWuXi = entry.ownerIds.some(id => ["wuxiPM", "scheduling"].includes(data.people[id].roleKey));
         const shanghaiTime = isWuXi && zone !== baseZone ? `<small data-shanghai-time>${time(at, baseZone)} ${city(baseZone)}</small>` : "";
-        // The marker separates explicit records from pending work; passing time never completes a task.
-        const boundary = !nowInserted && status !== "recorded" ? now : "";
-        if (boundary) nowInserted = true;
-        return `${boundary}<tr data-risk-event="${entry.id}" data-event-status="${status}"><td data-field="time" data-label="${escape(t.timelineDate)}">${time(at, zone, { year: "numeric" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(t.timelineEvents[entry.id])}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
-      }).join("");
+        return `<tr data-risk-event="${entry.id}" data-event-status="${status}"><td data-field="time" data-label="${escape(t.timelineDate)}">${time(at, zone, { year: "numeric" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
+      }
+      // Recorded actions stay above Now, even when their audit row was added later.
+      const recorded = entries.filter(entry => entry.status === "recorded").sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
+      const remaining = entries.filter(entry => entry.status !== "recorded");
+      const rows = recorded.map(renderEntry).join("") + now + remaining.map(renderEntry).join("");
       return `<section id="risk-timeline" class="section" aria-labelledby="risk-timeline-title"><div class="section-heading"><div class="heading-with-info"><h2 id="risk-timeline-title">${t.timeline}</h2>${info("timelineStatus", t.timelineScope, note(t.timelineExplanation))}</div>${assumption}</div><div class="table-wrap"><table class="risk-timeline-table"><caption>${copy(t.timelineZone, { zone: city(person.timezone) })}</caption><thead><tr><th scope="col">${t.timelineDate}</th><th scope="col">${t.timelineEvent}</th><th scope="col">${t.timelineOwner}</th><th scope="col">${t.timelineStatus}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
     }
 
+    function nextAction() {
+      if (decision?.authorization) return ["P07", "P08"].includes(person.id) ? t.nextActions.resourceResponse : t.nextActions.awaitWuXi;
+      if (!decision) return person.id === "P01" ? t.nextActions.chooseOption : t.nextActions.awaitDecision;
+      if (!decision.tasksCreated) return person.id === "P01" ? t.nextActions.draftBriefs : t.nextActions.awaitBriefs;
+      if (person.id === "P01") {
+        if (!decision.support.assignedAt) return t.nextActions.assignSupport;
+        if (!decision.support.acceptedAt) return t.nextActions.acceptSupport;
+        if (!decision.approver.id) return t.nextActions.designateApprover;
+        return view.reviewsComplete ? t.nextActions.followAuthorization : t.nextActions.followReviews;
+      }
+      if (["P02", "P03"].includes(person.id)) {
+        const review = decision.reviews[person.id === "P02" ? "technical" : "quality"];
+        return t.nextActions[review.status === "completed" ? "reviewRecorded" : review.status === "inProgress" ? "completeReview" : "startReview"];
+      }
+      if (person.id === "P04") return t.nextActions.leaveCoverage;
+      if (person.id === "P05") return t.nextActions[!decision.support.assignedAt ? "awaitSupportAssignment" : !decision.support.acceptedAt ? "acceptPreparation" : "prepareBudget"];
+      if (person.id === "P06") return t.nextActions[!decision.approver.id ? "awaitDesignation" : !view.reviewsComplete ? "awaitReviews" : "authorizeBudget"];
+      return t.nextActions.nonbinding;
+    }
+
     function nextSteps() {
-      return `<nav id="risk-next-steps" aria-labelledby="risk-next-steps-title"><h2 id="risk-next-steps-title">${t.nextSteps}</h2><div class="risk-next-step-links"><a id="risk-compare-options" class="button button-primary" href="#comparison">${t.compareOptions}${icon("arrow")}</a><button id="risk-assign-tasks" class="button button-secondary">${t.assignTasks}<span class="status">${t.comingSoon}</span>${icon("arrow")}</button></div></nav>`;
+      return `<section id="risk-ownership" class="section" aria-labelledby="risk-ownership-title"><div class="section-heading"><h2 id="risk-ownership-title">${t.ownership}</h2></div><dl class="risk-owner-grid"><div class="risk-owner-row"><dt>${t.riskOwner}</dt><dd>${escape(data.people.P07.name)}</dd></div><div class="risk-owner-row"><dt>${t.customerCoordinator}</dt><dd>${escape(data.people.P01.name)}</dd></div><div class="risk-owner-row"><dt>${t.schedulingOwner}</dt><dd>${escape(data.people.P08.name)}</dd></div></dl><p class="risk-owner-next" data-risk-next-action="${person.id}"><strong>${escape(person.name)}</strong><span>${nextAction()}</span></p><nav id="risk-next-steps" aria-label="${t.nextSteps}"><div class="risk-next-step-links"><a id="risk-compare-options" class="button button-primary" href="#comparison">${t.compareOptions}${icon("arrow")}</a><a id="risk-assign-tasks" class="button button-secondary" href="#decision">${t.assignTasks}${icon("arrow")}</a></div></nav></section>`;
     }
 
     return `<div class="risk-detail-page"><div class="risk-page-heading"><a href="#main" class="risk-back">${icon("arrow")}${t.back}</a><div class="page-heading"><h1>${t.title}</h1><nav aria-label="${t.navigation}"><a href="#risk-evidence">${t.evidenceLink}</a><a href="#risk-assessment">${t.assessmentLink}</a><a href="#risk-timeline">${t.timelineLink}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time id="snapshot-time" datetime="${state.clock}">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div></div><div class="risk-detail-summary"><h2>${text.overview.riskTitle}</h2><span class="risk-status">${text.risk.state}</span><span class="data-tag">${text.common.demo}</span></div>${roleFocus()}${evidence()}${assessment()}${nextUpdate()}${timeline()}${nextSteps()}</div>`;

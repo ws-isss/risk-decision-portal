@@ -78,6 +78,12 @@ async function applyToBoth(pages, operation) {
   await Promise.all(pages.map(operation));
 }
 
+async function switchToChinese(page) {
+  await page.locator('#language-menu summary').click();
+  await page.locator('[data-language="zh"]').click();
+  assert.equal(await page.locator('html').getAttribute('lang'), 'zh-CN');
+}
+
 async function visibleWithinWidth(page, selector, message) {
   const elements = page.locator(selector);
   assert.ok(await elements.count(), `${message}: elements exist.`);
@@ -138,6 +144,20 @@ try {
   await applyToBoth(pages, page => page.locator('#comparison').waitFor());
   await compare(local, online, 'Overview hash route after refresh');
 
+  await applyToBoth(pages, switchToChinese);
+  await compare(local, online, 'Chinese overview and guided next action');
+  await applyToBoth(pages, page => page.locator('#toggle-costs').click());
+  await compare(local, online, 'Chinese fees and commitment conditions');
+  await applyToBoth(pages, page => page.locator('#notifications-toggle').click());
+  await compare(local, online, 'Chinese role notifications');
+  await applyToBoth(pages, page => page.locator('#notifications-toggle').click());
+  await applyToBoth(pages, page => page.locator('#risk-title a').click());
+  for (const role of ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08']) {
+    await applyToBoth(pages, page => page.locator('#viewer').selectOption(role));
+    await compare(local, online, `Chinese risk details and dates for ${role}`);
+  }
+  await online.screenshot({ path: path.join(output, 'deployed-chinese-risk.png'), fullPage: true });
+
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   contexts.push(mobileContext);
   const mobile = await mobileContext.newPage();
@@ -158,17 +178,23 @@ try {
   await mobile.reload();
   await mobile.locator('.risk-detail-page').waitFor();
   assert.equal(new URL(mobile.url()).pathname, deployedUrl.pathname);
+  await switchToChinese(mobile);
+  await visibleWithinWidth(mobile, '#language-menu, #viewer, #risk-next-steps a', 'Chinese mobile controls fit');
+  assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await mobile.locator('#risk-compare-options').click();
+  await visibleWithinWidth(mobile, '[data-gap], [data-task] .action-due, [data-task] [data-task-status]', 'Chinese mobile comparison and tasks fit');
+  await mobile.screenshot({ path: path.join(output, 'deployed-chinese-mobile.png'), fullPage: true });
   assert.deepEqual(failures, [], 'No runtime, console, failed resource or out-of-subpath requests.');
 
   const report = {
     url: deployedUrl.href, checkedAt: new Date().toISOString(),
     bytes: localHtml.length, localSha256, deployedSha256,
     comparisons, requests, failures,
-    screenshots: ['deployed-desktop.png', 'deployed-risk.png', 'deployed-mobile-risk.png']
+    screenshots: ['deployed-desktop.png', 'deployed-risk.png', 'deployed-mobile-risk.png', 'deployed-chinese-risk.png', 'deployed-chinese-mobile.png']
   };
   await writeFile(path.join(output, 'deployment-verification.json'), `${JSON.stringify(report, null, 2)}\n`);
   console.log(`Published HTML matches local dist/index.html exactly (${localHtml.length} bytes, SHA-256 ${localSha256}).`);
-  console.log(`Passed ${comparisons.length} local-versus-online content checks, all eight risk role views, fee expansion, notification task navigation, hash-route refresh, mobile layout and resource-path checks.`);
+  console.log(`Passed ${comparisons.length} local-versus-online content checks in English and Chinese, all eight risk role views, fee expansion, notification task navigation, hash-route refresh, mobile layout and resource-path checks.`);
   console.log('Release evidence: output/deployment-verification.json and output/deployed-*.png');
 } finally {
   await Promise.all(contexts.map(context => context.close()));

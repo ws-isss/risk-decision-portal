@@ -81,6 +81,7 @@
     previewHeading: "Recipient preview",
     previewHint: "Private preview. Review this content before attaching it to the decision request or copying it; no email is sent.",
     edited: "Edited by Emma",
+    authoredLanguageHint: "Manually edited content is retained in its original language; switching languages does not rewrite it.",
     asOf: "Data as of",
     versions: "Source versions",
     sourceNote: "Synthetic records; not a delivery commitment.",
@@ -117,6 +118,7 @@
     requirement: "Requirement: {deliverable}, {destination}, {needDate}.",
     prerequisites: { technical: "technical study-scope review", quality: "QA study-scope review", approver: "approver designation" },
     prerequisitesPending: "Pending before authorization: {items}.",
+    listSeparator: "; ",
     prerequisitesComplete: "Technical and QA study-scope reviews and approver designation: completed.",
     heldFallbackScope: "The separate {fallbackCap} fallback cap does not approve a replacement window.",
     enquiryScope: "The planned expedited experiment and analysis slots are unavailable. The enquiry has no financial commitment; replacement resources need confirmation.",
@@ -169,7 +171,8 @@
       STALE_BRIEF: "Update this private draft from current records and preview it before attaching.",
       NO_BRIEF: "Generate and preview a private brief before attaching it.",
       NEW_AUTHORIZATION_REQUIRED: "The plan, amount, quote or authorization scope has changed. Create a new decision request and obtain a new authorization; the existing signature cannot be reused.",
-      INVALID_BRIEF_ATTACHMENT: "Use a frozen brief attached to this decision request. A private draft or an attachment from another request cannot be recorded as the authorization basis."
+      INVALID_BRIEF_ATTACHMENT: "Use a frozen brief attached to this decision request. A private draft or an attachment from another request cannot be recorded as the authorization basis.",
+      BRIEF_REQUEST_MISMATCH: "The attached brief belongs to a different decision request and cannot support this authorization."
     }
   };
 })(globalThis);

@@ -1,9 +1,10 @@
 (function (global) {
   "use strict";
   const data = global.DEMO_DATA;
-  const core = global.DEMO_CORE;
+  let language = "en";
+  let text = global.DEMO_MESSAGES[language];
+  let core = global.DEMO_I18N.coreFor(text);
   const workflow = global.DEMO_WORKFLOW;
-  const text = global.DEMO_MESSAGES.en;
   const session = core.createSession(data);
   const root = document.getElementById("app");
   const dialog = document.getElementById("dialog");
@@ -54,12 +55,38 @@
   function instant(at, zone, options) { return escape(core.formatInstant(at, zone, options)); }
   const money = value => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
   const zoneLabel = zone => zone === data.baseline.timezone ? text.common.easternTime : city(zone);
+  const recordText = value => global.DEMO_I18N.recordText(value, {data,state:session.getState(),text});
   const dateOnly = (at, zone) => instant(at, zone, { year: "numeric", hour: undefined, minute: undefined });
   function badge(key) { return `<span class="status status-${key}">${escape(text.common[key] || text.portal.statuses[key] || text.wuxi.statuses?.[key] || key)}</span>`; }
   function info(key, label, content, align = "start") {
     return `<details class="info-tip info-${align}" data-info="${key}"><summary aria-label="${escape(label)}" title="${escape(label)}">${icon("info")}</summary><div class="info-content" role="note"><strong>${escape(label)}</strong>${content}</div></details>`;
   }
   const note = copy => `<p>${escape(copy)}</p>`;
+  function explainTerms(container) {
+    if (language !== "zh") return;
+    const seen = new Set();
+    const nodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.parentElement.closest("script,style,textarea,select,abbr,[data-info=terminology]") || !node.parentElement.getClientRects().length) continue;
+      nodes.push(node);
+    }
+    const pattern = /\b(SEC-HPLC|HMW|GMP|DS|IND|CMC|QA)\b/g;
+    for (const node of nodes) {
+      let start = 0;
+      const fragment = document.createDocumentFragment();
+      for (const match of node.textContent.matchAll(pattern)) {
+        if (seen.has(match[0])) continue;
+        seen.add(match[0]);
+        fragment.append(node.textContent.slice(start, match.index));
+        const term = document.createElement("abbr");
+        term.textContent = match[0]; term.title = text.common.glossary[match[0]]; term.tabIndex = 0;
+        fragment.append(term); start = match.index + match[0].length;
+      }
+      if (start) { fragment.append(node.textContent.slice(start)); node.replaceWith(fragment); }
+    }
+  }
 
   function decisionStatus(state) {
     const view = workflow.project(data,state);
@@ -111,7 +138,7 @@
     const brief = basis.brief;
     const changed = !core.authorizationMatches(data,state,kind);
     const requestTime = `${core.formatInstant(basis.request.createdAt,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`;
-    const briefLabel = brief ? interpolate(t.briefBasis,{version:brief.version,name:brief.attachedBy.name,attachedAt:brief.attachedAtLabel,dataAsOf:brief.dataAsOfLabel}) : t.noBriefAtSigning;
+    const briefLabel = brief ? interpolate(t.briefBasis,{version:brief.version,name:brief.attachedBy.name,attachedAt:`${core.formatInstant(brief.attachedAt,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`,dataAsOf:`${core.formatInstant(brief.dataAsOf,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`}) : t.noBriefAtSigning;
     return `<section class="authorization-basis" data-authorization-basis="${kind}" data-authorization-request-key="${escape(basis.request.key)}" data-authorized-brief-version="${brief ? brief.version : "none"}" data-authorization-current="${!changed}"><h4>${t.title}</h4><dl class="info-facts"><dt>${t.boundRequest}</dt><dd>${escape(t.requestKinds[basis.request.kind])} · ${escape(data.project.id)} · ${escape(requestTime)}</dd><dt>${t.amount}</dt><dd>${money(basis.scope.amount)}</dd><dt>${t.boundQuote}</dt><dd>${basis.quotes.map(quote=>`${escape(quote.id)} v${escape(quote.version)} · ${money(quote.amount)} · ${escape(t.quoteScopes[quote.scopeKey])}`).join("<br>")}</dd><dt>${t.supportingBrief}</dt><dd>${escape(briefLabel)}</dd></dl><p class="decision-note">${t.boundary}</p><p class="decision-note">${t.progressOnly}</p>${changed ? `<p class="brief-stale" role="status"><strong>${t.newAuthorization}</strong> · ${t.scopeChanged}</p>` : `<p class="decision-note">${t.scopeChanged}</p>`}</section>`;
   }
 
@@ -375,7 +402,7 @@
   }
 
   function renderWuxi(state) {
-    return global.DEMO_WUXI_VIEW.render({data,core,state,text,formValues,helpers:{escape,interpolate,money,instant,dateOnly,zoneLabel,city,icon,info,note,badge,renderFeeBreakdown,renderAuthorizationBrief,renderAuthorizationBasis}});
+    return global.DEMO_WUXI_VIEW.render({data,core,state,text,formValues,helpers:{escape,interpolate,money,instant,dateOnly,zoneLabel,city,icon,info,note,badge,renderFeeBreakdown,renderAuthorizationBrief,renderAuthorizationBasis,recordText}});
   }
   function renderUnpublished(state, person) {
     return `<div class="page-heading"><h1>${state.viewer === "P07" ? text.portal.privateDraft : text.project.title}</h1><div class="snapshot"><span>${text.overview.snapshot}</span> <time id="snapshot-time" datetime="${state.clock}">${instant(state.clock,person.timezone)}</time> ${zoneLabel(person.timezone)}</div></div>${state.viewer === "P07" ? renderWuxi(state) : `<section class="unpublished-state"><h2>${text.portal.hiddenTitle}</h2><p>${text.portal.hiddenBody}</p></section>`}`;
@@ -383,6 +410,8 @@
 
   function render() {
     const isRisk = activePage === "risk";
+    document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+    document.querySelector('meta[name="description"]').content = text.meta.description;
     document.title = isRisk ? `${text.riskDetail.title} · ${data.project.id}` : text.meta.title;
     const state = session.getState();
     const person = data.people[state.viewer];
@@ -394,12 +423,13 @@
     const nextTimingInfo = view.nextTiming ? `<p>${text.portal.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : view.nextTiming.kind]}: ${instant(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone)} · ${city(view.nextTiming.timezone)}</p>` : "";
     const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
     root.innerHTML = `<a class="skip-link" href="#main">${text.nav.skip}</a>
-      <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools"><details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.english}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="true">${text.overview.languageCurrent}</button><button type="button" data-language="zh" disabled>${text.overview.languagePending}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
-      <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
+      <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools">${language === "zh" ? info("terminology",text.common.glossaryTitle,`<dl class="info-facts">${Object.entries(text.common.glossary).map(([term,meaning])=>`<dt>${escape(term)}</dt><dd>${escape(meaning)}</dd>`).join("")}</dl>`,"end") : ""}<details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.languageCurrent}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="${language === "en"}">${text.common.languageEnglish}</button><button type="button" data-language="zh" aria-current="${language === "zh"}">${text.common.languageChinese}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
+      <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction, recordText}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
       <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-timing-kind="${banner.kind || "milestone"}" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
-      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief,renderAuthorizationBasis}})}${renderWuxi(state)}${renderContext(state)}`}
+      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief,renderAuthorizationBasis,recordText}})}${renderWuxi(state)}${renderContext(state)}`}
       ${renderManagementBrief(state)}${renderAdvance(state,person)}
       <footer class="page-footer">${text.overview.footer}</footer></main>`;
+    explainTerms(root);
     footerObserver.disconnect();
     refreshLayout();
     footerObserver.observe(document.querySelector(".demo-timeline"));
@@ -417,6 +447,7 @@
     document.querySelectorAll(".info-tip[open]").forEach(tip => { tip.open = false; });
     dialog.innerHTML = content;
     dialog.showModal();
+    explainTerms(dialog);
   }
   function dialogHeading(title, subtitle) {
     return `<div class="dialog-heading"><div>${subtitle ? `<p class="dialog-subtitle">${escape(subtitle)}</p>` : ""}<h2 id="dialog-title">${escape(title)}</h2></div><button class="icon-button" data-close aria-label="${escape(text.common.close)}">${icon("close")}</button></div>`;
@@ -445,16 +476,7 @@
     }
   }
   function createBriefs(plan, fallbackSelected, publication) {
-    const et = id => `${core.formatInstant(data.events[id].at, data.baseline.timezone)} ${text.common.easternTime}`;
-    const values = {
-      evidence: ["SEC-001", "EXP-001", `Q-${plan}`].map(id => `${id} · v${data.reports[id].version}`).join("; "),
-      plannedStart: `${core.formatInstant(data.initialClock,data.baseline.timezone)} ${text.common.easternTime}`,
-      reviewStart: et("latestReviewStart"), reviewComplete: et("reviewsComplete"),
-      designation: et("alternateAssigned"), budgetStart: et("budgetStart"), budgetEnd: et("budgetAuthorized"),
-      plan, amount: money(data.plans[plan].total + (fallbackSelected ? data.fees.fallbackCap : 0))
-    };
-    const context = interpolate(text.portal.publishedContext,{certainty:text.portal.certainty[publication.certainty],update:et(publication.nextUpdateEvent)});
-    return Object.fromEntries(["technical","quality","budget"].map(key => [key,context + interpolate(text.decision.template[key],values)]));
+    return global.DEMO_I18N.taskBriefs({data,text,plan,fallbackSelected,publication});
   }
   function enterChapter(id) {
     const fixtures = {
@@ -551,6 +573,18 @@
   }
 
   document.addEventListener("click", event => {
+    const languageButton = event.target.closest("[data-language]");
+    if (languageButton) {
+      const nextLanguage = languageButton.dataset.language;
+      if (!global.DEMO_MESSAGES[nextLanguage]) return;
+      const previousText = text;
+      const errorKey = ["brief", "wuxi", "decision"].flatMap(group => Object.entries(previousText[group].errors).map(([key,value])=>({group,key,value}))).find(item=>item.value === decisionError);
+      language = nextLanguage; text = global.DEMO_MESSAGES[language]; core = global.DEMO_I18N.coreFor(text);
+      if (managementBrief) managementBrief = global.DEMO_BRIEF.localize(managementBrief,text);
+      decisionError = errorKey ? text[errorKey.group].errors[errorKey.key] : ""; briefCopied = false;
+      clearTimeout(noticeTimer); document.getElementById("notice").classList.remove("visible");
+      render(); document.querySelector("#language-menu summary").focus(); return;
+    }
     if (event.target.closest("#attach-management-brief:not(:disabled)")) { attachManagementBrief(); return; }
     if (event.target.closest("#view-management-brief")) {
       const state = session.getState();
@@ -689,6 +723,7 @@
   });
   document.addEventListener("input", event => {
     const field = event.target;
+    if (field.setCustomValidity) field.setCustomValidity("");
     const form = field.closest("form");
     if (field.id === "management-brief-editor") {
       if (session.getState().viewer !== "P01" || !managementBrief) return;
@@ -716,6 +751,10 @@
     try { session.saveDrafts(Object.fromEntries([...document.querySelectorAll("[data-draft-role]")].map(field => [field.dataset.draftRole,field.value]))); }
     catch (error) { notify(text.wuxi.errors[error.message] || text.decision.errors[error.message] || text.decision.errors.default); }
   });
+  document.addEventListener("invalid", event => {
+    const field = event.target;
+    if (field.setCustomValidity) field.setCustomValidity(field.validity.valueMissing ? text.common.requiredField : text.common.invalidField);
+  }, true);
   document.addEventListener("submit", event => {
     if (event.target.id === "reschedule-authorization-form") {
       event.preventDefault(); const form = new FormData(event.target);

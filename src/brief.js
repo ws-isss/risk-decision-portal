@@ -28,9 +28,38 @@
 
   // Preview/edit flags belong to Emma's workspace. An attachment only changes
   // when the authored content or its captured source snapshot actually changes.
+  const hasAuthoredChanges = brief => Boolean(brief.edited && (!brief.translations || !Object.values(brief.translations).some(view => view.content === brief.content)));
+
   function isAttachedDraft(brief, attachment) {
     if (!brief || !attachment?.brief) return false;
-    return ["content", "snapshot", "metadata", "generatedAt"].every(key => JSON.stringify(brief[key]) === JSON.stringify(attachment.brief[key]));
+    const canonical = item => ({
+      content: hasAuthoredChanges(item) ? item.content : item.translations?.en?.content || item.content,
+      authoredLanguage: hasAuthoredChanges(item) ? item.authoredLanguage || item.language || "en" : null,
+      translations: item.translations || null,
+      snapshot: item.snapshot,
+      metadata: item.translations?.en?.metadata || item.metadata,
+      generatedAt: item.generatedAt
+    });
+    return JSON.stringify(canonical(brief)) === JSON.stringify(canonical(attachment.brief));
+  }
+
+  const languageOf = text => text.meta?.language === "zh" ? "zh" : "en";
+
+  // Both generated renderings are captured from one source snapshot. Switching
+  // language never consults current business records or translates authored text.
+  function localize(brief, text) {
+    if (!brief) return brief;
+    const language = languageOf(text);
+    const view = brief.translations?.[language];
+    if (!view) return brief;
+    const authored = hasAuthoredChanges(brief);
+    return {
+      ...brief,
+      language,
+      content: authored ? brief.content : view.content,
+      metadata: view.metadata,
+      authoredLanguage: authored ? brief.authoredLanguage || brief.language || "en" : null
+    };
   }
 
   function deepFreeze(value) {
@@ -107,18 +136,19 @@
     return ["business", "requirement", "sources", "publication"].filter(key => JSON.stringify(brief.snapshot[key]) !== JSON.stringify(next[key]));
   }
 
-  function generate({ data, core, state, text }) {
+  function generateView({ data, core, state, text }) {
     if (state.viewer !== "P01") throw new Error("ROLE_NOT_ALLOWED");
     const view = customerView(data, state);
     if (!view.clientVisible || state.publication?.status !== "published") throw new Error("UNPUBLISHED_RISK");
     const t = text.brief;
+    const locale = languageOf(text) === "zh" ? "zh-CN" : "en-US";
     const d = state.decision;
     const key = statusKey(view);
     const money = value => new Intl.NumberFormat("en-US", { style: "currency", currency: data.fees.currency, maximumFractionDigits: 0 }).format(value);
     const customerZone = data.baseline.timezone;
     const baseZone = data.calendars.base.timezone;
-    const localTime = (value, zone) => `${core.formatInstant(value, zone, { year: "numeric" })} ${zone === baseZone ? text.common.shanghai : text.common.easternTime}`;
-    const dateOnly = (value, zone) => core.formatInstant(value, zone, { year: "numeric", hour: undefined, minute: undefined });
+    const localTime = (value, zone) => `${core.formatInstant(value, zone, { locale, year: "numeric" })} ${zone === baseZone ? text.common.shanghai : text.common.easternTime}`;
+    const dateOnly = (value, zone) => core.formatInstant(value, zone, { locale, year: "numeric", hour: undefined, minute: undefined });
     const quote = view.rescheduleQuoteReturned ? view.rescheduleQuote : null;
     const confirmation = view.rescheduleConfirmed ? d.resource.rescheduleRequest.confirmation : null;
     const reassessing = Boolean(view.forecastReassessmentRequired || view.resourceRejected || view.rescheduleRequested);
@@ -139,7 +169,7 @@
       rescheduleFee: quote ? money((confirmation || quote).amount) : "",
       measured: data.risk.hmwPct.toFixed(1), target: data.risk.targetPct.toFixed(1),
       committed: money(view.committedFees), shared: money(data.fees.shared),
-      needDate: core.formatLocalDate(state.needByLocalDate),
+      needDate: core.formatLocalDate(state.needByLocalDate, { locale }),
       deliverable: state.deliverableOverride || text.project[data.project.deliveryStatusKey],
       destination: state.destinationOverride || text.project[data.project.destinationKey],
       owner: data.people[data.risk.nextUpdateOwnerId].name,
@@ -155,7 +185,7 @@
         const plan = data.plans[id];
         const gap = core.calendarGap(state.needByLocalDate, plan.forecast.localDate);
         const gapText = gap === 0 ? t.onNeed : interpolate(gap > 0 ? t.beforeNeed : t.afterNeed, { days: Math.abs(gap) });
-        return [id, `${money(plan.total)} ${t.table.quoted}`, dateOnly(plan.window.at, baseZone), `${core.formatLocalDate(plan.forecast.localDate)} (${gapText})`, t.table.unconfirmed];
+        return [id, `${money(plan.total)} ${t.table.quoted}`, dateOnly(plan.window.at, baseZone), `${core.formatLocalDate(plan.forecast.localDate, { locale })} (${gapText})`, t.table.unconfirmed];
       });
       currentSummary = [t.table.headers, t.table.headers.map(() => "---"), ...rows].map(cells => `| ${cells.join(" | ")} |`).join("\n");
     } else {
@@ -170,7 +200,7 @@
       !view.approverDesignated && t.prerequisites.approver
     ].filter(Boolean);
     const prerequisites = key === "beforeAuthorization"
-      ? missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join("; ") }) : t.prerequisitesComplete
+      ? missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join(t.listSeparator || "; ") }) : t.prerequisitesComplete
       : "";
     let nextUpdate;
     if (view.nextTiming) {
@@ -217,9 +247,23 @@
     };
   }
 
+  function generate(options) {
+    const selected = generateView(options);
+    const language = languageOf(options.text);
+    const translations = {};
+    for (const target of ["en", "zh"]) {
+      const messages = target === language ? options.text : global.DEMO_MESSAGES?.[target];
+      if (!messages?.brief) continue;
+      const view = target === language ? selected : generateView({ ...options, text: messages });
+      translations[target] = { content: view.content, metadata: view.metadata };
+    }
+    return { ...selected, language, authoredLanguage: null, translations };
+  }
+
   // Use captured metadata, never the current dataset, for an edited or old brief.
   function recipientMarkdown(brief, text, { staleReasons = [] } = {}) {
     if (!brief) return "";
+    brief = localize(brief, text);
     const t = text.brief;
     const meta = brief.metadata;
     const warning = staleReasons.length ? `**${t.staleRecipient}** ${staleReasons.map(key => t.staleReasons[key]).join(" ")}` : "";
@@ -247,7 +291,10 @@
   }
 
   function copyText(brief, text, options) { return plainText(recipientMarkdown(brief, text, options)); }
-  function wordCount(brief, text, options) { return copyText(brief, text, options).trim().split(/\s+/).filter(Boolean).length; }
+  function wordCount(brief, text, options) {
+    const content = copyText(brief, text, options).trim();
+    return languageOf(text) === "zh" ? (content.match(/[\p{Script=Han}]|[A-Za-z0-9]+(?:[.,%-][A-Za-z0-9]+)*/gu) || []).length : content.split(/\s+/).filter(Boolean).length;
+  }
 
-  global.DEMO_BRIEF = Object.freeze({ generate, fingerprint, staleReasons, recipientMarkdown, plainText, copyText, wordCount, statusKey, requestKey, currentAttachment, history, attach, isAttachedDraft });
+  global.DEMO_BRIEF = Object.freeze({ generate, localize, fingerprint, staleReasons, recipientMarkdown, plainText, copyText, wordCount, statusKey, requestKey, currentAttachment, history, attach, isAttachedDraft });
 })(globalThis);

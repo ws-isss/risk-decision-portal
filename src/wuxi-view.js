@@ -10,6 +10,7 @@
   function render({ data, core, state, text, helpers, formValues = {} }) {
     const t = text.wuxi;
     const { escape, interpolate, money, instant, city } = helpers;
+    const recordText = helpers.recordText || (value => value);
     const baseZone = data.calendars.base.timezone;
     const d = state.decision;
     const publication = state.publication;
@@ -17,7 +18,10 @@
     const isWuXi = ["P07", "P08"].includes(person.id);
     const view = global.DEMO_WORKFLOW.project(data, state, person.id);
     const resource = d?.resource;
-    const value = (key, fallback) => Object.hasOwn(formValues, key) ? formValues[key] : fallback;
+    const value = (key, fallback) => {
+      const current = Object.hasOwn(formValues, key) ? formValues[key] : fallback;
+      return typeof current === "string" && /reason/i.test(key) ? recordText(current) : current;
+    };
     const copy = (template, values) => escape(interpolate(template, values));
     const time = (at, zone = baseZone) => `<time datetime="${at}">${instant(at, zone, { weekday: "short" })} ${city(zone)}</time>`;
     const disabled = when => when ? " disabled" : "";
@@ -81,14 +85,14 @@
 
     function result() {
       const held = receipt.outcome === "held";
-      return `<div id="wuxi-response" class="wuxi-receipt" data-receipt-outcome="${receipt.outcome}" data-hold-status="${held ? "confirmed" : "unconfirmed"}"><h3>${held ? t.held : t.unavailable}</h3>${held ? `<p class="wuxi-hold-until">${t.heldUntil}: <strong>${time(data.plans.A.holdUntil)}</strong></p><p class="wuxi-conclusion">${t.heldConclusion}</p><p>${t.heldBoundary}</p>` : `<p class="wuxi-conclusion">${t.unavailableConclusion}</p>`}<p><strong>${t.refusalReason}</strong></p><p class="preserved-text" data-response-reason>${escape(view.schedulingReason || "")}</p><dl class="wuxi-facts"><div data-scheduling-by="${resource.scheduling.by}"><dt>${t.responseBy}</dt><dd>${escape(data.people[resource.scheduling.by].name)} · ${time(resource.scheduling.at)}</dd></div><div data-receipt-by="${receipt.by}"><dt>${t.returnedBy}</dt><dd>${escape(data.people[receipt.by].name)} · ${time(receipt.at)}</dd></div></dl>${feeSummary}${!held ? candidateRequest() : ""}</div>`;
+      return `<div id="wuxi-response" class="wuxi-receipt" data-receipt-outcome="${receipt.outcome}" data-hold-status="${held ? "confirmed" : "unconfirmed"}"><h3>${held ? t.held : t.unavailable}</h3>${held ? `<p class="wuxi-hold-until">${t.heldUntil}: <strong>${time(data.plans.A.holdUntil)}</strong></p><p class="wuxi-conclusion">${t.heldConclusion}</p><p>${t.heldBoundary}</p>` : `<p class="wuxi-conclusion">${t.unavailableConclusion}</p>`}<p><strong>${t.refusalReason}</strong></p><p class="preserved-text" data-response-reason>${escape(recordText(view.schedulingReason || ""))}</p><dl class="wuxi-facts"><div data-scheduling-by="${resource.scheduling.by}"><dt>${t.responseBy}</dt><dd>${escape(data.people[resource.scheduling.by].name)} · ${time(resource.scheduling.at)}</dd></div><div data-receipt-by="${receipt.by}"><dt>${t.returnedBy}</dt><dd>${escape(data.people[receipt.by].name)} · ${time(receipt.at)}</dd></div></dl>${feeSummary}${!held ? candidateRequest() : ""}</div>`;
     }
 
     function actionPanel() {
       if (d.planId === "B") return `<div class="wuxi-branch-outcome" data-hold-status="unconfirmed"><p>${t.bScope}</p>${feeSummary}${candidateRequest()}</div>`;
       if (receipt) return result();
       if (!isWuXi) return `<p>${t.privateResponse}</p><div data-hold-status="unconfirmed">${feeSummary}</div>`;
-      if (visibleOutcome) return `<div class="wuxi-internal-response" data-internal-outcome="${visibleOutcome}" data-hold-status="${visibleOutcome === "held" ? "confirmed" : "unconfirmed"}"><h3>${t.internalResponse}</h3><p class="status">${t.outcomeOptions[visibleOutcome]}</p><p data-response-reason class="preserved-text">${escape(view.schedulingReason)}</p><p data-scheduling-by="${resource.scheduling.by}">${t.responseBy}: ${escape(data.people[resource.scheduling.by].name)} · ${time(resource.scheduling.at)}</p>${visibleOutcome === "held" ? `<p>${t.heldUntil}: ${time(data.plans.A.holdUntil)}</p>` : ""}${feeSummary}<p>${t.returnOwner}: ${escape(data.people.P07.name)}</p>${person.id === "P07" ? `<button type="button" class="button button-primary" id="return-resource-receipt">${t.returnReceipt}</button>` : ""}</div>`;
+      if (visibleOutcome) return `<div class="wuxi-internal-response" data-internal-outcome="${visibleOutcome}" data-hold-status="${visibleOutcome === "held" ? "confirmed" : "unconfirmed"}"><h3>${t.internalResponse}</h3><p class="status">${t.outcomeOptions[visibleOutcome]}</p><p data-response-reason class="preserved-text">${escape(recordText(view.schedulingReason))}</p><p data-scheduling-by="${resource.scheduling.by}">${t.responseBy}: ${escape(data.people[resource.scheduling.by].name)} · ${time(resource.scheduling.at)}</p>${visibleOutcome === "held" ? `<p>${t.heldUntil}: ${time(data.plans.A.holdUntil)}</p>` : ""}${feeSummary}<p>${t.returnOwner}: ${escape(data.people.P07.name)}</p>${person.id === "P07" ? `<button type="button" class="button button-primary" id="return-resource-receipt">${t.returnReceipt}</button>` : ""}</div>`;
       if (person.id === "P07") return `<div class="wuxi-review-start"><p>${t.startDue}: ${time(data.events.resourceReviewStart.at)}</p>${view.resourceStarted ? `<p class="status">${t.started}</p><p>${t.startedAt}: ${time(resource.startedAt)}</p><p>${t.waitForResponse}</p>` : `<button type="button" class="button button-primary" id="start-resource-review"${disabled(!reached("resourceReviewStart"))}>${t.start}</button>`}<p>${t.scheduleOwner}: ${escape(data.people.P08.name)}</p><p>${t.responseDue}: ${time(data.events.resourceConfirmed.at)}</p>${feeSummary}</div>`;
       const outcome = value("resourceOutcome", state.branchIntent === "unavailable" ? "unavailable" : "held");
       const reason = value("resourceReason", defaultReason({data,core,text,outcome}));

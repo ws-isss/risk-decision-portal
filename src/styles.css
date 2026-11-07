@@ -31,6 +31,8 @@ button { border-radius: 2px; }
 .skip-link:focus { top: 8px; }
 .topbar { height: 58px; padding: 0 28px; display: flex; justify-content: space-between; align-items: center; gap: 20px; border-bottom: 1px solid var(--strong-line); background: var(--paper); position: sticky; top: 0; z-index: 20; }
 .app-identity, .topbar-tools { display: flex; align-items: center; gap: 18px; }
+.topbar-tools, .viewer-picker { min-width: 0; }
+.topbar-tools > .language-menu, .topbar-tools > .info-tip, .topbar-tools > .demo-tag, .topbar-tools > #reset-demo, .topbar-tools > #notifications { flex-shrink: 0; }
 .brand { font-size: 23px; font-weight: 650; letter-spacing: -.7px; }
 .project-id { padding-left: 18px; border-left: 1px solid var(--line); font-size: 14px; font-weight: 600; }
 .customer-name { font-size: 12px; color: var(--muted); }
@@ -70,6 +72,7 @@ button { border-radius: 2px; }
 .viewer-picker { display: flex; flex-direction: column; gap: 1px; border-left: 1px solid var(--line); padding-left: 15px; }
 .viewer-picker label { font-size: 10px; color: var(--muted); padding-left: 2px; }
 .viewer-picker select { max-width: 240px; font-size: 12px; font-weight: 500; background: transparent; border: 0; padding: 2px 0; }
+.viewer-picker select { min-width: 0; width: 100%; }
 main { max-width: 1420px; padding: 20px 28px 0; margin: 0 auto; outline: none; }
 .page-heading { display: flex; align-items: center; gap: 24px; margin-bottom: 14px; }
 .page-heading nav { display: flex; gap: 20px; font-size: 12px; }

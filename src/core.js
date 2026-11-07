@@ -14,12 +14,28 @@
   }
 
   function formatInstant(value, timeZone, options) {
-    return new Intl.DateTimeFormat("en-US", Object.assign({ timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }, options)).format(new Date(value));
+    const { locale = "en-US", ...fields } = options || {};
+    if (locale === "zh-CN") {
+      const date = new Date(value);
+      const hasDate = !(Object.hasOwn(fields, "month") && fields.month === undefined && Object.hasOwn(fields, "day") && fields.day === undefined);
+      const hasTime = !(Object.hasOwn(fields, "hour") && fields.hour === undefined && Object.hasOwn(fields, "minute") && fields.minute === undefined);
+      const labels = global.DEMO_MESSAGES.zh.common;
+      let datePart = hasDate ? new Intl.DateTimeFormat(locale, { timeZone, year: "numeric", month: "long", day: "numeric" }).format(date) : "";
+      if (hasDate && (fields.weekday || hasTime)) {
+        const weekday = new Intl.DateTimeFormat(locale, { timeZone, weekday: "short" }).format(date);
+        datePart = labels.dateWithWeekday.replace("{date}", datePart).replace("{weekday}", weekday);
+      }
+      const timePart = hasTime ? new Intl.DateTimeFormat(locale, { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date) : "";
+      return hasDate && hasTime ? labels.dateTime.replace("{date}", datePart).replace("{time}", timePart) : datePart || timePart;
+    }
+    return new Intl.DateTimeFormat(locale, Object.assign({ timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }, fields)).format(new Date(value));
   }
 
   function formatLocalDate(value, options) {
     if (!validLocalDate(value)) throw new Error("INVALID_LOCAL_DATE");
-    return new Intl.DateTimeFormat("en-US", Object.assign({ timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }, options)).format(new Date(value + "T12:00:00Z"));
+    const { locale = "en-US", ...fields } = options || {};
+    if (locale === "zh-CN") return formatInstant(value + "T12:00:00Z", "UTC", { ...fields, locale, hour: undefined, minute: undefined });
+    return new Intl.DateTimeFormat(locale, Object.assign({ timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }, fields)).format(new Date(value + "T12:00:00Z"));
   }
 
   function deepFreeze(value) {

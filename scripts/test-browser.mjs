@@ -157,8 +157,8 @@ try {
   assert.equal(await page.locator('#cost-details').isVisible(), false);
   await page.locator('#language-menu > summary').click();
   assert.equal(await page.locator('[data-language="en"]').getAttribute('aria-current'), 'true');
-  assert.equal(await page.locator('[data-language="zh"]').isDisabled(), true);
-  assert.match(await page.locator('[data-language="zh"]').innerText(), /available after the core flow/);
+  assert.equal(await page.locator('[data-language="zh"]').isDisabled(), false);
+  assert.match(await page.locator('[data-language="zh"]').innerText(), /中文/);
   await page.locator('[data-language="en"]').click();
   assert.equal(await page.locator('#language-menu').getAttribute('open'), null);
   const emmaTasks = ['assignBen', 'startTechnical', 'startQuality', 'designateElena'];

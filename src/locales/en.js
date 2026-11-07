@@ -2,11 +2,17 @@
   "use strict";
   global.DEMO_MESSAGES = { en: {
     meta: {
+      locale: "en-US", language: "en",
       title: "DaVinci concept · Delivery decisions",
       description: "A simulated decision workspace for a clinical drug substance program.",
       noscript: "Please enable JavaScript to open this interactive demonstration. No internet connection is required."
     },
     common: {
+      dateWithWeekday: "{date} ({weekday})", dateTime: "{date} {time}",
+      languageEnglish: "English", languageChinese: "中文", languageCurrent: "English",
+      requiredField: "Please fill out this field.", invalidField: "Please check this value.",
+      chinese: "中文", glossaryTitle: "Terminology",
+      glossary: { "SEC-HPLC": "Size-exclusion high-performance liquid chromatography", HMW: "High molecular weight species", GMP: "Good manufacturing practice", DS: "Drug substance", IND: "Investigational new drug application", CMC: "Chemistry, manufacturing and controls", QA: "Quality assurance" },
       brand: "DaVinci", demo: "Demo data", assumption: "Case design assumption", concept: "Concept workspace",
       english: "English", close: "Close", cancel: "Cancel", save: "Save changes", reset: "Reset demo",
       viewAs: "View as", owner: "Owner", startBy: "Start by", respondBy: "Respond by", arrangeBy: "Arrange by",

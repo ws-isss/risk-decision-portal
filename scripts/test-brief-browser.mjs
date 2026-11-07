@@ -61,6 +61,13 @@ const exceptionTimes = {
 const copies = page => page.evaluate(() => globalThis.testCopies);
 const normalized = content => content.replace(/\s+/g, ' ').trim();
 const wordCount = content => normalized(content).split(' ').length;
+const prerequisiteLabels = ['technical study-scope review', 'QA study-scope review', 'approver designation'];
+function pendingPrerequisites(content, expected) {
+  const pending = content.split('\n').find(line => line.includes('Pending before authorization:'));
+  assert.ok(pending, 'An early brief identifies the approvals that are still outstanding');
+  for (const label of prerequisiteLabels) assert.equal(pending.includes(label), expected.includes(label), `Only outstanding ${label} belongs in the pending list`);
+  assert.doesNotMatch(content, /Technical and QA study-scope reviews and approver designation: completed\./, 'An incomplete prerequisite list must not claim completion');
+}
 function currentOnly(content) {
   assert.doesNotMatch(content, /\$80,000|\$40,000|Mar 11|Apr 22|Historical comparison|previous conditional delivery|8 calendar days before|34 calendar days after/i, 'Inactive A/B quotes and delivery forecasts stay in the decision record, outside the current brief');
 }
@@ -72,12 +79,13 @@ async function role(page, id) {
 async function advanceTo(page, at) {
   while (Date.parse(await clock(page)) < Date.parse(at)) {
     const before = await clock(page);
-    const status = await page.locator('#wuxi').getAttribute('data-resource-status');
+    const resource = page.locator('#wuxi');
+    const status = await resource.count() ? await resource.getAttribute('data-resource-status') : null;
     assert.equal(await page.locator('#advance-event').isEnabled(), true, `A pending action must not block advancement before ${at}`);
     await page.locator('#advance-event').click();
     assert.ok(Date.parse(await clock(page)) > Date.parse(before));
     assert.ok(Date.parse(await clock(page)) <= Date.parse(at));
-    assert.equal(await page.locator('#wuxi').getAttribute('data-resource-status'), status, 'Advancement never submits the next action');
+    assert.equal(await resource.count() ? await resource.getAttribute('data-resource-status') : null, status, 'Advancement never submits the next resource action');
   }
   assert.equal(Date.parse(await clock(page)), Date.parse(at));
 }
@@ -89,7 +97,8 @@ async function chapter(page, id) {
 async function generate(page, status) {
   const before = await clock(page);
   await role(page, 'P01');
-  await page.locator('#generate-management-brief').click();
+  if (await page.locator('#regenerate-management-brief').count()) await page.locator('#regenerate-management-brief').click();
+  else await page.locator('#generate-management-brief').click();
   if (await page.locator('#confirm-regenerate-brief').isVisible()) await page.locator('#confirm-regenerate-brief').click();
   await page.locator('#management-brief-editor').waitFor();
   assert.equal(await page.locator('#management-brief').getAttribute('data-brief-status'), status);
@@ -194,6 +203,7 @@ try {
   assert.match(original.split('\n')[0], /\$80,000[\s\S]*\$40,000[\s\S]*Nov 13/);
   assert.match(original, /8 (?:calendar )?days (?:before|early)/);
   assert.match(original, /34 (?:calendar )?days (?:after|late)/);
+  pendingPrerequisites(original, prerequisiteLabels);
   assert.equal(await page.locator('#decision').getAttribute('data-task-count'), '0');
   await preview(page);
   await capture(page, 'brief-before-authorization-clean.png');
@@ -265,12 +275,58 @@ try {
   assert.equal(await page.locator('#demo-next-step').getAttribute('data-guide-key'), 'startTechnical', 'An already previewed current brief does not trap the new task milestone in a copy loop');
   assert.equal((await copies(page)).length, copiesBeforeTasks);
 
+  // Brief prerequisites follow recorded actions, not the planned dates. The
+  // designation itself invalidates a draft even though no review has completed.
+  await role(page, 'P02');
+  await page.locator('#start-technical').click();
+  await role(page, 'P03');
+  await page.locator('#start-quality').click();
+  await advanceTo(page, '2026-11-09T11:00:00-05:00');
+  await role(page, 'P01');
+  await page.locator('#assign-support').click();
+  await role(page, 'P05');
+  await page.locator('#accept-support').click();
+  await advanceTo(page, '2026-11-10T09:00:00-05:00');
+  let prerequisiteDraft = await generate(page, 'beforeAuthorization');
+  pendingPrerequisites(prerequisiteDraft, prerequisiteLabels);
+  await preview(page);
+  await page.locator('#edit-management-brief').click();
+  const preservedPrerequisiteDraft = `${prerequisiteDraft}\n\nEmma’s note: keep this wording until I update the brief.`;
+  await page.locator('#management-brief-editor').fill(preservedPrerequisiteDraft);
+  await page.locator('#designate-approver').click();
+  assert.equal(await page.locator('#management-brief').getAttribute('data-brief-stale'), 'true', 'Recording the approver designation invalidates the earlier pending list');
+  assert.match(await page.locator('#management-brief-stale').innerText(), /approver designation/i);
+  assert.equal(await page.locator('#management-brief-editor').inputValue(), preservedPrerequisiteDraft, 'Designation never silently replaces an edited brief');
+  prerequisiteDraft = await generate(page, 'beforeAuthorization');
+  pendingPrerequisites(prerequisiteDraft, prerequisiteLabels.slice(0, 2));
+  await preview(page);
+  await advanceTo(page, '2026-11-11T17:00:00-05:00');
+  prerequisiteDraft = await generate(page, 'beforeAuthorization');
+  pendingPrerequisites(prerequisiteDraft, prerequisiteLabels.slice(0, 2));
+  assert.equal(await page.locator('[data-confirmation-key="technical"]').getAttribute('data-status'), 'inProgress');
+  assert.equal(await page.locator('[data-confirmation-key="quality"]').getAttribute('data-status'), 'inProgress');
+  await role(page, 'P02');
+  await page.locator('#review-technical-form [type="submit"]').click();
+  prerequisiteDraft = await generate(page, 'beforeAuthorization');
+  pendingPrerequisites(prerequisiteDraft, ['QA study-scope review']);
+  await preview(page);
+  await role(page, 'P03');
+  await page.locator('#review-quality-form [type="submit"]').click();
+  prerequisiteDraft = await generate(page, 'beforeAuthorization');
+  assert.match(prerequisiteDraft, /Technical and QA study-scope reviews and approver designation: completed\./);
+  assert.doesNotMatch(prerequisiteDraft, /Pending before authorization:/);
+  assert.match(prerequisiteDraft, /If authorized by[\s\S]*Alex Lin’s resource assessment result is expected[\s\S]*a hold is not guaranteed\./, 'The next update promises an assessment result, never a successful hold');
+  await preview(page);
+  await copyFresh(page);
+
   // A customer authorization is not a resource receipt. An internal Mei result
   // must neither leak into the brief nor invalidate it until Alex returns it.
   await chapter(page, 'hold');
   let content = await generate(page, 'authorized');
   assert.match(content.split('\n')[0], /authorized[\s\S]*\$80,000|\$80,000[\s\S]*authorized/i);
   assert.match(content, /await[\s\S]*(?:resource|WuXi)|(?:resource|WuXi)[\s\S]*await/i);
+  assert.match(content, /resource assessment result is expected[\s\S]*a hold is not guaranteed\./);
+  assert.doesNotMatch(content, /Pending before authorization:/);
   await preview(page);
   await capture(page, 'brief-authorized.png');
   await role(page, 'P07');
@@ -421,7 +477,7 @@ try {
   await plainContext.close();
   assert.deepEqual(errors, []);
   assert.deepEqual(network, [], 'The brief, clipboard fallback and full follow-up flow work without external requests');
-  console.log('Management brief browser checks passed: compact current-state briefs, real A/B table and bold title, safe HTML/plain clipboard parity, independent editing, stale confirmations and captured metadata, private-result isolation, generation cancellation, four main states and full rescheduling, frozen data, offline rich/plain/selection clipboard fallbacks and mobile layout.');
+  console.log('Management brief browser checks passed: action-derived prerequisite lists, designation staleness without overwriting edits, conditional resource-assessment wording, compact current-state briefs, real A/B table and bold title, safe HTML/plain clipboard parity, independent editing, stale confirmations and captured metadata, private-result isolation, generation cancellation, four main states and full rescheduling, frozen data, offline rich/plain/selection clipboard fallbacks and mobile layout.');
 } finally {
   await browser.close();
   await rm(isolated, { recursive: true, force: true });

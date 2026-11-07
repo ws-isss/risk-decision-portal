@@ -21,7 +21,7 @@
     staleTitle: "This brief may be out of date",
     staleRecipient: "Earlier version · may be out of date",
     staleReasons: {
-      business: "The published decision or resource response has changed.",
+      business: "The review, approver designation, decision or resource response has changed.",
       requirement: "The customer requirement has changed.",
       sources: "The evidence, quote version or source data has changed.",
       publication: "The published risk wording or update commitment has changed."
@@ -60,11 +60,14 @@
       awaitingWuXiConfirmation: "Elena authorized the {rescheduleFee} rescheduling scope; Alex must formally confirm the {candidateWindow} window. No rescheduling fee is incurred yet.",
       confirmed: "The new window is confirmed for {candidateWindow}; {rescheduleFee} in rescheduling fees is incurred. Aggregate remediation, process readiness and delivery remain under assessment."
     },
-    selectedDecision: "Authorize selected option {selected} for {selectedTotal} by {authorizationDue}; technical and QA opinions must be recorded before budget authorization.",
+    selectedDecision: "Authorize selected option {selected} for {selectedTotal} by {authorizationDue}.",
     selectedFallbackDecision: "Authorize selected option A for {aTotal}, plus a separate {fallbackCap} fallback cap ({fallbackTotal} total), by {authorizationDue}.",
     authorizedFallbackDecision: "Option A is authorized within {authorizedTotal}, including a separate {fallbackCap} fallback cap; await WuXi’s resource response. Authorization alone incurs no fee.",
     finding: "SEC-HPLC found {measured}% high molecular weight components against a ≤{target}% development target; this is not a GMP release failure.",
     requirement: "Requirement: {deliverable}, {destination}, {needDate}.",
+    prerequisites: { technical: "technical study-scope review", quality: "QA study-scope review", approver: "approver designation" },
+    prerequisitesPending: "Pending before authorization: {items}.",
+    prerequisitesComplete: "Technical and QA study-scope reviews and approver designation: completed.",
     heldScope: "The {shared} study has not started; its fee becomes non-cancellable at experiment start.",
     heldFallbackScope: "The {shared} study has not started; the separate {fallbackCap} fallback cap does not approve a replacement window.",
     enquiryScope: "The planned expedited experiment and analysis slots are unavailable. The enquiry has no financial commitment; replacement resources need confirmation.",
@@ -95,7 +98,9 @@
       "Revised delivery and additional technical costs remain unconfirmed."
     ],
     nextReview: "{owner}: technical / QA review status expected {time}.",
-    nextResource: "Expected WuXi response: {owner}, {time}; resources and window remain unconfirmed until the named response.",
+    nextConditionalResource: "If authorized by {plannedAuthorization}, {owner}’s resource assessment result is expected {time}; a hold is not guaranteed.",
+    nextConditionalQuote: "If authorized by {authorizationDue}, {owner}’s resource assessment and rescheduling quote are expected {time}; no window is guaranteed.",
+    nextResource: "{owner}’s resource assessment result is expected {time}; a hold is not guaranteed.",
     nextHeld: "{owner}: first-round analysis expected {time}, subject to study execution; results still require review.",
     nextUnavailable: "Expected WuXi response: {owner}, {time}; the next response covers resource availability and rescheduling arrangements.",
     nextCustomer: "Customer action due: {owner}, {time}; no fee is incurred before authorized formal WuXi confirmation.",

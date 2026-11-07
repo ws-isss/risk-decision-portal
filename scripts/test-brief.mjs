@@ -138,11 +138,68 @@ function authorizedSession(plan,fallback=false) {
   const s=core.createSession(data);s.selectPlan(plan);if(fallback)s.setFallback(true);s.saveDrafts(fixtures.drafts);s.confirmTasks();
   s.setViewer('P02');s.startReview('technical');s.setViewer('P03');s.startReview('quality');s.advanceNext();s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceNext();s.setViewer('P01');s.designateApprover();s.advanceNext();s.setViewer('P02');s.completeReview('technical','Accept scope.');s.setViewer('P03');s.completeReview('quality','Accept scope.');s.advanceNext();s.setViewer('P06');s.authorize({signature:data.people.P06.name,reason:'Accept scope.',acknowledged:true});s.setViewer('P01');return s;
 }
+// Completion comes from explicit shared records, not the phase label or clock.
+// Exercise all prerequisite combinations, including an early brief that still
+// lacks approver designation after both study-scope opinions are available.
+for (const [plan, withFallback] of [['A',false],['A',true],['B',false]]) {
+  const completedState = plain(authorizedSession(plan,withFallback).getState());
+  for (let mask = 0; mask < 8; mask++) {
+    const state = plain(completedState);
+    const missing = [];
+    const remove = new Set(['budgetAuthorized']);
+    state.decision.authorization = null;
+    for (const [bit,kind] of [[1,'technical'],[2,'quality']]) {
+      if (!(mask & bit)) {
+        state.decision.reviews[kind].status = 'inProgress';
+        state.decision.reviews[kind].completedAt = null;
+        remove.add(kind+'Completed');remove.add('reviewsComplete');
+        missing.push(text.brief.prerequisites[kind]);
+      }
+    }
+    if (!(mask & 4)) {
+      state.decision.approver = {id:null,designatedAt:null};
+      remove.add('alternateAssigned');missing.push(text.brief.prerequisites.approver);
+    }
+    state.eventIds = state.eventIds.filter(id => !remove.has(id));
+    state.decision.audit = state.decision.audit.filter(item => !remove.has(item.id));
+    const currentBrief = generate({getState:()=>state});
+    assert.doesNotMatch(firstLine(currentBrief),/opinions must be recorded/);
+    if (missing.length) {
+      assert.ok(currentBrief.content.includes(`Pending before authorization: ${missing.join('; ')}.`),`Only outstanding prerequisites: ${plan}, fallback ${withFallback}, mask ${mask}`);
+      assert.equal(currentBrief.content.includes(text.brief.prerequisitesComplete),false);
+    } else {
+      assert.ok(currentBrief.content.includes(text.brief.prerequisitesComplete));
+      assert.equal(currentBrief.content.includes('Pending before authorization:'),false);
+    }
+    if ((mask & 3) === 3) {
+      const expected = plan === 'B'
+        ? /If authorized by Nov 13, 2026, 5:00 PM ET, Alex Lin’s resource assessment and rescheduling quote are expected Nov 17, 2026, 5:00 PM Shanghai; no window is guaranteed/
+        : /If authorized by Nov 12, 2026, 5:00 PM ET, Alex Lin’s resource assessment result is expected Nov 13, 2026, 5:00 PM Shanghai; a hold is not guaranteed/;
+      assert.match(currentBrief.content,expected);
+      const responseEvent = plan === 'B' ? 'rescheduleQuoteReturned' : 'resourceConfirmed';
+      const authorizationEvent = plan === 'B' ? 'latestAuthorization' : 'budgetAuthorized';
+      assert.ok(Date.parse(data.events[responseEvent].at)>Date.parse(data.events[authorizationEvent].at),'The conditional resource reply follows the specified authorization time');
+    }
+    assert.deepEqual(plain(briefModel.staleReasons(currentBrief,{data,state:{...state,clock:data.events.latestAuthorization.at}})),[],'Clock advancement alone does not complete a prerequisite');
+    if (mask === 3) {
+      const designated = plain(state);
+      designated.decision.approver = plain(completedState.decision.approver);
+      designated.eventIds.push('alternateAssigned');
+      designated.decision.audit.push(plain(completedState.decision.audit.find(item=>item.id==='alternateAssigned')));
+      const before = currentBrief.content;
+      assert.deepEqual(plain(briefModel.staleReasons(currentBrief,{data,state:designated})),['business'],'Designation invalidates the earlier pending-prerequisite brief');
+      assert.equal(currentBrief.content,before,'Staleness never overwrites the earlier brief');
+    }
+  }
+}
 const fallback=authorizedSession('A',true);
 assert.match(firstLine(generate(fallback)),/\$90,000.*\$10,000/);
+assert.match(generate(fallback).content,/Alex Lin’s resource assessment result is expected Nov 13, 2026, 5:00 PM Shanghai; a hold is not guaranteed/);
+assert.equal(generate(fallback).content.includes('Pending before authorization:'),false);
 fallback.advanceNext();fallback.setViewer('P07');fallback.startResourceReview();fallback.advanceNext();fallback.setViewer('P08');fallback.respondScheduling({outcome:'held',reason:'Confirmed scope.'});fallback.setViewer('P07');fallback.returnResourceReceipt();fallback.setViewer('P01');
 const heldFallback=generate(fallback);assert.ok(heldFallback.content.includes('separate $10,000 fallback cap'));
 const directB=authorizedSession('B');assert.match(firstLine(generate(directB)),/Option B.*\$40,000/);
+assert.ok(generate(directB).content.includes('Nov 17, 2026, 5:00 PM Shanghai'),'B retains its quote-response date after authorization');
 directB.setViewer('P07');directB.advanceTo('rescheduleRequested');directB.requestReschedule();directB.setViewer('P01');const directBBrief=generate(directB);
 assert.ok(directBBrief.content.includes('Not selected'));
 assert.equal(/unavailable|Closed/.test(directBBrief.content),false,'Selecting B does not invent a failed A scheduling attempt');

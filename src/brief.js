@@ -32,7 +32,7 @@
       },
       business: {
         planId: d?.planId || null, fallbackSelected: Boolean(d?.fallbackSelected),
-        technicalComplete: view.technicalComplete, qualityComplete: view.qualityComplete,
+        technicalComplete: view.technicalComplete, qualityComplete: view.qualityComplete, approverDesignated: view.approverDesignated,
         authorized: view.authorized, authorization: view.authorized ? { by: d.authorization.by, at: d.authorization.at, total: d.authorization.total } : null,
         resourceStarted: view.resourceStarted, resourceConfirmed: view.resourceConfirmed, resourceRejected: view.resourceRejected,
         reason: view.resourceRejected ? view.schedulingReason : "", committedFees: view.committedFees,
@@ -66,6 +66,7 @@
     const values = {
       aTotal: money(data.plans.A.total), bTotal: money(data.plans.B.total),
       authorizationDue: localTime(data.events.latestAuthorization.at, customerZone),
+      plannedAuthorization: localTime(data.events.budgetAuthorized.at, customerZone),
       actionDue: view.nextTiming?.kind === "customerActionDue" ? localTime(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone) : "",
       selected: d?.planId || "", selectedTotal: d ? money(data.plans[d.planId].total) : "",
       authorizedTotal: d?.authorization ? money(d.authorization.total) : "",
@@ -101,6 +102,14 @@
     });
     const table = [t.table.headers, t.table.headers.map(() => "---"), ...rows].map(cells => `| ${cells.join(" | ")} |`).join("\n");
     let unknowns = reassessing ? t.unknownsUnavailable : view.resourceConfirmed ? t.unknownsHeld : t.unknowns;
+    const missingPrerequisites = [
+      !view.technicalComplete && t.prerequisites.technical,
+      !view.qualityComplete && t.prerequisites.quality,
+      !view.approverDesignated && t.prerequisites.approver
+    ].filter(Boolean);
+    const prerequisites = key === "beforeAuthorization"
+      ? missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join("; ") }) : t.prerequisitesComplete
+      : "";
     let nextUpdate;
     if (view.nextTiming) {
       const timing = view.nextTiming;
@@ -110,15 +119,19 @@
       const firstAnalysis = data.plans.A.stages.find(stage => stage.id === "firstAnalysis");
       nextUpdate = interpolate(t.nextHeld, { ...values, time: localTime(firstAnalysis.end, firstAnalysis.executionTimezone) });
     } else {
-      const eventId = view.authorized || view.reviewsComplete ? "resourceConfirmed" : state.publication.nextUpdateEvent || data.risk.nextUpdateEvent;
-      nextUpdate = interpolate(eventId === "resourceConfirmed" ? t.nextResource : t.nextReview, { ...values, time: localTime(data.events[eventId].at, eventId === "resourceConfirmed" ? baseZone : customerZone) });
+      const publishedEvent = state.publication.nextUpdateEvent || data.risk.nextUpdateEvent;
+      const resourceUpdate = view.authorized || view.reviewsComplete || publishedEvent === "resourceConfirmed";
+      const optionBQuote = resourceUpdate && d?.planId === "B";
+      const eventId = optionBQuote ? "rescheduleQuoteReturned" : resourceUpdate ? "resourceConfirmed" : publishedEvent;
+      const template = resourceUpdate ? view.authorized ? t.nextResource : optionBQuote ? t.nextConditionalQuote : t.nextConditionalResource : t.nextReview;
+      nextUpdate = interpolate(template, { ...values, time: localTime(data.events[eventId].at, resourceUpdate ? baseZone : customerZone) });
     }
     const scope = view.resourceConfirmed ? copy(d?.fallbackSelected ? t.heldFallbackScope : t.heldScope)
       : reassessing ? quote ? copy(t.rescheduleScope) : view.resourceRejected ? t.enquiryScope : t.optionBEnquiryScope
       : copy(t.requirement);
     const sections = [
       `**${data.project.id}: ${copy(opening)}**`, table,
-      `${copy(t.finding)} ${scope}`,
+      `${copy(t.finding)} ${scope}${prerequisites ? ` ${prerequisites}` : ""}`,
       `**${t.sections.unknowns}**\n${unknowns.map(item => `- ${item}`).join("\n")}`,
       `**${t.sections.update}:** ${nextUpdate}`
     ];

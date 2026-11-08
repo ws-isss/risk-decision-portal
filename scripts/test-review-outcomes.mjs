@@ -60,5 +60,17 @@ for(const chapter of ['authorization','hold','unavailable']) {
   const s=core.createSession(data);s.enterChapter(chapter,fixtures);
   assert.ok(Object.values(s.getState().decision.reviews).every(r=>r.outcome==='approved'&&r.requestVersion===1),'Seeded later chapters explicitly record Agree');
 }
+for (const lang of ['en','zh']) {
+  const s=core.createSession(data);s.enterChapter('quality',fixtures);
+  assert.equal(s.getState().decision.reviews.quality.outcome,null,'QA exception starts before an explicit outcome');
+  const at=s.getState().clock;
+  s.completeReview('quality',messages[lang].decision.qualityScenario.reason,'needsInformation');
+  s.setViewer('P06');assert.throws(()=>s.authorize(sign),/REVIEWS_NOT_APPROVED/);
+  s.setViewer('P01');
+  const generated=brief.generate({data,core,state:s.getState(),text:messages[lang]});
+  const firstSentence=generated.content.split('\n')[0].split(/[。]/)[0];
+  assert.match(firstSentence,lang==='zh'?/授权受阻.*QA.*需要补充信息/:/Authorization is blocked.*QA.*More information required/);
+  assert.equal(s.getState().clock,at);assert.equal(s.getState().decision.authorization,null);
+}
 assert.equal(JSON.stringify(data),original);
 console.log('Review outcome checks passed: explicit outcomes, core authorization guard, bilingual blocked briefs, versioned resubmission, obsolete reviews and attachments, v2 signature scope and positive chapter fixtures.');

@@ -33,6 +33,7 @@
     const pairs = [];
     const d = state.decision;
     for (const source of Object.values(global.DEMO_MESSAGES)) {
+      if (source.decision.qualityScenario && text.decision.qualityScenario) pairs.push([source.decision.qualityScenario.reason, text.decision.qualityScenario.reason]);
       for (const key of ["technical", "quality"]) pairs.push([source.decision.examples[key], text.decision.examples[key]]);
       for (const outcome of ["held", "unavailable"]) pairs.push([
         global.DEMO_WUXI_VIEW.defaultReason({ data, core: coreFor(source), text: source, outcome }),

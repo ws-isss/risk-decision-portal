@@ -14,7 +14,7 @@ The two act transitions move forward to existing scenario times. They preserve a
 
 ## Exception scenarios
 
-- **QA requests more information:** enter immediately before Nina selects her review outcome; follow the existing blocked-request and resubmission flow.
+- **QA requests more information:** Nina selects **More information required** with an editable scale-down-model recovery-data example. The dedicated guide then shows Emma’s blocker and responsibility, Elena’s disabled authorization, and Emma’s brief opening with the blocked authorization. It does not resubmit or approve; manual resubmission remains available.
 - **Budget approver on leave:** assign Ben’s preparation work and designate Elena; preparation does not confer signing authority.
 - **WuXi unable to hold / rescheduling:** obtain a quote, initiate a separate decision, authorize and formally confirm rescheduling.
 - **Before risk publication:** Alex reviews and publishes the private risk draft when evidence is ready.
@@ -116,7 +116,7 @@ BROWSER_EXECUTABLE=/absolute/path/to/chromium \
 node scripts/test-brief-browser.mjs
 ```
 
-The new `test-tour-browser.mjs` checks both languages through the three acts, attachment/signature continuity, option-B handling and disabled styling. `test-dashboard-browser.mjs` checks local source, standalone mobile, the repository subpath, navigation, role menus and notification positioning.
+`test-quality-guide-browser.mjs` checks the dedicated QA sequence in both languages, explicit outcomes, blocked authorization and the brief opening, without changing the simulation clock. The `test-tour-browser.mjs` checks both languages through the three acts, attachment/signature continuity, option-B handling and disabled styling. `test-dashboard-browser.mjs` checks local source, standalone mobile, the repository subpath, navigation, role menus and notification positioning.
 
 Browser checks cover standalone offline execution, the relative-path source entry, desktop and mobile flows, permissions, notifications, timeline state and a locally hosted repository subpath. Review screenshots go to ignored `output/`.
 

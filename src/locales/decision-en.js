@@ -103,3 +103,23 @@
   global.DEMO_MESSAGES.en.decision.reviewWait = "Waiting for the review result, expected by";
   global.DEMO_MESSAGES.en.decision.errors.TOO_EARLY = "The required review or external result is not available yet.";
 })(globalThis);
+
+(function (global) {
+  const d = global.DEMO_MESSAGES.en.decision;
+  d.qualityScenario = {
+  "briefOpening": "Authorization is blocked for request v{version}: {blockers}. Emma must obtain the missing evidence or revise the scope and resubmit for both reviews.",
+  "reason": "Additional evidence is required before I can agree to this study scope. Please provide recovery data for the scale-down model supporting EXP-001 v1, including how recovery is calculated and whether the model represents the proposed purification conditions. Emma should coordinate the missing evidence or revise the scope and resubmit for review. This is not approval to proceed.",
+  "reviewHint": "QA exception: choose More information required, then submit your review. The explanation is editable; only the selected outcome controls authorization.",
+  "emmaHint": "Inspect the QA blocker and Emma’s responsibility. Keep this request blocked for the demonstration; next inspect Elena’s authorization controls.",
+  "elenaHint": "Elena cannot authorize: QA requires additional evidence. The request remains blocked until Emma resubmits and both reviewers agree.",
+  "briefHint": "Return to Emma and generate a brief from the current blocked request. Its opening must state that authorization is blocked.",
+  "done": "QA exception demonstrated: additional evidence requested, Emma owns follow-up, Elena cannot authorize, and the brief records the blocker. No authorization or resource confirmation has occurred.",
+  "approvedHint": "You selected Agree, so this run has no QA blocker. Re-enter QA requests more information from the chapter menu to demonstrate the exception.",
+  "guides": {
+    "qaMoreInfo": "Switch to Nina · request more information",
+    "qaEmmaBlocker": "Switch to Emma · inspect the blocker and next action",
+    "qaElenaBlocked": "Switch to Elena · inspect disabled authorization"
+  }
+};
+  Object.assign(d.guide, d.qualityScenario.guides);
+})(globalThis);

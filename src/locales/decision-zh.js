@@ -103,3 +103,23 @@
   global.DEMO_MESSAGES.zh.decision.reviewWait = "等待审阅结果，预计于";
   global.DEMO_MESSAGES.zh.decision.errors.TOO_EARLY = "所需的审阅或外部结果尚未可用。";
 })(globalThis);
+
+(function (global) {
+  const d = global.DEMO_MESSAGES.zh.decision;
+  d.qualityScenario = {
+  "briefOpening": "请求 v{version} 授权受阻：{blockers}。Emma 须补充证据或调整范围后，重新提交两项审阅。",
+  "reason": "需要补充证据后，才能同意本次小试范围。请提供支撑 EXP-001 v1 的缩小规模模型回收率数据，包括回收率的计算口径，以及该模型是否代表拟定的纯化条件。请 Emma 协调补充证据或调整范围后，重新提交审阅。本意见不批准继续执行。",
+  "reviewHint": "QA 异常场景：请选择“需要补充信息”，再提交审阅意见。理由可以编辑；是否允许授权仅由所选结果决定。",
+  "emmaHint": "查看 QA 卡在哪，以及 Emma 的处理责任。本次演示先保持请求受阻，下一步查看 Elena 的授权控件。",
+  "elenaHint": "Elena 不能授权：QA 要求补充证据。Emma 重新提交且两位审阅人均同意之前，请求保持受阻。",
+  "briefHint": "回到 Emma，根据当前受阻请求生成简报。简报首句应明确写出授权受阻。",
+  "done": "QA 异常演示完成：已要求补充证据，Emma 负责跟进，Elena 无法授权，简报已记录阻碍。未发生授权或资源确认。",
+  "approvedHint": "你选择了“同意”，本次没有触发 QA 拦截。请从章节菜单重新进入“QA 要求补充资料”演示异常。",
+  "guides": {
+    "qaMoreInfo": "切换到 Nina · 要求补充信息",
+    "qaEmmaBlocker": "切换到 Emma · 查看阻碍与下一步",
+    "qaElenaBlocked": "切换到 Elena · 查看禁用的授权按钮"
+  }
+};
+  Object.assign(d.guide, d.qualityScenario.guides);
+})(globalThis);

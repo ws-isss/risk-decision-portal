@@ -182,7 +182,7 @@
     if (key === "authorized" && d?.fallbackSelected) opening = t.authorizedFallbackDecision;
     const f = text.decision.reviewFlow;
     const blockers = view.reviewBlockers.map(b=>interpolate(f.summary,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})).join(t.listSeparator);
-    if (blockers) opening = interpolate(f.briefBlocked,{version:d.version,blockers});
+    if (blockers) opening = interpolate(state.chapterId === "quality" && d.version === 1 ? text.decision.qualityScenario.briefOpening : f.briefBlocked,{version:d.version,blockers});
     let currentSummary;
     if (key === "beforeAuthorization") {
       const rows = ["A", "B"].map(id => {

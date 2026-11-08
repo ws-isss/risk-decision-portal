@@ -16,6 +16,7 @@
   let tourRiskSeen = false;
   let tourAttachmentSeen = false;
   let tourComplete = false;
+  let qualityWalk = { emmaSeen:false, elenaSeen:false };
   let notificationsOpen = false;
   let draftLoading = false;
   let draftGeneration = 0;
@@ -228,12 +229,37 @@
     const guide = nextGuidedAction(state);
     const guideButton = guide && guide.key !== "advancePublication";
     const stepZone = data.events[step.nextEvent]?.executionTimezone || (state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone);
-    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : step.nextEvent === "rescheduleCustomerAvailable" ? text.decision.timingRules.officeHandoff : step.nextEvent ? text.decision.timingRules.externalWait : text.decision.clockOnly}</p>${state.resetNotice || state.chapterSeeded ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
+    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${qualityScenarioHint(state,guide) || (guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : step.nextEvent === "rescheduleCustomerAvailable" ? text.decision.timingRules.officeHandoff : step.nextEvent ? text.decision.timingRules.externalWait : text.decision.clockOnly)}</p>${state.resetNotice || state.chapterSeeded ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
+  }
+
+  function qualityScenarioActive(state) {
+    return !tourAct && state.chapterId === "quality" && state.decision?.version === 1;
+  }
+  function qualityScenarioHint(state, guide) {
+    if (!qualityScenarioActive(state)) return null;
+    const t = text.decision.qualityScenario;
+    const review = state.decision.reviews.quality;
+    if (review.status !== "completed") return t.reviewHint;
+    if (review.outcome === "approved") return t.approvedHint;
+    if (guide?.key === "qaEmmaBlocker") return t.emmaHint;
+    if (guide?.key === "qaElenaBlocked") return t.elenaHint;
+    return guide ? t.briefHint : t.done;
   }
 
   function nextGuidedAction(state) {
     const d = state.decision;
     const step = (key, role, target) => ({key,role,target});
+    if (qualityScenarioActive(state)) {
+      const review = d.reviews.quality;
+      if (review.status !== "completed") return step("qaMoreInfo","P03",'#review-quality-form select[name="outcome"]');
+      if (review.outcome === "approved") return null;
+      if (!qualityWalk.emmaSeen) return step("qaEmmaBlocker","P01","#review-blockers");
+      if (!qualityWalk.elenaSeen) return step("qaElenaBlocked","P06","#authorize-budget");
+      if (!managementBrief) return step("managementBrief","P01","#generate-management-brief");
+      if (global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length) return step("updateBrief","P01","#regenerate-management-brief");
+      if (!managementBrief.previewed) return step("previewBrief","P01","#preview-management-brief");
+      return null;
+    }
     if (tourAct === 1) {
       if (d?.tasksCreated) return null;
       if (!tourRiskSeen) return step("openRisk","P01","#risk");
@@ -317,6 +343,8 @@
     const guide = nextGuidedAction(session.getState());
     if (!guide || draftLoading || briefLoading) return;
     clearNotice();
+    if (guide.key === "qaEmmaBlocker") qualityWalk.emmaSeen = true;
+    if (guide.key === "qaElenaBlocked") qualityWalk.elenaSeen = true;
     session.setViewer(guide.role); decisionError = ""; notificationsOpen = false;
     if (guide.key === "finish") { tourComplete = true; tourAct = 0; activePage = "home"; history.pushState(null,"","#home"); render(); window.scrollTo(0,0); return; }
     if (guide.key === "openRisk") { tourRiskSeen = true; activePage = "risk"; history.pushState(null,"","#risk"); render(); window.scrollTo(0,0); return; }
@@ -539,6 +567,7 @@
   function enterChapter(id) {
     if (!performDecision(() => session.enterChapter(id,chapterFixtures()))) return;
     tourAct = 0; tourComplete = false; tourRiskSeen = false; tourAttachmentSeen = false;
+    qualityWalk = { emmaSeen:false, elenaSeen:false };
     formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false;
     notificationsOpen = false; notificationReads.clear(); dialog.close(); clearBrief(); activePage = "overview";
     history.replaceState(null,"",["prepublication","hold","unavailable"].includes(id) ? "#wuxi" : id === "selection" ? "#comparison" : "#decision");
@@ -777,7 +806,7 @@
     if (event.target.closest("[data-close]")) dialog.close();
     if (event.target.closest("#reset-demo")) openDialog(`${dialogHeading(text.common.resetTitle)}<p class="dialog-intro">${text.common.resetBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-reset">${text.common.resetConfirm}</button></div>`);
     if (event.target.closest("#confirm-reset")) {
-      tourAct=0; tourComplete=false; session.reset("customer"); clearBrief(); formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false; notificationsOpen = false; notificationReads.clear(); dialog.close(); render();
+      tourAct=0; tourComplete=false; qualityWalk={emmaSeen:false,elenaSeen:false}; session.reset("customer"); clearBrief(); formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false; notificationsOpen = false; notificationReads.clear(); dialog.close(); render();
       notify(text.common.resetNotice); document.getElementById("reset-demo").focus();
     }
   });

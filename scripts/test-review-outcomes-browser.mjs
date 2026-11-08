@@ -38,7 +38,7 @@ async function run(lang,outcome,mobile=false) {
   const original=await p.evaluate(()=>JSON.stringify(DEMO_DATA));
   await p.locator('#chapter-select').selectOption('coverage');
   await role(p,'P01');await p.locator('#assign-support').click();
-  await role(p,'P05');await p.locator('#accept-support').click();await p.locator('#advance-event').click();
+  await role(p,'P05');await p.locator('#accept-support').click();
   await role(p,'P01');await p.locator('#designate-approver').click();await p.locator('#advance-event').click();
   await role(p,'P03');
   assert.equal(await p.locator('#review-quality-form [name="outcome"]').inputValue(),'','Outcome has no default');
@@ -78,7 +78,6 @@ async function run(lang,outcome,mobile=false) {
     await review(p,'technical','approved','Agree to the revised request v2.');
     await role(p,'P06');assert.equal(await p.locator('#authorize-budget').isDisabled(),true,'Both reviewers must decide again');
     await role(p,'P03');await p.locator('#start-quality').click();await review(p,'quality','approved','The additional quality evidence supports request v2.');
-    await p.locator('#advance-event').click();
     const currentBrief=await generate(p);
     assert.ok(!currentBrief.split('\n')[0].includes(expected),'New brief is not still blocked after both Agree to v2');
     await p.locator('#preview-management-brief').click();await p.locator('#attach-management-brief').click();

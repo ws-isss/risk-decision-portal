@@ -156,7 +156,7 @@ assert.deepEqual(plain(brief.metadata.sourceVersions),['SEC-001 v1','EXP-001 v1'
 
 function authorizedSession(plan,fallback=false) {
   const s=core.createSession(data);s.selectPlan(plan);if(fallback)s.setFallback(true);s.saveDrafts(fixtures.drafts);s.confirmTasks();
-  s.setViewer('P02');s.startReview('technical');s.setViewer('P03');s.startReview('quality');s.advanceNext();s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceNext();s.setViewer('P01');s.designateApprover();s.advanceNext();s.setViewer('P02');s.completeReview('technical','Accept scope.', 'approved');s.setViewer('P03');s.completeReview('quality','Accept scope.', 'approved');s.advanceNext();s.setViewer('P06');s.authorize({signature:data.people.P06.name,reason:'Accept scope.',acknowledged:true});s.setViewer('P01');return s;
+  s.setViewer('P02');s.startReview('technical');s.setViewer('P03');s.startReview('quality');s.advanceTo('backupAssigned');s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceTo('alternateAssigned');s.setViewer('P01');s.designateApprover();s.advanceTo('reviewsComplete');s.setViewer('P02');s.completeReview('technical','Accept scope.', 'approved');s.setViewer('P03');s.completeReview('quality','Accept scope.', 'approved');s.advanceTo('budgetAuthorized');s.setViewer('P06');s.authorize({signature:data.people.P06.name,reason:'Accept scope.',acknowledged:true});s.setViewer('P01');return s;
 }
 // Completion comes from explicit shared records, not the phase label or clock.
 // Exercise all prerequisite combinations, including an early brief that still
@@ -216,7 +216,7 @@ const fallback=authorizedSession('A',true);
 assert.match(firstLine(generate(fallback)),/\$90,000.*\$10,000/);
 assert.match(generate(fallback).content,/Alex Lin’s resource assessment result is expected Nov 13, 2026, 5:00 PM Shanghai; a hold is not guaranteed/);
 assert.equal(generate(fallback).content.includes('Pending before authorization:'),false);
-fallback.advanceNext();fallback.setViewer('P07');fallback.startResourceReview();fallback.advanceNext();fallback.setViewer('P08');fallback.respondScheduling({outcome:'held',reason:'Confirmed scope.'});fallback.setViewer('P07');fallback.returnResourceReceipt();fallback.setViewer('P01');
+fallback.advanceTo('resourceReviewStart');fallback.setViewer('P07');fallback.startResourceReview();fallback.advanceNext();fallback.setViewer('P08');fallback.respondScheduling({outcome:'held',reason:'Confirmed scope.'});fallback.setViewer('P07');fallback.returnResourceReceipt();fallback.setViewer('P01');
 const heldFallback=generate(fallback);assert.ok(heldFallback.content.includes('separate $10,000 fallback cap'));
 const directB=authorizedSession('B');assert.match(firstLine(generate(directB)),/Option B.*\$40,000/);
 assert.ok(generate(directB).content.includes('Nov 17, 2026, 5:00 PM Shanghai'),'B retains its quote-response date after authorization');

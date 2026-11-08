@@ -111,9 +111,7 @@
 
   function createSession(data) {
     let state;
-    const steps = ["backupAssigned", "alternateAssigned", "reviewsComplete", "budgetAuthorized", "resourceReviewStart", "resourceConfirmed"];
     const reviewOwners = { technical: "P02", quality: "P03" };
-    const rescheduleSteps = ["rescheduleRequested", "rescheduleQuotePrepared", "rescheduleQuoteReturned", "rescheduleDecisionCreated", "rescheduleAuthorized", "rescheduleConfirmed"];
     function initial(scene) {
       return {
         scene, viewer: scene === "prepublication" ? "P07" : "P01",
@@ -132,7 +130,7 @@
     function role(id) { customer(); ensure(state.viewer === id, "ROLE_NOT_ALLOWED"); }
     function request() { customer(); ensure(state.decision, "DECISION_REQUIRED"); return state.decision; }
     function tasksRequired() { const d = request(); ensure(d.tasksCreated, "TASKS_REQUIRED"); return d; }
-    function at(value) { ensure(Date.parse(state.clock) >= Date.parse(value), "TOO_EARLY"); ensure(Date.parse(state.clock) === Date.parse(value), "WRONG_SCENARIO_TIME"); }
+    function at(value) { ensure(Date.parse(state.clock) >= Date.parse(value), "TOO_EARLY"); }
     function atEvent(id) { at(data.events[id].at); }
     function changed() { state.revision += 1; return snapshot(); }
     function record(id, recordedAt = state.clock, timeStatus) {
@@ -148,7 +146,6 @@
       return entry;
     }
     function rescheduleRecord(id, fields = {}) {
-      atEvent(id);
       const entry = record(id);
       return Object.assign({ by: entry.by, at: entry.at, sequence: entry.sequence }, fields);
     }
@@ -169,38 +166,41 @@
           : Object.freeze({ nextEvent: null, blockKey: "publishRisk", done: true });
       }
       customer();
-      const decision = state.decision;
-      const exceptionActive = decision && ((decision.planId === "B" && Date.parse(state.clock) >= Date.parse(data.events.budgetAuthorized.at)) || (decision.resource.receipt && decision.resource.receipt.outcome === "unavailable"));
-      if (exceptionActive) {
-        const nextEvent = rescheduleSteps.find(id => Date.parse(data.events[id].at) > Date.parse(state.clock)) || null;
-        if (!nextEvent) return Object.freeze({ nextEvent: null, blockKey: null, done: true });
-        const r = decision.resource.rescheduleRequest;
-        let blockKey = null;
-        if (!decision.authorization) blockKey = "authorizeCustomer";
-        else if (nextEvent === "rescheduleQuotePrepared" && !r) blockKey = "requestReschedule";
-        else if (nextEvent === "rescheduleQuoteReturned" && !(r && r.quote)) blockKey = "prepareRescheduleQuote";
-        else if (nextEvent === "rescheduleDecisionCreated" && !(r && r.quoteReceipt)) blockKey = "returnRescheduleQuote";
-        else if (nextEvent === "rescheduleAuthorized" && !(r && r.decision)) blockKey = "createRescheduleDecision";
-        else if (nextEvent === "rescheduleConfirmed" && !(r && r.authorization)) blockKey = "authorizeReschedule";
-        return Object.freeze({ nextEvent, blockKey, done: false });
-      }
-      const nextEvent = steps.find(id => Date.parse(data.events[id].at) > Date.parse(state.clock)) || null;
-      if (!nextEvent) return Object.freeze({ nextEvent: null, blockKey: null, done: true });
       const d = state.decision;
-      let blockKey = null;
-      if (!d) blockKey = "choosePlan";
-      else if (reviewBlocked(d)) blockKey = "resolveReviews";
-      else if (d.version > 1 && !reviewsApproved(d)) blockKey = "completeReviews";
-      else if (!d.tasksCreated) blockKey = "createTasks";
-      else if (nextEvent === "backupAssigned" && Object.values(d.reviews).some(r => r.status === "notStarted")) blockKey = "startReviews";
-      else if (nextEvent === "alternateAssigned" && !d.support.assignedAt) blockKey = "assignSupport";
-      else if (nextEvent === "alternateAssigned" && !d.support.acceptedAt) blockKey = "acceptSupport";
-      else if (nextEvent === "reviewsComplete" && !d.approver.id) blockKey = "designateApprover";
-      else if (nextEvent === "budgetAuthorized" && !bothReviews(d)) blockKey = "completeReviews";
-      else if (nextEvent === "resourceReviewStart" && !d.authorization) blockKey = "authorizeCustomer";
-      else if (nextEvent === "resourceConfirmed" && !d.resource.startedAt) blockKey = "startResourceReview";
-      return Object.freeze({ nextEvent, blockKey, done: false });
+      const blocked = blockKey => Object.freeze({ nextEvent: null, blockKey, done: false });
+      const wait = (nextEvent, blockKey) => Date.parse(state.clock) < Date.parse(data.events[nextEvent].at)
+        ? Object.freeze({ nextEvent, blockKey: null, done: false }) : blocked(blockKey);
+      if (!d) return blocked("choosePlan");
+      if (!d.tasksCreated) return blocked("createTasks");
+      if (reviewBlocked(d)) return blocked("resolveReviews");
+      if (!d.authorization) {
+        if (!d.support.assignedAt) return blocked("assignSupport");
+        if (!d.approver.id) return blocked("designateApprover");
+        if (!d.support.acceptedAt) return blocked("acceptSupport");
+        if (Object.values(d.reviews).some(r => r.status === "notStarted")) return blocked("startReviews");
+        if (!bothReviews(d)) return d.version > 1 ? blocked("completeReviews") : wait("reviewsComplete", "completeReviews");
+        return blocked("authorizeCustomer");
+      }
+      const resource = d.resource;
+      const exceptionActive = d.planId === "B" || resource.receipt?.outcome === "unavailable";
+      if (exceptionActive) {
+        const r = resource.rescheduleRequest;
+        if (!r) return blocked("requestReschedule");
+        if (!r.quote) return wait("rescheduleQuotePrepared", "prepareRescheduleQuote");
+        if (!r.quoteReceipt) return blocked("returnRescheduleQuote");
+        // A suggested daytime handoff in the guide, never an action lock.
+        if (!r.decision && Date.parse(state.clock) < Date.parse(data.events.rescheduleCustomerAvailable.at)) return wait("rescheduleCustomerAvailable", "createRescheduleDecision");
+        if (!r.decision) return blocked("createRescheduleDecision");
+        if (!r.authorization) return blocked("authorizeReschedule");
+        if (!r.confirmation) return wait("rescheduleConfirmed", "confirmReschedule");
+      } else {
+        if (!resource.startedAt) return blocked("startResourceReview");
+        if (!resource.scheduling) return wait("resourceConfirmed", "schedulingResponse");
+        if (!resource.receipt) return blocked("returnResourceReceipt");
+      }
+      return Object.freeze({ nextEvent: null, blockKey: null, done: true });
     }
+
     const api = {
       getState: snapshot,
       getAdvanceInfo,
@@ -279,36 +279,30 @@
         role("P01"); const d = request();
         if (d.tasksCreated) return snapshot();
         ensure(Object.values(d.drafts).every(value => value.trim()), "EMPTY_TASK_BRIEF");
-        at(data.initialClock);
         d.tasksCreated = true; d.tasksCreatedAt = state.clock; record("tasksCreated");
         return changed();
       },
       startReview(kind) {
         const r = review(kind);
         if (r.status !== "notStarted") return snapshot();
-        if (state.decision.version === 1) at(data.initialClock);
         r.status = "inProgress"; r.startedAt = state.clock; record(kind + "Started");
         return changed();
       },
       assignSupport() {
         role("P01"); const d = tasksRequired();
         if (d.support.assignedAt) return snapshot();
-        atEvent("backupAssigned");
         d.support.assignedAt = state.clock; record("backupAssigned");
         return changed();
       },
       acceptSupport() {
         role("P05"); const d = tasksRequired(); ensure(d.support.assignedAt, "SUPPORT_ASSIGNMENT_REQUIRED");
         if (d.support.acceptedAt) return snapshot();
-        atEvent("backupAssigned");
         d.support.acceptedAt = state.clock; record("supportAccepted");
         return changed();
       },
       designateApprover() {
         role("P01"); const d = tasksRequired();
         if (d.approver.id) return snapshot();
-        ensure(d.support.acceptedAt, "SUPPORT_ACCEPTANCE_REQUIRED");
-        atEvent("alternateAssigned");
         d.approver.id = "P06"; d.approver.designatedAt = state.clock; record("alternateAssigned");
         return changed();
       },
@@ -328,7 +322,6 @@
         ensure(!d.authorization, "DECISION_LOCKED");
         ensure(reviewBlocked(d), "REVIEW_RESUBMIT_NOT_AVAILABLE");
         ensure(typeof supplement === "string" && supplement.trim(), "SUPPLEMENT_REQUIRED");
-        ensure(Date.parse(state.clock) <= Date.parse(data.events.budgetAuthorized.at), "REVIEW_TIMING_EXPIRED");
         const reviewIds = ["decisionCreated", "tasksCreated", "technicalStarted", "qualityStarted", "technicalCompleted", "qualityCompleted", "reviewsComplete"];
         d.reviewHistory.push({ version: d.version, requestKey: mainRequestKey(d), createdAt: d.createdAt, submittedAt: d.tasksCreatedAt, supplement: d.supplement, reviews: JSON.parse(JSON.stringify(d.reviews)), audit: d.audit.filter(item => reviewIds.includes(item.id)) });
         d.version += 1; d.supplement = supplement.trim(); d.tasksCreatedAt = state.clock;
@@ -344,16 +337,14 @@
         ensure(d.approver.id === "P06", "APPROVER_REQUIRED");
         ensure(bothReviews(d), "REVIEWS_REQUIRED");
         ensure(reviewsApproved(d), "REVIEWS_NOT_APPROVED");
-        ensure(d.support.acceptedAt, "SUPPORT_ACCEPTANCE_REQUIRED");
-        atEvent("budgetAuthorized");
         ensure(values && typeof values.signature === "string" && values.signature.trim() === data.people.P06.name, "INVALID_SIGNATURE");
         ensure(typeof values.reason === "string" && values.reason.trim(), "REASON_REQUIRED");
         ensure(values.acknowledged === true, "ACKNOWLEDGEMENT_REQUIRED");
         const total = d.fallbackSelected ? data.fees.totals.AWithFallback : data.fees.totals[d.planId];
         ensure(total <= data.people.P06.budgetLimit, "BUDGET_LIMIT_EXCEEDED");
         const basis = authorizationBasis(data, state, "main", values.briefAttachment);
-        d.authorization = { by: "P06", at: state.clock, signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, total, fallbackCap: d.fallbackSelected ? data.fees.fallbackCap : 0, budgetReviewStartedAt: data.events.budgetStart.at, basis };
-        record("budgetStart", data.events.budgetStart.at); record("budgetAuthorized");
+        d.authorization = { by: "P06", at: state.clock, signature: values.signature.trim(), reason: values.reason.trim(), acknowledged: true, total, fallbackCap: d.fallbackSelected ? data.fees.fallbackCap : 0, budgetReviewStartedAt: state.clock, basis };
+        record("budgetStart"); record("budgetAuthorized");
         return changed();
       },
       saveRiskDraft(values) {
@@ -381,7 +372,7 @@
         state.publication.status = "published"; state.publication.publishedAt = state.clock; state.publication.updatedAt = state.clock;
         record("riskPublished");
         state.scene = "customer";
-        state.clock = data.initialClock;
+        if (Date.parse(state.clock) < Date.parse(data.initialClock)) state.clock = data.initialClock;
         return changed();
       },
       startResourceReview() {
@@ -389,7 +380,6 @@
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED"); ensure(d.planId === "A", "ORIGINAL_WINDOW_ONLY");
         ensure(authorizationMatches(data, state, "main"), "NEW_AUTHORIZATION_REQUIRED");
         if (d.resource.startedAt) return snapshot();
-        atEvent("resourceReviewStart");
         d.resource.startedAt = state.clock; record("resourceReviewStarted");
         return changed();
       },
@@ -415,7 +405,6 @@
         ensure(d.authorization, "CUSTOMER_AUTHORIZATION_REQUIRED");
         ensure(d.resource.scheduling, "SCHEDULING_RESPONSE_REQUIRED");
         if (d.resource.receipt) return snapshot();
-        atEvent("resourceConfirmed");
         d.resource.receipt = { outcome: d.resource.scheduling.outcome, by: "P07", at: state.clock };
         record(d.resource.receipt.outcome === "held" ? "resourceConfirmed" : "resourceRejected");
         return changed();
@@ -432,6 +421,7 @@
       respondRescheduleQuote() {
         role("P08"); const r = rescheduleRequest();
         if (r.quote) return snapshot();
+        atEvent("rescheduleQuotePrepared");
         r.quote = rescheduleRecord("rescheduleQuotePrepared", { candidateWindow: data.plans.B.window.at, amount: data.fees.reschedule, quoteRef: "Q-B", version: data.reports["Q-B"].version });
         return changed();
       },
@@ -468,6 +458,7 @@
         ensure(r.authorization, "RESCHEDULE_AUTHORIZATION_REQUIRED");
         ensure(authorizationMatches(data, state, "reschedule"), "NEW_AUTHORIZATION_REQUIRED");
         if (r.confirmation) return snapshot();
+        atEvent("rescheduleConfirmed");
         r.confirmation = rescheduleRecord("rescheduleConfirmed", { candidateWindow: r.quote.candidateWindow, amount: r.authorization.amount });
         return changed();
       },
@@ -482,16 +473,16 @@
         state = initial(id === "prepublication" ? "prepublication" : "customer");
         if (seeded) {
           api.selectPlan("A"); api.saveDrafts(fixtures.drafts); api.confirmTasks();
-          api.setViewer("P02"); api.startReview("technical"); api.setViewer("P03"); api.startReview("quality"); api.advanceNext();
+          api.setViewer("P02"); api.startReview("technical"); api.setViewer("P03"); api.startReview("quality"); api.advanceTo("backupAssigned");
           api.setViewer("P01");
           if (id !== "coverage") {
-            api.assignSupport(); api.setViewer("P05"); api.acceptSupport(); api.advanceNext();
-            api.setViewer("P01"); api.designateApprover(); api.advanceNext();
+            api.assignSupport(); api.setViewer("P05"); api.acceptSupport(); api.advanceTo("alternateAssigned");
+            api.setViewer("P01"); api.designateApprover(); api.advanceTo("reviewsComplete");
             api.setViewer("P02"); api.completeReview("technical", fixtures.reviewReasons.technical, "approved");
-            api.setViewer("P03"); api.completeReview("quality", fixtures.reviewReasons.quality, "approved"); api.advanceNext(); api.setViewer("P06");
+            api.setViewer("P03"); api.completeReview("quality", fixtures.reviewReasons.quality, "approved"); api.advanceTo("budgetAuthorized"); api.setViewer("P06");
             if (["hold", "unavailable"].includes(id)) {
               api.authorize({ signature: data.people.P06.name, reason: fixtures.authorizationReason, acknowledged: true });
-              api.advanceNext(); api.setViewer("P07");
+              api.advanceTo("resourceReviewStart"); api.setViewer("P07");
               if (id === "unavailable") { api.startResourceReview(); api.advanceNext(); api.setViewer("P08"); }
             }
           }

@@ -18,8 +18,8 @@ const errors = [], network = [], checked = [];
 const taskKeys = ['startTechnical', 'startQuality'];
 const oldAmbiguousText = /complete review packet|combined review package|完整审阅材料|合并审阅材料|审阅材料已齐备/i;
 const copy = {
-  en: { evidence: /Evidence published/i, pending: /Task briefs (?:pending|awaiting) confirmation/i, ready: /Ready to start review/i, sent: /Sent at/i, start: /Start by/i },
-  zh: { evidence: /证据已发布/, pending: /任务说明待确认/, ready: /可以开始审阅/, sent: /发送于/, start: /最晚开始/ }
+  en: { evidence: /Evidence published/i, pending: /Task briefs (?:pending|awaiting) confirmation/i, ready: /Ready to start review/i, sent: /Received at/i, start: /Start by/i },
+  zh: { evidence: /证据已发布/, pending: /任务说明待确认/, ready: /可以开始审阅/, sent: /收到于/, start: /最晚开始/ }
 };
 const clock = page => page.locator('.demo-clock time').getAttribute('datetime');
 async function role(page, id) {
@@ -53,7 +53,7 @@ async function checkNotification(page, lang, key, kind, status, { sentAt, stateP
   assert.equal(await notification.getAttribute('data-notification-kind'), kind);
   assert.equal(await notification.locator('[data-notification-status]').getAttribute('data-notification-status'), status);
   if (statePattern) assert.match(await notification.locator('.notification-title').innerText(), statePattern);
-  const sent = notification.locator('[data-notification-sent]');
+  const sent = notification.locator('[data-notification-received]');
   const timing = notification.locator('[data-notification-timing]');
   assert.match(await sent.innerText(), copy[lang].sent, 'Notification timestamps explicitly identify when the message was sent');
   assert.match(await timing.innerText(), copy[lang].start, 'The separate task timing explicitly identifies its latest start');
@@ -112,7 +112,7 @@ async function mobileLayout(page, label) {
   await notifications(page);
   const result = await page.evaluate(() => {
     const panel = document.querySelector('#notifications-panel').getBoundingClientRect();
-    const contents = [...document.querySelectorAll('#notifications-panel [data-task-link], [data-notification-sent], [data-notification-timing]')].map(node => ({ r: node.getBoundingClientRect(), scroll: node.scrollWidth, width: node.clientWidth }));
+    const contents = [...document.querySelectorAll('#notifications-panel [data-task-link], [data-notification-received], [data-notification-timing]')].map(node => ({ r: node.getBoundingClientRect(), scroll: node.scrollWidth, width: node.clientWidth }));
     return { panel: panel.left >= 0 && panel.right <= innerWidth && panel.top >= 0 && panel.bottom <= innerHeight, horizontal: document.documentElement.scrollWidth <= innerWidth + 1 && contents.every(({r, scroll, width}) => r.left >= 0 && r.right <= innerWidth + 1 && scroll <= width + 2) };
   });
   assert.equal(result.panel, true, `${label}: notification panel fits the viewport`);
@@ -172,10 +172,8 @@ async function run(lang, mobile = false) {
   assert.equal(await page.locator('#start-quality').isEnabled(), true);
   await page.locator('#start-quality').click();
   assert.equal(await taskState(page, 'startQuality'), 'inProgress');
-  await page.locator('#advance-event').click();
   await role(page, 'P01'); await page.locator('#assign-support').click();
   await role(page, 'P05'); await page.locator('#accept-support').click();
-  await page.locator('#advance-event').click();
   await role(page, 'P01'); await page.locator('#designate-approver').click();
   await page.locator('#advance-event').click();
   assert.equal(await clock(page), reviewsComplete);

@@ -186,11 +186,11 @@
     const value = action.day && session.getState().clock === data.initialClock && person.timezone === data.baseline.timezone
       ? `${text.common[action.day]}, ${core.formatInstant(at, person.timezone, { month: undefined, day: undefined })}`
       : core.formatInstant(at, person.timezone, { weekday: "short" });
-    return `${withLabel ? `<span class="task-time-kind">${text.portal.taskTimingLabels[kind]}</span>` : ""}<time datetime="${at}" class="${action.day === "today" ? "due-today" : ""}">${escape(value)} <span>${zoneLabel(person.timezone)}</span></time>`;
+    return `${withLabel ? `<span class="task-time-kind">${text.portal.taskTimingLabels[kind]}</span>` : ""}<time datetime="${at}" class="${action.day === "today" && !action.actualAt ? "due-today" : ""}">${escape(value)} <span>${zoneLabel(person.timezone)}</span></time>`;
   }
   function renderActions(state, person) {
     const actions = workflow.tasks(data, state);
-    const mixedTiming = actions.some(action => action.timingKey);
+    const mixedTiming = actions.some(action => action.timingKey || action.timing?.kind !== "startBy");
     const timingHeading = mixedTiming ? text.portal.timing : text.overview.deadline;
     const hasCoverage = ["P01", "P04", "P05", "P06"].includes(person.id);
     return `<section id="actions" class="section" aria-labelledby="actions-title">
@@ -200,7 +200,7 @@
       ${actions.length ? `<div class="table-wrap actions-wrap"><table class="actions-table"><thead><tr><th scope="col">${text.overview.person}</th><th scope="col">${text.overview.action}</th><th scope="col">${timingHeading}</th><th scope="col">${text.overview.status}</th></tr></thead><tbody>${actions.map(action => {
         const owner = data.people[action.owner];
         const title = actionTitle(action);
-        return `<tr id="task-${action.key}" data-task="${action.key}" data-owner="${owner.id}" tabindex="-1"${location.hash === `#task-${action.key}` ? ' class="task-highlight"' : ""}><td class="task-person">${escape(owner.name)}</td><td class="task-description"><span>${state.decision ? `<a href="${(["resource","schedule","monitor","receipt"].includes(action.key) || action.key.startsWith("reschedule")) ? "#wuxi" : "#decision"}">${escape(title)}</a>` : escape(title)}</span>${actionInfo(action)}</td><td class="action-due" data-label="${escape(timingHeading)}">${actionDue(action, person, mixedTiming)}</td><td data-task-status="${action.status}">${badge(action.status)}</td></tr>`;
+        return `<tr id="task-${action.key}" data-task="${action.key}" data-owner="${owner.id}" tabindex="-1"${location.hash === `#task-${action.key}` ? ' class="task-highlight"' : ""}><td class="task-person">${escape(owner.name)}</td><td class="task-description"><span>${state.decision ? `<a href="${(["resource","schedule","monitor","receipt"].includes(action.key) || action.key.startsWith("reschedule")) ? "#wuxi" : "#decision"}">${escape(title)}</a>` : escape(title)}</span>${actionInfo(action)}</td><td class="action-due" data-label="${escape(timingHeading)}">${actionDue(action, person, mixedTiming)}${action.actualAt ? `<small data-task-actual><span>${text.decision.timingRules.recordedAt}</span> ${instant(action.actualAt,person.timezone)} ${zoneLabel(person.timezone)}</small>` : action.availableAt ? `<small data-task-available><span>${text.decision.timingRules.availableAt}</span> ${instant(action.availableAt,person.timezone)} ${zoneLabel(person.timezone)}</small>` : ""}${!action.actualAt && ["startBy","actionDue"].includes(action.timing?.kind) && Date.parse(state.clock) > Date.parse(action.timing.at) ? `<small class="due-today">${text.decision.timingRules.overdue}</small>` : ""}</td><td data-task-status="${action.status}">${badge(action.status)}</td></tr>`;
       }).join("")}</tbody></table></div>` : `<div class="empty-actions"><strong>${text.actions.noTasks}</strong>${info("unassigned", text.overview.coverageInfo, note(person.id === "P05" ? text.actions.backupNote : text.actions.alternateNote))}</div>`}
     </section>`;
   }
@@ -214,7 +214,7 @@
     const guide = nextGuidedAction(state);
     const guideButton = guide && guide.key !== "advancePublication";
     const stepZone = data.events[step.nextEvent]?.executionTimezone || (state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone);
-    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
+    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : step.nextEvent === "rescheduleCustomerAvailable" ? text.decision.timingRules.officeHandoff : step.nextEvent ? text.decision.timingRules.externalWait : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
   }
 
   function nextGuidedAction(state) {
@@ -234,29 +234,29 @@
       if (q) {
         if (q.confirmation) return null;
         if (q.authorization) return scheduledStep("confirmReschedule","P07","#confirm-reschedule","rescheduleConfirmed");
-        if (q.decision) return scheduledStep("rescheduleAuthorization","P06",'#reschedule-authorization-form input[name="signature"]',"rescheduleAuthorized");
-        if (q.quoteReceipt) return scheduledStep("rescheduleDecision","P01","#launch-reschedule-decision","rescheduleDecisionCreated");
-        if (q.quote) return scheduledStep("returnQuote","P07","#return-reschedule-quote","rescheduleQuoteReturned");
+        if (q.decision) return step("rescheduleAuthorization","P06",'#reschedule-authorization-form input[name="signature"]');
+        if (q.quoteReceipt) return scheduledStep("rescheduleDecision","P01","#launch-reschedule-decision","rescheduleCustomerAvailable");
+        if (q.quote) return step("returnQuote","P07","#return-reschedule-quote");
         return scheduledStep("rescheduleQuote","P08","#record-reschedule-quote","rescheduleQuotePrepared");
       }
       if (r?.receipt?.outcome === "held") return null;
-      if (r?.receipt?.outcome === "unavailable" || d.planId === "B") return scheduledStep("reschedule","P07","#request-reschedule","rescheduleRequested");
+      if (r?.receipt?.outcome === "unavailable" || d.planId === "B") return step("reschedule","P07","#request-reschedule");
       if (r?.scheduling && !r.receipt) return step("replyReceipt","P07","#return-resource-receipt");
-      if (!r?.startedAt) return Date.parse(state.clock) >= Date.parse(data.events.resourceReviewStart.at) ? step("startResources","P07","#start-resource-review") : null;
+      if (!r?.startedAt) return step("startResources","P07","#start-resource-review");
       if (Date.parse(state.clock) >= Date.parse(data.events.resourceConfirmed.at)) return step("scheduling","P08",'#resource-response-form select[name="outcome"]');
       return null;
     }
+    if (!d.support.assignedAt) return step("assignSupport","P01","#assign-support");
+    if (!d.approver.id) return step("designate","P01","#designate-approver");
+    if (d.support.assignedAt && !d.support.acceptedAt) return step("acceptSupport","P05","#accept-support");
     if (d.reviews.technical.status === "notStarted") return step("startTechnical","P02","#start-technical");
     if (d.reviews.quality.status === "notStarted") return step("startQuality","P03","#start-quality");
     const reached = key => Date.parse(state.clock) >= Date.parse(data.events[key].at);
-    if (reached("backupAssigned") && !d.support.assignedAt) return step("assignSupport","P01","#assign-support");
-    if (d.support.assignedAt && !d.support.acceptedAt) return step("acceptSupport","P05","#accept-support");
-    if (reached("alternateAssigned") && !d.approver.id) return step("designate","P01","#designate-approver");
     if (reached("reviewsComplete")) {
       if (d.reviews.technical.status !== "completed") return step("completeTechnical","P02",'#review-technical-form textarea[name="reason"]');
       if (d.reviews.quality.status !== "completed") return step("completeQuality","P03",'#review-quality-form textarea[name="reason"]');
     }
-    if (reached("budgetAuthorized")) {
+    if (workflow.project(data,state).reviewsApproved && d.approver.id) {
       // One guide checkpoint before the initial signature. Later business events
       // retain manual updates and shared stale warnings, never another milestone.
       const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
@@ -317,7 +317,7 @@
       const owner = data.people[item.task.owner];
       const isRead = read.has(item.id);
       const timing = item.task.timing;
-      return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div>${item.at ? `<div class="notification-time" data-notification-sent><span>${t.sentAt}</span> <time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : `<span class="notification-sequence">${text.portal.sequenceOnly}</span>`}${timing ? `<div class="notification-time" data-notification-timing="${timing.kind}" data-timing-event="${timing.eventRef}"><span>${text.portal.taskTimingLabels[timing.kind]}</span> <time datetime="${timing.at}">${instant(timing.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : ""}</a></li>`;
+      return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div>${item.at ? `<div class="notification-time" data-notification-received><span>${t.receivedAt}</span> <time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : `<span class="notification-sequence">${text.portal.sequenceOnly}</span>`}${timing ? `<div class="notification-time" data-notification-timing="${timing.kind}" data-timing-event="${timing.eventRef}"><span>${text.portal.taskTimingLabels[timing.kind]}</span> <time datetime="${timing.at}">${instant(timing.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : ""}</a></li>`;
     }).join("")}</ul>` : `<p class="notifications-empty">${t.empty}</p>`}<div class="notifications-footer"><span class="data-tag">${text.common.assumption}</span><p>${t.readBoundary}</p></div></section></div>`;
   }
   function updateNotifications(open, restoreFocus = false) {
@@ -396,7 +396,7 @@
         ${row("delivery", text.overview.estimatedDelivery, plan => `${reassess ? `<strong>${text.portal.reassessment}</strong><small>${text.portal.previousEstimate}</small>` : ""}<time datetime="${plan.forecast.delivery}">${dateOnly(plan.forecast.delivery, data.baseline.timezone)}</time><span class="inline-meta">${text.common.newYork}</span>`, info("delivery", text.overview.deliveryInfo, note(reassess ? text.portal.forecastInvalid : text.overview.deliveryExplanation)))}
         ${row("gap", text.overview.difference, plan => gapMarkup(plan, state))}
         ${row("confirmation", text.overview.confirmed, plan => `<span class="confirmation-status" data-confirmation="${plan.id}">${windowStatus(plan,state)}</span>`)}
-      </tbody></table></div><p class="shared-prerequisite">${text.overview.sharedPrerequisite}</p>${renderBasis()}</div>
+      </tbody></table></div><p class="shared-prerequisite">${text.overview.sharedPrerequisite}</p>${state.viewer === "P01" && state.decision?.tasksCreated ? `<p class="decision-note">${text.decision.timingRules.scopeLocked}</p>` : ""}${renderBasis()}</div>
     </section>`;
   }
 

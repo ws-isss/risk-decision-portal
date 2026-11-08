@@ -18,11 +18,12 @@
     };
     const supportAssigned = !!(d && d.support.assignedAt && recorded("backupAssigned"));
     const supportAccepted = supportAssigned && !!(d.support.acceptedAt && recorded("supportAccepted"));
-    const approverDesignated = supportAccepted && !!(d && d.approver.id === "P06" && recorded("alternateAssigned"));
+    const approverDesignated = !!(d && d.approver.id === "P06" && recorded("alternateAssigned"));
     const technicalComplete = !!(d && d.reviews.technical.status === "completed" && d.reviews.technical.requestVersion === d.version && recorded("technicalCompleted"));
     const qualityComplete = !!(d && d.reviews.quality.status === "completed" && d.reviews.quality.requestVersion === d.version && recorded("qualityCompleted"));
     const reviewsComplete = technicalComplete && qualityComplete && recorded("reviewsComplete");
     const reviewsApproved = reviewsComplete && Object.values(d.reviews).every(r => r.outcome === "approved");
+    const budgetReadyAt = reviewsApproved && approverDesignated ? [d.reviews.technical.completedAt, d.reviews.quality.completedAt, d.approver.designatedAt, d.tasksCreatedAt].reduce((latest, at) => Date.parse(at) > Date.parse(latest) ? at : latest) : null;
     const reviewBlockers = d ? Object.entries(d.reviews).filter(([kind, r]) => (kind === "technical" ? technicalComplete : qualityComplete) && r.outcome !== "approved").map(([kind, r]) => ({ kind, outcome: r.outcome, reason: r.reason, reviewer: r.owner, owner: "P01", requestVersion: d.version })) : [];
     const authorized = !!(d && d.authorization && d.authorization.by === "P06" && d.authorization.total <= data.people.P06.budgetLimit && approverDesignated && reviewsApproved && recorded("budgetAuthorized"));
     const resource = d && d.resource;
@@ -93,9 +94,12 @@
     const add = (task, roles) => {
       const revisedReview = d?.version > 1 && ["startTechnical", "startQuality"].includes(task.key);
       const completionEvent = revisedReview ? null : completionEvents[task.key];
+      const actualEvents = {assignBen:"backupAssigned", designateElena:"alternateAssigned", startTechnical:"technicalStarted", startQuality:"qualityStarted", budget:"budgetAuthorized", support:"supportAccepted", receipt:"resourceReviewStarted", schedule: schedulingOutcome === "held" ? "schedulingHeld" : "schedulingUnavailable", reschedule:"rescheduleRequested", rescheduleQuote:"rescheduleQuotePrepared", rescheduleQuoteReceipt:"rescheduleQuoteReturned", rescheduleDecision:"rescheduleDecisionCreated", rescheduleAuthorization:"rescheduleAuthorized", rescheduleConfirmation:"rescheduleConfirmed"};
+      const actualAt = occurred(actualEvents[task.key]) ? audit.find(item => item.id === actualEvents[task.key])?.at || null : null;
+      const availableAt = task.key === "reschedule" && authorized ? (resourceRejected ? resource.receipt.at : d.authorization.at) : task.key === "rescheduleQuote" && internalViewer ? r?.at : task.key === "rescheduleQuoteReceipt" && rescheduleQuoteReady ? r.quote.at : task.key === "rescheduleDecision" && rescheduleQuoteReturned ? r.quoteReceipt.at : task.key === "rescheduleAuthorization" && rescheduleDecisionCreated ? r.decision.at : task.key === "rescheduleConfirmation" && rescheduleAuthorized ? r.authorization.at : task.key === "budget" ? budgetReadyAt : ["receipt", "monitor"].includes(task.key) && authorized ? d.authorization.at : task.key === "schedule" && resourceStarted ? resource.startedAt : task.key === "support" ? d.support.assignedAt : ["startTechnical", "startQuality"].includes(task.key) && tasksCreated ? d.tasksCreatedAt : null;
       records[task.key] = Object.freeze({
-        ...task,
-        timing: revisedReview ? Object.freeze({ eventRef: "tasksCreated", at: d.tasksCreatedAt, kind: "assignedAt" }) : timing(task.event, task.timingKey || "startBy"),
+        ...task, actualAt, availableAt,
+        timing: revisedReview ? Object.freeze({ eventRef: "tasksCreated", at: d.tasksCreatedAt, kind: "assignedAt" }) : task.key === "support" ? Object.freeze({eventRef:"backupAssigned",at:d.support.assignedAt,kind:"assignedAt"}) : timing(task.event, task.timingKey || "startBy"),
         ...(completionEvent ? { completionTiming: timing(completionEvent, "actionDue") } : {})
       });
       roles.forEach(id => { if (!roleKeys[id].includes(task.key)) roleKeys[id].push(task.key); });
@@ -110,7 +114,7 @@
       add({ key: "designateElena", owner: "P01", event: "alternateAssigned", day: initialSnapshot ? "tomorrow" : undefined, status: approverDesignated ? "taskCompleted" : "pendingDesignation", info: "approver" }, ["P01"]);
       const budgetRoles = approverDesignated ? ["P04", "P06"] : ["P04"];
       if (tasksCreated) budgetRoles.push("P01");
-      add({ key: "budget", owner: approverDesignated ? "P06" : "P04", plannedOwner: "P06", event: d ? "budgetStart" : "latestBudgetStart", status: authorized ? "taskCompleted" : reviewBlockers.length ? "reviewBlocked" : approverDesignated ? reviewsApproved ? "readyForAuthorization" : "pendingReview" : "blocked", info: approverDesignated ? "budgetReview" : "budget", created: tasksCreated, brief: tasksCreated ? d.drafts.budget : null, dependencyKeys: ["startTechnical", "startQuality", "designateElena"] }, budgetRoles);
+      add({ key: "budget", owner: approverDesignated ? "P06" : "P04", plannedOwner: "P06", event: "latestBudgetStart", status: authorized ? "taskCompleted" : reviewBlockers.length ? "reviewBlocked" : approverDesignated ? reviewsApproved ? "readyForAuthorization" : "pendingReview" : "blocked", info: approverDesignated ? "budgetReview" : "budget", created: tasksCreated, brief: tasksCreated ? d.drafts.budget : null, dependencyKeys: ["startTechnical", "startQuality", "designateElena"] }, budgetRoles);
     }
     if (reviewBlockers.length) add({ key: "resolveReviews", owner: "P01", event: "latestAuthorization", timingKey: "actionDue", status: "reviewBlocked", info: "resolveReviews", blockers: reviewBlockers }, ["P01"]);
     if (supportAssigned) add({ key: "support", owner: "P05", event: "backupAssigned", status: supportAccepted ? "inProgress" : "assigned", info: "supportPreparation", created: true, dependencyKeys: ["assignBen"] }, ["P05"]);
@@ -126,7 +130,7 @@
       if (rescheduleDecisionCreated) add({ key: "rescheduleAuthorization", owner: "P06", event: data.rescheduleTiming.authorizationDueEvent, timingKey: "actionDue", status: rescheduleAuthorized ? "taskCompleted" : "readyForAuthorization", info: "rescheduleAuthorization", dependencyKeys: ["rescheduleDecision"] }, ["P01", "P06"]);
       if (rescheduleAuthorized) add({ key: "rescheduleConfirmation", owner: "P07", event: "rescheduleConfirmed", timingKey: "expectedReply", status: rescheduleConfirmed ? "taskCompleted" : "ready", info: "rescheduleConfirmation", dependencyKeys: ["rescheduleAuthorization"] }, ["P01", "P07"]);
     }
-    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, reviewsApproved, reviewBlockers, authorized, published, evidencePublished, reviewReadiness, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, rescheduleQuoteReady, rescheduleQuoteReturned, rescheduleQuote, rescheduleDecisionCreated, rescheduleAuthorized, rescheduleConfirmed, rescheduleStage, nextTiming, rescheduleAuthorization: rescheduleAuthorized ? r.authorization : null, rescheduleConfirmation: rescheduleConfirmed ? r.confirmation : null, resourceFees, rescheduleFees, committedFees, forecastReassessmentRequired: resourceRejected || rescheduleRequested, customerRejected: false, tasksCreated };
+    return { records, roleKeys, occurred, supportAssigned, supportAccepted, approverDesignated, technicalComplete, qualityComplete, reviewsComplete, reviewsApproved, budgetReadyAt, reviewBlockers, authorized, published, evidencePublished, reviewReadiness, clientVisible: customerVisible, resourceStarted, schedulingOutcome, schedulingReason, resourceConfirmed, resourceRejected, rescheduleRequested, rescheduleQuoteReady, rescheduleQuoteReturned, rescheduleQuote, rescheduleDecisionCreated, rescheduleAuthorized, rescheduleConfirmed, rescheduleStage, nextTiming, rescheduleAuthorization: rescheduleAuthorized ? r.authorization : null, rescheduleConfirmation: rescheduleConfirmed ? r.confirmation : null, resourceFees, rescheduleFees, committedFees, forecastReassessmentRequired: resourceRejected || rescheduleRequested, customerRejected: false, tasksCreated };
   }
 
   function tasks(data, state, viewerId = state.viewer) {
@@ -142,7 +146,9 @@
   }
 
   function eventTiming(data, state, eventRef, viewerId = state.viewer) {
-    for (const task of Object.values(project(data, state, viewerId).records)) {
+    const view = project(data,state,viewerId);
+    if (eventRef === "budgetStart" && view.budgetReadyAt) return {eventRef,at:view.budgetReadyAt,kind:"availableAt"};
+    for (const task of Object.values(view.records)) {
       for (const value of [task.timing, task.completionTiming]) {
         if (value && value.eventRef === eventRef) return value;
       }

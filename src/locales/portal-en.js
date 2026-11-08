@@ -59,4 +59,5 @@
   Object.assign(global.DEMO_MESSAGES.en.portal.statuses, {"approved":"Agree","needsInformation":"More information required","rejected":"Disagree","reviewBlocked":"Authorization blocked"});
   global.DEMO_MESSAGES.en.portal.taskTimingLabels.assignedAt = "Reassigned at";
   global.DEMO_MESSAGES.en.portal.actions.resolveReviews = {"title":"Authorization blocked","detail":"Emma: address the review concerns and resubmit. Both reviewers must agree to the current request before authorization."};
+  global.DEMO_MESSAGES.en.portal.taskTimingLabels.availableAt = "Available since";
 })(globalThis);

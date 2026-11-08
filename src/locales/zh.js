@@ -160,7 +160,7 @@
     },
     notifications: {
       title: "通知", unreadCount: "{count} 条未读通知", markAll: "全部标为已读", empty: "当前角色暂无通知。",
-      owner: "任务负责人", status: "任务状态", sentAt: "发送于", openTask: "查看任务", read: "已读", unread: "未读",
+      owner: "任务负责人", status: "任务状态", receivedAt: "收到于", openTask: "查看任务", read: "已读", unread: "未读",
       readBoundary: "阅读通知不代表任务完成或已获授权。",
       kinds: {
         leaveSupport: { title: "Olivia 休假中", body: "请安排 Ben 准备材料，转交尚未完成。" },

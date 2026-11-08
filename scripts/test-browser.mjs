@@ -101,7 +101,7 @@ async function assertNotificationsForTasks(targetPage, expectedTasks) {
   assert.deepEqual([...tasks].sort(), [...expectedTasks].sort(), 'Notifications use the current role’s task records');
   assert.equal(new Set(await links.evaluateAll(nodes => nodes.map(node => node.dataset.notificationId))).size, tasks.length, 'Notifications have stable unique identities');
   const clock = await targetPage.locator('#snapshot-time').getAttribute('datetime');
-  for (const at of await links.locator('[data-notification-sent] time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))) {
+  for (const at of await links.locator('[data-notification-received] time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))) {
     assert.ok(Date.parse(at) <= Date.parse(clock), 'Notifications cannot announce future events as already received');
   }
   assert.ok(!(await links.evaluateAll(nodes => nodes.map(node => node.dataset.notificationKind))).includes('authorizationReceived'), 'Customer authorization is not reported before it occurs');

@@ -162,7 +162,7 @@
     },
     notifications: {
       title: "Notifications", unreadCount: "{count} unread notifications", markAll: "Mark all as read", empty: "No notifications for this role.",
-      owner: "Task owner", status: "Task status", sentAt: "Sent at", openTask: "View task", read: "Read", unread: "Unread",
+      owner: "Task owner", status: "Task status", receivedAt: "Received at", openTask: "View task", read: "Read", unread: "Unread",
       readBoundary: "Reading a notification does not complete or authorize a task.",
       kinds: {
         leaveSupport: { title: "Olivia is on leave", body: "Arrange Ben’s preparation support. The handoff is still pending." },

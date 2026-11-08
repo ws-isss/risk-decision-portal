@@ -9,7 +9,7 @@ const fixtures={drafts:{technical:'Review technical scope.',quality:'Review qual
 const sign={signature:data.people.P06.name,reason:'Authorize the current reviewed scope.',acknowledged:true};
 function pending() {
   const s=core.createSession(data);s.enterChapter('coverage',fixtures);
-  s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceNext();s.setViewer('P01');s.designateApprover();s.advanceNext();
+  s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceTo('alternateAssigned');s.setViewer('P01');s.designateApprover();s.advanceTo('reviewsComplete');
   s.setViewer('P02');s.completeReview('technical','Technically acceptable.','approved');s.setViewer('P03');return s;
 }
 for(const outcome of ['rejected','needsInformation']) {

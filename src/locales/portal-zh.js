@@ -59,4 +59,5 @@
   Object.assign(global.DEMO_MESSAGES.zh.portal.statuses, {"approved":"同意","needsInformation":"需要补充信息","rejected":"不同意","reviewBlocked":"授权受阻"});
   global.DEMO_MESSAGES.zh.portal.taskTimingLabels.assignedAt = "重新分派于";
   global.DEMO_MESSAGES.zh.portal.actions.resolveReviews = {"title":"授权受阻","detail":"Emma：处理审阅提出的问题并重新提交。两位审阅人均同意当前请求后，才能授权。"};
+  global.DEMO_MESSAGES.zh.portal.taskTimingLabels.availableAt = "可办理自";
 })(globalThis);

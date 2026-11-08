@@ -12,7 +12,7 @@
     dependencyCopy: { technical: "已确认说明并分派任务；已发布 SEC-001 和 EXP-001", quality: "已确认说明并分派任务；已发布 SEC-001 和 EXP-001", budget: "已指定 Elena；技术与 QA 意见齐备；最终报价已提供", schedule: "客户授权后，由药明评估资源" },
     statuses: { notStarted: "未开始", draft: "草稿 · 未分派", inProgress: "进行中", taskCompleted: "已确认", pendingDesignation: "待指定授权人", pendingReview: "等待技术与 QA 意见", readyForAuthorization: "待授权", waiting: "等待客户授权", ready: "等待药明确认" },
     draft: "起草任务说明", drafting: "正在起草…", simulated: "AI 起草（模拟生成）", draftReady: "草稿已生成", draftsIntro: "请逐项审阅并编辑说明。Emma 确认后才会创建任务。", confirmDrafts: "确认并创建 3 项任务", tasksCreated: "已创建 3 项任务", briefs: "任务说明", taskNames: { technical: "Daniel · 技术审阅", quality: "Nina · QA 审阅", budget: "预算授权负责人" },
-    template: { technical: "需要判断什么\n审阅追加小试的范围及技术评估要求；评估不只限于聚集体。本次意见不批准 GMP 生产。\n\n依据\n{evidence}\n\n仍缺少什么\n您的正式技术意见；QA 意见和最终预算授权分别记录。实验与生产资源尚未确认。\n\n何时办理\n计划开始：{plannedStart}。最晚于 {reviewStart} 开始。请于 {reviewComplete} 前提交审阅意见。", quality: "需要判断什么\n判断拟定的小试评价标准和质量证据要求是否充分。本次意见不批准工艺锁定或批次放行。\n\n依据\n{evidence}\n\n仍缺少什么\n您的正式 QA 意见；技术意见和预算授权分别记录。资源尚未确认。\n\n何时办理\n计划开始：{plannedStart}。最晚于 {reviewStart} 开始。请于 {reviewComplete} 前提交审阅意见。", budget: "需要判断什么\n审阅方案 {plan}，授权上限 {amount}，仅包含本请求明确选择的后备范围。请核对各项费用的发生条件；客户授权不等于预订产能。\n\n依据\n{evidence}\n\n仍缺少什么\nEmma 需指定 Elena；Daniel 和 Nina 需记录各自意见。Ben 可以准备材料，但不能批准费用。\n\n何时办理\n指定授权人后于 {designation} 开始预读。技术与 QA 审阅意见应于 {reviewComplete} 前提交，供预算授权使用。最终预算审阅时段：{budgetStart} 至 {budgetEnd}。" },
+    template: { technical: "需要判断什么\n审阅追加小试的范围及技术评估要求；评估不只限于聚集体。本次意见不批准 GMP 生产。\n\n依据\n{evidence}\n\n仍缺少什么\n您的正式技术意见；QA 意见和最终预算授权分别记录。实验与生产资源尚未确认。\n\n何时办理\n计划开始：{plannedStart}。最晚于 {reviewStart} 开始。请于 {reviewComplete} 前提交审阅意见。", quality: "需要判断什么\n判断拟定的小试评价标准和质量证据要求是否充分。本次意见不批准工艺锁定或批次放行。\n\n依据\n{evidence}\n\n仍缺少什么\n您的正式 QA 意见；技术意见和预算授权分别记录。资源尚未确认。\n\n何时办理\n计划开始：{plannedStart}。最晚于 {reviewStart} 开始。请于 {reviewComplete} 前提交审阅意见。", budget: "需要判断什么\n审阅方案 {plan}，授权上限 {amount}，仅包含本请求明确选择的后备范围。请核对各项费用的发生条件；客户授权不等于预订产能。\n\n依据\n{evidence}\n\n仍缺少什么\nEmma 需指定 Elena；Daniel 和 Nina 须均同意当前请求。Ben 可以准备材料，但不能批准费用。\n\n何时办理\nEmma 指定后即可预读，指定提醒时间为 {designation}。技术与 QA 意见预计于 {reviewComplete} 可用；两人均同意后即可授权。原预算计划为 {budgetStart} 至 {budgetEnd}，仅作参照，不是解锁时段。" },
     yourStep: "您的下一步", openTask: "打开任务", startReview: "开始审阅", reviewStarted: "审阅进行中", reviewRecorded: "意见已记录", reviewReason: "审阅意见与理由", confirmReview: "确认审阅意见", reviewBoundary: "本次确认仅针对追加小试，不授权 GMP 开工或批次放行。", reviewWait: "审阅意见提交截止",
     assignSupport: "指派 Ben 准备材料", supportAssigned: "已指派 Ben 准备材料", acceptSupport: "接手材料准备", supportAccepted: "Ben 已接手准备", designate: "指定 Elena", designated: "已指定 Elena 为预算授权人", coverage: "预算工作安排", coveragePending: "Olivia 休假中。待安排 Ben 准备材料，待指定 Elena 审批。", supportOnly: "Ben 可以准备并跟进材料；其签批额度为 {limit}，不能批准费用。", cannotApprove: "Ben 可以准备材料，但没有费用签批权限。", approve: "授权本请求", awaitingAssignment: "请等待 Emma 指派后再接手材料准备。", awaitingDesignation: "Emma 需先指定 Elena，Elena 才能授权。",
     signature: "电子签名 · 全名", reason: "授权理由", signatureHint: "请填写 Elena Torres。本签名仅用于模拟演示。", acknowledge: "我已审阅技术与 QA 意见、最终报价及费用条款，仅授权此处列明的范围和金额。", reviewPeriod: "预算审阅时段：{start} 至 {end}。签字前请审阅完整的技术与 QA 意见、最终报价及费用条款。", signedBy: "签字人", signedAt: "签字时间", authorizationReason: "已记录的理由", budgetBlocked: "授权前需指定 Elena、记录技术与 QA 意见、由 Ben 接手材料准备，并完成预算审阅。",
@@ -84,4 +84,22 @@
   global.DEMO_MESSAGES.zh.decision.guide.resolveReviews = "切换到 Emma · 处理审阅问题";
   global.DEMO_MESSAGES.zh.decision.dependencyCopy.budget = "已指定 Elena；技术与 QA 均同意当前版本；最终报价";
   global.DEMO_MESSAGES.zh.decision.budgetBlocked = "授权须满足：技术与 QA 均同意当前请求、Elena 已被指定、Ben 已接手准备，并已完成预算审阅。";
+  global.DEMO_MESSAGES.zh.decision.timingRules = {
+  "readyNow": "前置条件已满足，现在即可操作；截止时间用于提醒，不是解锁时刻。",
+  "externalWait": "正在等待预定的审阅或外部结果。推进演示时间只模拟等待，不会自动作出决定。",
+  "officeHandoff": "引导等待纽约工作时段再转交客户；操作本身已可用，并非权限锁定。",
+  "budgetAvailable": "技术与 QA 均同意、且已指定 Elena 后即可授权；签字记录使用实际操作时刻。",
+  "budgetReady": "预算授权前置条件已满足",
+  "budgetRecord": "预算审阅与授权一同记录",
+  "recordedAt": "实际操作于",
+  "availableAt": "可办理自",
+  "overdue": "已逾期 · 满足前置条件仍可操作",
+  "needTasks": "需要先创建并分派任务。",
+  "needApprover": "需要 Emma 先指定 Elena。",
+  "needReviews": "需要技术与 QA 均同意当前请求。",
+  "scopeLocked": "任务已创建，本请求的方案与授权范围已锁定。"
+};
+  global.DEMO_MESSAGES.zh.decision.budgetBlocked = "授权须满足：技术与 QA 均同意当前请求、有效审批人已指定、最终报价已提供。Ben 的材料准备不赋予签批权限。";
+  global.DEMO_MESSAGES.zh.decision.reviewWait = "等待审阅结果，预计于";
+  global.DEMO_MESSAGES.zh.decision.errors.TOO_EARLY = "所需的审阅或外部结果尚未可用。";
 })(globalThis);

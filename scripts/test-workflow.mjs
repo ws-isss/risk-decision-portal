@@ -45,7 +45,7 @@ function verifyLinks(state) {
     assert.equal(record.timing.eventRef, record.event);
     assert.equal(record.timing.at, data.events[record.timing.eventRef].at);
     assert.deepEqual(plain(workflow.taskTiming(data, state, record.key)), plain(record.timing));
-    assert.deepEqual(plain(workflow.eventTiming(data, state, record.timing.eventRef)), plain(record.timing));
+    if (record.timing.kind !== "assignedAt") assert.deepEqual(plain(workflow.eventTiming(data, state, record.timing.eventRef)), plain(record.timing));
     if (record.completionTiming) {
       assert.ok(Object.isFrozen(record.completionTiming));
       assert.equal(record.completionTiming.at, data.events[record.completionTiming.eventRef].at);
@@ -125,14 +125,14 @@ assert.equal(task(created, 'P02', 'startTechnical').status, 'readyForReview');
 assert.equal(task(created, 'P03', 'startQuality').status, 'readyForReview');
 assert.equal(workflow.project(data, created).reviewReadiness, 'readyForReview');
 assert.equal(task(created, 'P01', 'budget').created, true);
-assert.equal(task(created, 'P04', 'budget').event, 'budgetStart');
+assert.equal(task(created, 'P04', 'budget').event, 'latestBudgetStart');
 verifyLinks(created);
 session.setViewer('P02'); session.startReview('technical');
 assert.equal(notification(session.getState(), 'P02', 'startTechnical').kind, 'reviewStarted');
 assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'readyForReview');
 assert.equal(workflow.project(data, session.getState()).reviewReadiness, 'inProgress');
 session.setViewer('P03'); session.startReview('quality');
-session.advanceNext();
+session.advanceTo('backupAssigned');
 assert.equal(task(session.getState(), 'P01', 'assignBen').status, 'pendingAssignment', 'Advancing to the handoff time does not assign Ben');
 session.setViewer('P01'); session.assignSupport();
 const supported = session.getState();
@@ -148,7 +148,7 @@ verifyLinks(supported);
 session.setViewer('P05'); session.acceptSupport();
 assert.equal(task(session.getState(), 'P05', 'support').status, 'inProgress');
 assert.equal(notification(session.getState(), 'P05', 'support').kind, 'supportAccepted');
-session.advanceNext();
+session.advanceTo('alternateAssigned');
 assert.equal(workflow.tasks(data, session.getState(), 'P06').length, 0, 'Scheduled designation alone grants no task access');
 session.setViewer('P01'); session.designateApprover();
 const designated = session.getState();
@@ -159,7 +159,7 @@ assert.equal(task(designated, 'P04', 'budget').owner, 'P06', 'Olivia sees the sa
 assert.equal(notification(designated, 'P06', 'budget').kind, 'approverDesignated');
 verifyLinks(designated);
 
-session.advanceNext();
+session.advanceTo('reviewsComplete');
 assert.equal(task(session.getState(), 'P06', 'budget').status, 'pendingReview', 'Scheduled review completion is not an opinion');
 session.setViewer('P02'); session.completeReview('technical', 'Technical scope is reviewable.', 'approved');
 assert.equal(task(session.getState(), 'P02', 'startTechnical').status, 'approved');
@@ -177,7 +177,7 @@ assert.equal(notification(reviewed, 'P06', 'budget').kind, 'reviewsCompleted');
 assert.equal(task(reviewed, 'P07', 'receipt').status, 'waiting');
 verifyLinks(reviewed);
 
-session.advanceNext();
+session.advanceTo('budgetAuthorized');
 assert.equal(task(session.getState(), 'P07', 'receipt').status, 'waiting', 'Scheduled authorization time does not authorize');
 session.setViewer('P06');
 session.authorize({ signature: data.people.P06.name, reason: 'Reviewed the complete package and fee conditions.', acknowledged: true });

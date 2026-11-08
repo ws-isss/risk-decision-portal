@@ -151,9 +151,10 @@
         if (status === "planned" && Date.parse(at) <= Date.parse(state.clock)) status = "pending";
         if (status === "conditionalForecast" && forecastReassessment) status = "historicalEstimate";
         let label = status === "recorded" && t.recordedTimelineEvents[entry.id] ? t.recordedTimelineEvents[entry.id] : t.timelineEvents[entry.id];
+        if (entry.id === "budgetStart" && view.budgetReadyAt) label = record ? text.decision.timingRules.budgetRecord : text.decision.timingRules.budgetReady;
         if (decision?.version > 1 && (entry.id === "latestReviewStart" || entry.id === "reviewsComplete" && !view.reviewsComplete)) { status = "historicalEstimate"; label = f.originalTiming; }
         if (entry.id === "reviewsComplete" && view.reviewsComplete) label += " · " + ["technical","quality"].map(kind=>interpolate(f.summary,{review:f.roles[kind],outcome:f.outcomes[decision.reviews[kind].outcome]})).join(" / ");
-        return { ...entry, at, zone, status, label };
+        return { ...entry, at, zone, status, label, sequence: record?.sequence || 0 };
       });
       const auditOwners = {
         decisionCreated: ["P01"], tasksCreated: ["P01"], supportAccepted: ["P05"],
@@ -179,7 +180,7 @@
         return `<tr data-risk-event="${entry.id}" data-event-status="${status}"${taskKeys.length ? ` data-task-keys="${taskKeys.join(" ")}"` : ""}><td data-field="time" data-label="${escape(t.timelineDate)}">${when}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
       }
       // Recorded actions stay above Now, even when their audit row was added later.
-      const recorded = entries.filter(entry => entry.status === "recorded" && entry.at).sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
+      const recorded = entries.filter(entry => entry.status === "recorded" && entry.at).sort((left, right) => Date.parse(left.at) - Date.parse(right.at) || (left.sequence || 0) - (right.sequence || 0));
       const remaining = entries.filter(entry => entry.status !== "recorded");
       const pendingBrief = view.evidencePublished && !view.tasksCreated ? `<tr data-risk-event="taskBriefPending" data-event-status="pending"><td colspan="4"><strong>${t.reviewReadinessLabels.briefPending}</strong> · ${escape(data.people.P01.name)}<p>${t.reviewReadinessDescriptions.briefPending}</p></td></tr>` : "";
       const rows = recorded.map(renderEntry).join("") + now + pendingBrief + remaining.map(renderEntry).join("");

@@ -196,4 +196,5 @@
       syntheticTerms: "These are simulated quote terms, not WuXi billing policy.", toggle: "Expand cost details"
     }
   } };
+  Object.assign(global.DEMO_MESSAGES.en.notifications.kinds, {"rejected":{"title":"Review outcome: Disagree","body":"{owner} disagrees with the current request. Emma must address the concerns and resubmit; authorization is blocked."},"needsInformation":{"title":"Review outcome: More information required","body":"{owner} requires additional information. Emma owns the response and resubmission; authorization is blocked."},"reviewBlocked":{"title":"Authorization blocked by review outcome","body":"Emma must address the review concerns and resubmit. Technical and QA must both agree to the new version."}});
 })(globalThis);

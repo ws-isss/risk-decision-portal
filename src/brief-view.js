@@ -55,8 +55,8 @@
       .sort((a, b) => (a.key === currentKey ? -1 : b.key === currentKey ? 1 : a.key.localeCompare(b.key)));
     if (!groups.length) return "";
     const contents = groups.map(({ key, history }) => {
-      const separator = key.indexOf(":"), kind = key.slice(0, separator), createdAt = key.slice(separator + 1);
-      const requestName = t.authorizationBasis.requestKinds[kind];
+      const separator = key.indexOf(":"), kind = key.slice(0, separator), createdAt = key.slice(separator + 1).replace(/:v\d+$/, "");
+      const requestName = t.authorizationBasis.requestKinds[kind] + (kind === "main" ? ` · ${text.decision.reviewFlow.version.replace("{version}",key.match(/:v(\d+)$/)?.[1] || 1)}` : "");
       const requestTime = helpers.requestTime ? helpers.requestTime(createdAt) : createdAt;
       const entries = history.map((item, index) => {
         const captured = model.localize(item.brief, text);

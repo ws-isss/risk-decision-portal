@@ -11,6 +11,7 @@
     const decision = state.decision;
     const workflow = global.DEMO_WORKFLOW;
     const view = workflow.project(data, state, person.id);
+    const f = text.decision.reviewFlow;
     const publication = state.publication;
     const resource = decision?.resource;
     const isWuXi = ["P07", "P08"].includes(person.id);
@@ -28,7 +29,7 @@
       return `<time datetime="${value.end}">${dateOnly(value.end, value.executionTimezone)}</time>`;
     };
     const reviewTask = view.records[person.id === "P03" ? "startQuality" : "startTechnical"];
-    const reviewStart = reviewTask ? `<div class="risk-review-start" data-task-key="${reviewTask.key}"><span>${t.reviewDue}</span> <strong>${time(reviewTask.timing.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong></div>` : "";
+    const reviewStart = reviewTask ? `<div class="risk-review-start" data-task-key="${reviewTask.key}"><span>${text.portal.taskTimingLabels[reviewTask.timing.kind]}</span> <strong>${time(reviewTask.timing.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong></div>` : "";
     const supportBoundary = copy(t.supportBoundary, { name: data.people.P05.name });
     const assumption = `<span class="data-tag assumption-tag">${text.common.assumption}</span>`;
 
@@ -44,7 +45,7 @@
       const status = reviewTask.status;
       if (status === "briefPending" || status === "readyForReview") return `<div id="risk-review-progress" class="risk-review-progress" data-review-state="${status}"><span class="status">${t.reviewReadinessLabels[status]}</span><p>${t.reviewReadinessDescriptions[status]}</p></div>${reviewStart}`;
       const at = review.completedAt || review.startedAt;
-      return `<div id="risk-review-progress" class="risk-review-progress" data-review-state="${review.status}"><span class="status">${t.reviewStatuses[review.status]}</span>${at ? `<span>${time(at, person.timezone)} ${zoneLabel(person.timezone)}</span>` : ""}</div>`;
+      return `<div id="risk-review-progress" class="risk-review-progress" data-review-state="${review.status}"><span class="status">${review.status === "completed" ? f.outcomes[review.outcome] : t.reviewStatuses[review.status]}</span>${at ? `<span>${time(at, person.timezone)} ${zoneLabel(person.timezone)}</span>` : ""}</div>`;
     }
 
     function coverageStatus() {
@@ -74,7 +75,7 @@
     }
 
     function budgetFocus() {
-      const designation = decision?.authorization ? resourceHeld ? t.authorizationAndHold : resourceUnavailable ? t.authorizationResourceUnavailable : t.authorizationRecorded : decision?.approver.id ? view.reviewsComplete ? t.designatedReady : t.designatedAwaitingReviews : t.designationPending;
+      const designation = decision?.authorization ? resourceHeld ? t.authorizationAndHold : resourceUnavailable ? t.authorizationResourceUnavailable : t.authorizationRecorded : view.reviewBlockers.length ? f.blocked : decision?.approver.id ? view.reviewsApproved ? t.designatedReady : t.designatedAwaitingReviews : t.designationPending;
       const selected = decision ? `<p class="risk-selected-budget">${copy(t.selectedBudget, { option: decision.planId, amount: money(data.plans[decision.planId].total) })}${decision.fallbackSelected ? ` ${copy(t.fallbackSelected, { cap: money(data.fees.fallbackCap), total: money(data.fees.totals.AWithFallback) })}` : ` ${t.noFallback}`}</p>` : "";
       const feeState = view.rescheduleConfirmed ? copy(t.rescheduleFeesCommitted, {amount: money(view.rescheduleFees)}) : resourceHeld ? copy(t.resourceFeesCommitted, {amount: money(view.resourceFees ?? view.committedFees)}) : decision?.authorization && !resourceUnavailable && decision.planId === "A" ? t.feeStatusPending : t.noCommitment;
       return `<div class="risk-budget-summary"><div><span>${t.quotedAmount} · ${t.commitmentA}</span><strong>${money(a.total)}</strong></div><div><span>${t.quotedAmount} · ${t.commitmentB}</span><strong>${money(b.total)}</strong></div><span class="status" data-risk-fee-incurred="${view.committedFees || 0}">${feeState}</span></div>
@@ -114,6 +115,7 @@
 
     function nextUpdate() {
       const owner = data.people[data.risk.nextUpdateOwnerId];
+      if (view.reviewBlockers.length || decision?.version > 1 && !view.reviewsApproved) return `<section class="review-blockers" data-update-state="reviewBlocked"><h2>${view.reviewBlockers.length ? f.blocked : f.revisedPending}</h2>${view.reviewBlockers.map(b=>`<p><strong>${copy(f.blockedDetail,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})}</strong></p><p class="preserved-text">${escape(b.reason)}</p>`).join("")}<p>${f.briefNext}</p><a class="button button-secondary" href="#decision">${text.decision.openTask}</a></section>`;
       if (view.nextTiming) {
         const timing = view.nextTiming;
         return `<section class="risk-update-strip" data-update-state="${rescheduleStage}" data-timing-kind="${timing.kind}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${text.wuxi.rescheduleFlow.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : timing.kind]}</h2><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong><span>${t.updateOwner}: ${escape(data.people[timing.ownerId].name)}</span><p>${view.rescheduleConfirmed ? t.replacementNoDelivery : rescheduleStatus()}</p></section>`;
@@ -126,7 +128,7 @@
       const resourcePlanned = selectedUpdate === "resourceConfirmed";
       const heading = updated ? t.reviewUpdateAvailable : t.nextUpdate;
       const explanation = resourcePlanned ? t.resourceUpdateExplanation : updated ? t.reviewUpdateExplanation : t.updateExplanation;
-      const opinions = resourcePlanned ? "" : `<ul>${["technical", "quality"].map(kind => `<li data-review-opinion="${kind}">${t.reviewOpinionLabels[kind]}: ${view[kind + "Complete"] ? t.reviewOpinionRecorded : t.reviewOpinionPending}</li>`).join("")}</ul>`;
+      const opinions = resourcePlanned ? "" : `<ul>${["technical", "quality"].map(kind => `<li data-review-opinion="${kind}">${t.reviewOpinionLabels[kind]}: ${view[kind + "Complete"] ? f.outcomes[decision.reviews[kind].outcome] : t.reviewOpinionPending}</li>`).join("")}</ul>`;
       return `<section class="risk-update-strip" data-update-state="${resourcePlanned ? "resourcePlanned" : updated ? "reviewsRecorded" : "reviewsPlanned"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${heading}</h2><strong>${time(update.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span>${resourcePlanned ? `<span class="status">${t.plannedResponse}</span>` : ""}${info("riskNextUpdate", resourcePlanned ? t.resourceUpdatePurpose : t.updatePurpose, note(explanation) + opinions)}</section>`;
     }
 
@@ -148,7 +150,9 @@
         if (status === "deadline" && deadlineMet) status = "satisfiedDeadline";
         if (status === "planned" && Date.parse(at) <= Date.parse(state.clock)) status = "pending";
         if (status === "conditionalForecast" && forecastReassessment) status = "historicalEstimate";
-        const label = status === "recorded" && t.recordedTimelineEvents[entry.id] ? t.recordedTimelineEvents[entry.id] : t.timelineEvents[entry.id];
+        let label = status === "recorded" && t.recordedTimelineEvents[entry.id] ? t.recordedTimelineEvents[entry.id] : t.timelineEvents[entry.id];
+        if (decision?.version > 1 && (entry.id === "latestReviewStart" || entry.id === "reviewsComplete" && !view.reviewsComplete)) { status = "historicalEstimate"; label = f.originalTiming; }
+        if (entry.id === "reviewsComplete" && view.reviewsComplete) label += " · " + ["technical","quality"].map(kind=>interpolate(f.summary,{review:f.roles[kind],outcome:f.outcomes[decision.reviews[kind].outcome]})).join(" / ");
         return { ...entry, at, zone, status, label };
       });
       const auditOwners = {
@@ -159,7 +163,8 @@
       };
       for (const record of audit) {
         if (!auditOwners[record.id] || !view.occurred(record.id)) continue;
-        entries.push({ id: record.id, at: record.at, sequence: record.sequence, zone: person.timezone, status: "recorded", ownerIds: auditOwners[record.id], label: t.recordedTimelineEvents[record.id] });
+        const kind = record.id === "technicalCompleted" ? "technical" : record.id === "qualityCompleted" ? "quality" : null;
+        entries.push({ id: record.id, at: record.at, sequence: record.sequence, zone: person.timezone, status: "recorded", ownerIds: auditOwners[record.id], label: kind ? interpolate(f.summary,{review:f.roles[kind],outcome:f.outcomes[decision.reviews[kind].outcome]}) : t.recordedTimelineEvents[record.id] });
       }
       if (view.occurred("riskPublished")) entries.push({ id:"riskPublished", at:publication.publishedAt, zone:person.timezone, status:"recorded", ownerIds:["P07"], label:t.recordedTimelineEvents.riskPublished });
       function renderEntry(entry) {
@@ -192,6 +197,7 @@
     }
 
     function nextAction() {
+      if (view.reviewBlockers.length) return f.next;
       if (rescheduleStage !== "none") return t.nextActions[rescheduleStage === "confirmed" ? "rescheduleConfirmed" : rescheduleStage];
       if (resourceUnavailable) return view.resourceRejected ? t.nextActions.requestReschedule : t.nextActions.returnResponse;
       if (resourceHeld) return view.resourceConfirmed ? t.nextActions.heldStudyNext : t.nextActions.returnResponse;
@@ -204,7 +210,7 @@
         if (!decision.support.assignedAt) return t.nextActions.assignSupport;
         if (!decision.support.acceptedAt) return t.nextActions.acceptSupport;
         if (!decision.approver.id) return t.nextActions.designateApprover;
-        return view.reviewsComplete ? t.nextActions.followAuthorization : t.nextActions.followReviews;
+        return view.reviewsApproved ? t.nextActions.followAuthorization : t.nextActions.followReviews;
       }
       if (["P02", "P03"].includes(person.id)) {
         const review = decision.reviews[person.id === "P02" ? "technical" : "quality"];
@@ -212,7 +218,7 @@
       }
       if (person.id === "P04") return t.nextActions.leaveCoverage;
       if (person.id === "P05") return t.nextActions[!decision.support.assignedAt ? "awaitSupportAssignment" : !decision.support.acceptedAt ? "acceptPreparation" : "prepareBudget"];
-      if (person.id === "P06") return t.nextActions[!decision.approver.id ? "awaitDesignation" : !view.reviewsComplete ? "awaitReviews" : "authorizeBudget"];
+      if (person.id === "P06") return t.nextActions[!decision.approver.id ? "awaitDesignation" : !view.reviewsApproved ? "awaitReviews" : "authorizeBudget"];
       return t.nextActions.nonbinding;
     }
 

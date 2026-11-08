@@ -472,11 +472,13 @@ try {
   assert.equal(await page.locator('[data-confirmation-key="technical"]').getAttribute('data-status'), 'inProgress');
   assert.equal(await page.locator('[data-confirmation-key="quality"]').getAttribute('data-status'), 'inProgress');
   await role(page, 'P02');
+  await page.locator('#review-technical-form select[name="outcome"]').selectOption('approved');
   await page.locator('#review-technical-form [type="submit"]').click();
   prerequisiteDraft = await generate(page, 'beforeAuthorization');
   pendingPrerequisites(prerequisiteDraft, ['QA study-scope review']);
   await preview(page);
   await role(page, 'P03');
+  await page.locator('#review-quality-form select[name="outcome"]').selectOption('approved');
   await page.locator('#review-quality-form [type="submit"]').click();
   await advanceTo(page, '2026-11-12T17:00:00-05:00');
   await sharedReadonly(page, { state: 'stale' });

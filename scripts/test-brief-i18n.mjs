@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const context = { Intl, Date };
-for (const file of ['src/data.js', 'src/locales/en.js', 'src/locales/zh.js', 'src/locales/brief-en.js', 'src/locales/brief-zh.js', 'src/core.js', 'src/workflow.js', 'src/brief.js', 'src/brief-view.js']) vm.runInNewContext(readFileSync(path.join(root, file), 'utf8'), context);
+for (const file of ['src/data.js', 'src/locales/en.js', 'src/locales/zh.js', 'src/locales/decision-en.js', 'src/locales/brief-en.js', 'src/locales/decision-zh.js', 'src/locales/brief-zh.js', 'src/core.js', 'src/workflow.js', 'src/brief.js', 'src/brief-view.js']) vm.runInNewContext(readFileSync(path.join(root, file), 'utf8'), context);
 const { DEMO_DATA: data, DEMO_CORE: core, DEMO_BRIEF: model, DEMO_BRIEF_VIEW: view, DEMO_MESSAGES: messages } = context;
 const session = core.createSession(data);
 const fixtures = { drafts: {technical:'测试技术范围',quality:'测试质量范围',budget:'测试预算范围'}, reviewReasons: {technical:'同意小试范围',quality:'同意证据要求'}, authorizationReason:'授权所列范围' };

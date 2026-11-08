@@ -9,7 +9,7 @@
     const decision = state.decision;
     if (!decision?.createdAt) return null;
     const reschedule = decision.resource?.rescheduleRequest?.decision;
-    return reschedule?.at ? `reschedule:${reschedule.at}` : `main:${decision.createdAt}`;
+    return reschedule?.at ? `reschedule:${reschedule.at}` : global.DEMO_CORE.mainRequestKey(decision);
   }
 
   function currentAttachment(attachments, current) {
@@ -21,7 +21,7 @@
   function history(attachments, { state, requestKey: key = requestKey({ state }) }) {
     if (!["P01", "P06"].includes(state.viewer) || state.publication?.status !== "published") return [];
     const d = state.decision;
-    const keys = d ? [`main:${d.createdAt}`, d.resource?.rescheduleRequest?.decision?.at ? `reschedule:${d.resource.rescheduleRequest.decision.at}` : null] : [];
+    const keys = d ? [global.DEMO_CORE.mainRequestKey(d), ...(d.reviewHistory || []).map(v => v.requestKey), d.resource?.rescheduleRequest?.decision?.at ? `reschedule:${d.resource.rescheduleRequest.decision.at}` : null] : [];
     if (!key || !keys.includes(key)) return [];
     return (attachments || []).filter(item => item.requestKey === key).slice().sort((a, b) => a.version - b.version);
   }
@@ -118,6 +118,7 @@
       },
       business: {
         requestKey: requestKey({ state }),
+        reviewVersion: d?.version, reviewSupplement: d?.supplement, reviewOutcomes: d ? Object.fromEntries(Object.entries(d.reviews).map(([kind,r])=>[kind,{outcome:r.outcome,reason:r.reason,requestVersion:r.requestVersion}])) : null,
         planId: d?.planId || null, fallbackSelected: Boolean(d?.fallbackSelected),
         technicalComplete: view.technicalComplete, qualityComplete: view.qualityComplete, approverDesignated: view.approverDesignated,
         authorized: view.authorized, authorization: view.authorized ? { by: d.authorization.by, at: d.authorization.at, total: d.authorization.total } : null,
@@ -179,6 +180,9 @@
     let opening = t.decisions[key];
     if (key === "beforeAuthorization" && d) opening = d.fallbackSelected ? t.selectedFallbackDecision : t.selectedDecision;
     if (key === "authorized" && d?.fallbackSelected) opening = t.authorizedFallbackDecision;
+    const f = text.decision.reviewFlow;
+    const blockers = view.reviewBlockers.map(b=>interpolate(f.summary,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})).join(t.listSeparator);
+    if (blockers) opening = interpolate(f.briefBlocked,{version:d.version,blockers});
     let currentSummary;
     if (key === "beforeAuthorization") {
       const rows = ["A", "B"].map(id => {
@@ -200,10 +204,12 @@
       !view.approverDesignated && t.prerequisites.approver
     ].filter(Boolean);
     const prerequisites = key === "beforeAuthorization"
-      ? missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join(t.listSeparator || "; ") }) : t.prerequisitesComplete
+      ? blockers ? f.next : d?.version > 1 && !view.reviewsApproved ? interpolate(f.briefPending,{version:d.version}) : missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join(t.listSeparator || "; ") }) : t.prerequisitesComplete
       : "";
     let nextUpdate;
-    if (view.nextTiming) {
+    if (blockers || d?.version > 1 && !view.reviewsApproved) {
+      nextUpdate = f.briefNext;
+    } else if (view.nextTiming) {
       const timing = view.nextTiming;
       const template = timing.kind === "customerActionDue" ? t.nextCustomer : key === "confirmed" ? t.nextReassessment : t.nextUnavailable;
       nextUpdate = interpolate(template, { ...values, owner: data.people[timing.ownerId].name, time: localTime(data.events[timing.eventRef].at, timing.timezone) });
@@ -212,7 +218,7 @@
       nextUpdate = interpolate(t.nextHeld, { ...values, time: localTime(firstAnalysis.end, firstAnalysis.executionTimezone) });
     } else {
       const publishedEvent = state.publication.nextUpdateEvent || data.risk.nextUpdateEvent;
-      const resourceUpdate = view.authorized || view.reviewsComplete || publishedEvent === "resourceConfirmed";
+      const resourceUpdate = view.authorized || view.reviewsApproved || publishedEvent === "resourceConfirmed";
       const optionBQuote = resourceUpdate && d?.planId === "B";
       const eventId = optionBQuote ? "rescheduleQuoteReturned" : resourceUpdate ? "resourceConfirmed" : publishedEvent;
       const template = resourceUpdate ? view.authorized ? t.nextResource : optionBQuote ? t.nextConditionalQuote : t.nextConditionalResource : t.nextReview;
@@ -239,7 +245,7 @@
       snapshot: fingerprint({ data, state }), generatedAt: state.clock, statusKey: key,
       edited: false, previewed: false,
       metadata: {
-        title: `${data.project.id} · ${t.title}`, status: t.status[key] || t.status.unavailable,
+        title: `${data.project.id} · ${t.title}`, status: blockers ? f.blocked : t.status[key] || t.status.unavailable,
         asOf: localTime(state.clock, customerZone), timezoneLabel: text.common.easternTime, sourceVersions,
         labels: [text.common.demo, text.common.assumption, t.simulated],
         sourceNote: t.sourceNote

@@ -182,8 +182,8 @@ s.enterChapter('selection'); s.selectPlan('B'); s.saveDrafts(fixtures.drafts); s
 s.setViewer('P02'); s.startReview('technical'); s.setViewer('P03'); s.startReview('quality'); s.advanceNext();
 s.setViewer('P01'); s.assignSupport(); s.setViewer('P05'); s.acceptSupport(); s.advanceNext();
 s.setViewer('P01'); s.designateApprover(); s.advanceNext();
-s.setViewer('P02'); s.completeReview('technical',fixtures.reviewReasons.technical);
-s.setViewer('P03'); s.completeReview('quality',fixtures.reviewReasons.quality); s.advanceNext();
+s.setViewer('P02'); s.completeReview('technical',fixtures.reviewReasons.technical, 'approved');
+s.setViewer('P03'); s.completeReview('quality',fixtures.reviewReasons.quality, 'approved'); s.advanceNext();
 s.setViewer('P06'); s.authorize({signature:data.people.P06.name,reason:fixtures.authorizationReason,acknowledged:true});
 assert.equal(s.getAdvanceInfo().nextEvent,'rescheduleRequested','B enters the separate rescheduling schedule instead of the A resource hold flow');
 s.setViewer('P07'); assert.throws(() => s.startResourceReview(), /ORIGINAL_WINDOW_ONLY/);
@@ -338,8 +338,8 @@ for (const fallback of [false,true]) {
   a.setViewer('P02'); a.startReview('technical'); a.setViewer('P03'); a.startReview('quality'); a.advanceNext();
   a.setViewer('P01'); a.assignSupport(); a.setViewer('P05'); a.acceptSupport(); a.advanceNext();
   a.setViewer('P01'); a.designateApprover(); a.advanceNext();
-  a.setViewer('P02'); a.completeReview('technical',fixtures.reviewReasons.technical);
-  a.setViewer('P03'); a.completeReview('quality',fixtures.reviewReasons.quality); a.advanceNext();
+  a.setViewer('P02'); a.completeReview('technical',fixtures.reviewReasons.technical, 'approved');
+  a.setViewer('P03'); a.completeReview('quality',fixtures.reviewReasons.quality, 'approved'); a.advanceNext();
   a.setViewer('P06'); a.authorize({signature:data.people.P06.name,reason:fixtures.authorizationReason,acknowledged:true}); a.advanceNext();
   a.setViewer('P07'); a.startResourceReview(); a.advanceNext(); a.setViewer('P08'); a.respondScheduling({outcome:'unavailable',reason:fixtures.rejectionReason});
   a.setViewer('P07'); a.returnResourceReceipt(); a.advanceNext(); a.requestReschedule();

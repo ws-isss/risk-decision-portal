@@ -48,6 +48,7 @@
 
   // Commercial authority is captured from the structured request and quotation,
   // never from the editable management brief or the current progress narrative.
+  const mainRequestKey = d => `main:${d.createdAt}${(d.version || 1) > 1 ? `:v${d.version}` : ""}`;
   function authorizationContext(data, state, kind) {
     const d = state.decision;
     if (!d) return null;
@@ -74,10 +75,11 @@
     if (d.fallbackSelected) quotes.push({ id: data.plans.B.quoteRef, version: data.reports[data.plans.B.quoteRef].version, amount: fallbackCap, scopeKey: "fallbackRescheduling" });
     const feeKeys = d.planId === "A" ? ["shared", "expedite", "hold"] : ["shared", "reschedule"];
     return deepFreeze({
-      request: { key: `main:${d.createdAt}`, kind: "main", planId: d.planId, createdAt: d.createdAt },
+      request: { key: mainRequestKey(d), kind: "main", planId: d.planId, createdAt: d.createdAt, version: d.version || 1 },
       quotes,
       scope: {
         currency: data.fees.currency,
+        reviewScope: d.supplement || "",
         amount: d.fallbackSelected ? data.fees.totals.AWithFallback : data.fees.totals[d.planId],
         planAmount: data.fees.totals[d.planId], fallbackCap, window: plan.window.at,
         studyPlan: { id: "EXP-001", version: data.reports["EXP-001"].version },
@@ -138,7 +140,8 @@
       if (!state.decision) return null;
       let entry = state.decision.audit.find(item => item.id === id);
       if (!entry) {
-        entry = { id, at: recordedAt, by: state.viewer, sequence: state.decision.audit.length + 1 };
+        state.decision.nextAuditSequence = (state.decision.nextAuditSequence || 0) + 1;
+        entry = { id, at: recordedAt, by: state.viewer, sequence: state.decision.nextAuditSequence };
         if (timeStatus) entry.timeStatus = timeStatus;
         state.decision.audit.push(entry);
       }
@@ -157,6 +160,8 @@
     }
     function review(kind) { ensure(Object.hasOwn(reviewOwners, kind), "UNKNOWN_REVIEW"); role(reviewOwners[kind]); return tasksRequired().reviews[kind]; }
     function bothReviews(d) { return d.reviews.technical.status === "completed" && d.reviews.quality.status === "completed"; }
+    function reviewsApproved(d) { return bothReviews(d) && Object.values(d.reviews).every(r => r.outcome === "approved" && r.requestVersion === d.version); }
+    function reviewBlocked(d) { return d && Object.values(d.reviews).some(r => r.status === "completed" && r.outcome !== "approved"); }
     function getAdvanceInfo() {
       if (state.publication.status === "draft") {
         return Date.parse(state.clock) < Date.parse(data.events.materialReady.at)
@@ -184,6 +189,8 @@
       const d = state.decision;
       let blockKey = null;
       if (!d) blockKey = "choosePlan";
+      else if (reviewBlocked(d)) blockKey = "resolveReviews";
+      else if (d.version > 1 && !reviewsApproved(d)) blockKey = "completeReviews";
       else if (!d.tasksCreated) blockKey = "createTasks";
       else if (nextEvent === "backupAssigned" && Object.values(d.reviews).some(r => r.status === "notStarted")) blockKey = "startReviews";
       else if (nextEvent === "alternateAssigned" && !d.support.assignedAt) blockKey = "assignSupport";
@@ -237,10 +244,10 @@
           record("planChanged" + planId);
         } else {
           state.decision = {
-            planId, fallbackSelected: false, tasksCreated: false,
+            planId, version: 1, supplement: "", reviewHistory: [], fallbackSelected: false, tasksCreated: false,
             drafts: { technical: "", quality: "", budget: "" },
             createdAt: state.clock, tasksCreatedAt: null,
-            reviews: Object.fromEntries(Object.entries(reviewOwners).map(([key, owner]) => [key, { owner, status: "notStarted", startedAt: null, completedAt: null, reason: "" }])),
+            reviews: Object.fromEntries(Object.entries(reviewOwners).map(([key, owner]) => [key, { owner, requestVersion: 1, outcome: null, status: "notStarted", startedAt: null, completedAt: null, reason: "" }])),
             support: { owner: "P05", assignedAt: null, acceptedAt: null },
             approver: { id: null, designatedAt: null }, authorization: null, audit: [],
             resource: { startedAt: null, scheduling: null, receipt: null, rescheduleRequest: null }
@@ -279,7 +286,7 @@
       startReview(kind) {
         const r = review(kind);
         if (r.status !== "notStarted") return snapshot();
-        at(data.initialClock);
+        if (state.decision.version === 1) at(data.initialClock);
         r.status = "inProgress"; r.startedAt = state.clock; record(kind + "Started");
         return changed();
       },
@@ -305,14 +312,30 @@
         d.approver.id = "P06"; d.approver.designatedAt = state.clock; record("alternateAssigned");
         return changed();
       },
-      completeReview(kind, reason) {
+      completeReview(kind, reason, outcome) {
         const r = review(kind);
         if (r.status === "completed") return snapshot();
         ensure(r.status === "inProgress", "REVIEW_NOT_STARTED");
-        atEvent("reviewsComplete");
+        if (state.decision.version === 1) atEvent("reviewsComplete");
         ensure(typeof reason === "string" && reason.trim(), "REASON_REQUIRED");
-        r.status = "completed"; r.completedAt = state.clock; r.reason = reason.trim(); record(kind + "Completed");
+        ensure(["approved", "needsInformation", "rejected"].includes(outcome), "REVIEW_OUTCOME_REQUIRED");
+        r.status = "completed"; r.outcome = outcome; r.requestVersion = state.decision.version; r.completedAt = state.clock; r.reason = reason.trim(); record(kind + "Completed");
         if (bothReviews(state.decision)) record("reviewsComplete");
+        return changed();
+      },
+      resubmitReviews(supplement) {
+        role("P01"); const d = tasksRequired();
+        ensure(!d.authorization, "DECISION_LOCKED");
+        ensure(reviewBlocked(d), "REVIEW_RESUBMIT_NOT_AVAILABLE");
+        ensure(typeof supplement === "string" && supplement.trim(), "SUPPLEMENT_REQUIRED");
+        ensure(Date.parse(state.clock) <= Date.parse(data.events.budgetAuthorized.at), "REVIEW_TIMING_EXPIRED");
+        const reviewIds = ["decisionCreated", "tasksCreated", "technicalStarted", "qualityStarted", "technicalCompleted", "qualityCompleted", "reviewsComplete"];
+        d.reviewHistory.push({ version: d.version, requestKey: mainRequestKey(d), createdAt: d.createdAt, submittedAt: d.tasksCreatedAt, supplement: d.supplement, reviews: JSON.parse(JSON.stringify(d.reviews)), audit: d.audit.filter(item => reviewIds.includes(item.id)) });
+        d.version += 1; d.supplement = supplement.trim(); d.tasksCreatedAt = state.clock;
+        d.reviews = Object.fromEntries(Object.entries(reviewOwners).map(([key, owner]) => [key, { owner, requestVersion: d.version, outcome: null, status: "notStarted", startedAt: null, completedAt: null, reason: "" }]));
+        d.audit = d.audit.filter(item => !reviewIds.includes(item.id));
+        state.eventIds = state.eventIds.filter(id => !reviewIds.includes(id));
+        record("decisionCreated"); record("tasksCreated"); record("requestResubmittedV" + d.version);
         return changed();
       },
       authorize(values) {
@@ -320,6 +343,7 @@
         if (d.authorization) { ensure(authorizationMatches(data, state, "main"), "NEW_AUTHORIZATION_REQUIRED"); return snapshot(); }
         ensure(d.approver.id === "P06", "APPROVER_REQUIRED");
         ensure(bothReviews(d), "REVIEWS_REQUIRED");
+        ensure(reviewsApproved(d), "REVIEWS_NOT_APPROVED");
         ensure(d.support.acceptedAt, "SUPPORT_ACCEPTANCE_REQUIRED");
         atEvent("budgetAuthorized");
         ensure(values && typeof values.signature === "string" && values.signature.trim() === data.people.P06.name, "INVALID_SIGNATURE");
@@ -463,8 +487,8 @@
           if (id !== "coverage") {
             api.assignSupport(); api.setViewer("P05"); api.acceptSupport(); api.advanceNext();
             api.setViewer("P01"); api.designateApprover(); api.advanceNext();
-            api.setViewer("P02"); api.completeReview("technical", fixtures.reviewReasons.technical);
-            api.setViewer("P03"); api.completeReview("quality", fixtures.reviewReasons.quality); api.advanceNext(); api.setViewer("P06");
+            api.setViewer("P02"); api.completeReview("technical", fixtures.reviewReasons.technical, "approved");
+            api.setViewer("P03"); api.completeReview("quality", fixtures.reviewReasons.quality, "approved"); api.advanceNext(); api.setViewer("P06");
             if (["hold", "unavailable"].includes(id)) {
               api.authorize({ signature: data.people.P06.name, reason: fixtures.authorizationReason, acknowledged: true });
               api.advanceNext(); api.setViewer("P07");
@@ -486,5 +510,5 @@
     return Object.freeze(api);
   }
 
-  global.DEMO_CORE = Object.freeze({ validLocalDate, calendarGap, formatInstant, formatLocalDate, authorizationContext, authorizationMatches, createSession });
+  global.DEMO_CORE = Object.freeze({ validLocalDate, calendarGap, formatInstant, formatLocalDate, mainRequestKey, authorizationContext, authorizationMatches, createSession });
 })(globalThis);

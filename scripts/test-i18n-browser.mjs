@@ -160,6 +160,7 @@ async function oneStep(page, scenario, outcome = 'held') {
       await page.locator('#confirm-resource-response').click();
     } else {
       assert.ok(actionSelectors[key], `Known guided action ${key}`);
+      if (key === 'completeTechnical' || key === 'completeQuality') await page.locator('#review-' + (key === 'completeTechnical' ? 'technical' : 'quality') + '-form select[name="outcome"]').selectOption('approved');
       await page.locator(actionSelectors[key]).click();
       if (key === 'draft') await page.locator('#confirm-task-briefs').waitFor();
       if (key === 'managementBrief' || key === 'updateBrief') {

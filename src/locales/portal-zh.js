@@ -56,4 +56,7 @@
     statuses: { briefPending: "任务说明待确认", readyForReview: "可以开始审阅", draft: "草稿", resourceReview: "资源评估中", responseReady: "回复已就绪，待 Alex 回传", holdConfirmed: "药明已确认暂留", resourceUnavailable: "无法暂留", reschedulePending: "等待药明确认", pendingReschedule: "等待药明确认", published: "已发布" },
     guides: { editRisk: "切换到 Alex · 审阅风险草稿", advancePublication: "推进至证据包齐备", publishRisk: "切换到 Alex · 向客户发布", startResources: "切换到 Alex · 开始资源评估", scheduling: "切换到 Mei · 记录资源回复", replyReceipt: "切换到 Alex · 回传客户", reschedule: "切换到 Alex · 询问窗口和报价", rescheduleQuote: "切换到 Mei · 回复窗口和报价", returnQuote: "切换到 Alex · 向客户回传报价", rescheduleDecision: "切换到 Emma · 发起改期决策", rescheduleAuthorization: "切换到 Elena · 授权改期", confirmReschedule: "切换到 Alex · 正式确认改期", managementBrief: "切换到 Emma · 生成管理层简报", previewBrief: "切换到 Emma · 预览管理层简报", updateBrief: "切换到 Emma · 更新管理层简报", attachBrief: "切换到 Emma · 附简报至决策请求" }
   };
+  Object.assign(global.DEMO_MESSAGES.zh.portal.statuses, {"approved":"同意","needsInformation":"需要补充信息","rejected":"不同意","reviewBlocked":"授权受阻"});
+  global.DEMO_MESSAGES.zh.portal.taskTimingLabels.assignedAt = "重新分派于";
+  global.DEMO_MESSAGES.zh.portal.actions.resolveReviews = {"title":"授权受阻","detail":"Emma：处理审阅提出的问题并重新提交。两位审阅人均同意当前请求后，才能授权。"};
 })(globalThis);

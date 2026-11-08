@@ -179,6 +179,7 @@ async function completeReviews(targetPage) {
   const technical = targetPage.locator('#review-technical-form');
   assert.ok((await technical.locator('textarea[name="reason"]').inputValue()).trim(), 'Example rationale remains editable before confirmation');
   await technical.locator('textarea[name="reason"]').fill('');
+  await technical.locator('select[name="outcome"]').selectOption('approved');
   await technical.locator('[type="submit"]').click();
   assert.equal(await technical.evaluate(node => node.checkValidity()), false, 'Deleting an example reason still requires a nonempty rationale');
   const technicalReason = 'Accept the bounded existing-method study and recovery criteria; no GMP readiness approval.';
@@ -189,8 +190,9 @@ async function completeReviews(targetPage) {
   await targetPage.locator('#decision').waitFor();
   await guide(targetPage, 'completeTechnical', 'P02', '#review-technical-form textarea[name="reason"]');
   assert.equal(await technical.locator('textarea[name="reason"]').inputValue(), technicalReason, 'Edited rationale survives role and page navigation');
+  await technical.locator('select[name="outcome"]').selectOption('approved');
   await technical.locator('[type="submit"]').click();
-  assert.match(await confirmation(targetPage, 'technical').innerText(), /confirmed|complete/i);
+  assert.match(await confirmation(targetPage, 'technical').innerText(), /Agree/i);
   await notificationToTask(targetPage, 'startTechnical', 'reviewCompleted');
   await role(targetPage, 'P06');
   assert.equal(await targetPage.locator('#authorize-budget').isDisabled(), true, 'One review is insufficient for budget authorization');
@@ -198,8 +200,9 @@ async function completeReviews(targetPage) {
   const quality = targetPage.locator('#review-quality-form');
   assert.ok((await quality.locator('textarea[name="reason"]').inputValue()).trim(), 'QA rationale starts with editable example text');
   await quality.locator('textarea[name="reason"]').fill('Accept the defined quality evidence and evaluation scope only; batch release remains separate.');
+  await quality.locator('select[name="outcome"]').selectOption('approved');
   await quality.locator('[type="submit"]').click();
-  assert.match(await confirmation(targetPage, 'quality').innerText(), /confirmed|complete/i);
+  assert.match(await confirmation(targetPage, 'quality').innerText(), /Agree/i);
 }
 async function sign(targetPage) {
   // This is the only guided brief checkpoint. All earlier guide calls assert
@@ -337,7 +340,7 @@ try {
   await role(page, 'P06');
   assert.equal(await page.locator('#authorize-budget').isDisabled(), true, 'Designation does not bypass technical and QA prerequisites');
   await advance(page, stops[2]);
-  assert.ok(!/confirmed|complete/i.test(await confirmation(page, 'technical').getAttribute('data-status')), 'Time advancement alone does not confirm a review');
+  assert.ok(!/Agree/i.test(await confirmation(page, 'technical').getAttribute('data-status')), 'Time advancement alone does not confirm a review');
   await noAdvance(page);
   await completeReviews(page);
   await role(page, 'P01');

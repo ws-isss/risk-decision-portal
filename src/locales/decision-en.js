@@ -9,13 +9,13 @@
     fallbackSelectedFee: "Optional A fallback selected: an additional cap of {cap}, with a known total up to {total}. Rescheduling is charged only when confirmed. Additional technical work is excluded; the same study is not charged twice.",
     sourceTitle: "Synthetic decision evidence", experimentScope: "Existing samples and methods only; the bounded study covers purification screening, candidate confirmation, HMW, recovery and the agreed analytical assessment. Additional method development or expanded research is outside this quote.",
     confirmations: "Four confirmations", confirmationNames: { technical: "Technical", quality: "Quality", budget: "Budget", schedule: "Scheduling" }, owner: "Owner", status: "Status", dependencies: "Depends on",
-    dependencyCopy: { technical: "Assigned task with confirmed brief; published SEC-001 and EXP-001", quality: "Assigned task with confirmed brief; published SEC-001 and EXP-001", budget: "Elena designated; technical and QA opinions; final quote", schedule: "Customer authorization, then WuXi resource assessment" },
+    dependencyCopy: { technical: "Assigned task with confirmed brief; published SEC-001 and EXP-001", quality: "Assigned task with confirmed brief; published SEC-001 and EXP-001", budget: "Elena designated; Agree from technical and QA on this request version; final quote", schedule: "Customer authorization, then WuXi resource assessment" },
     statuses: { notStarted: "Not started", draft: "Draft · not assigned", inProgress: "In progress", taskCompleted: "Confirmed", pendingDesignation: "Designation pending", pendingReview: "Waiting for technical + QA", readyForAuthorization: "Ready for authorization", waiting: "Waiting for customer authorization", ready: "Awaiting WuXi confirmation" },
     draft: "Draft task briefs", drafting: "Drafting…", simulated: "AI draft (simulated)", draftReady: "Drafts ready", draftsIntro: "Review and edit each brief. Tasks are created only when Emma confirms below.", confirmDrafts: "Confirm and create 3 tasks", tasksCreated: "3 tasks created", briefs: "Task briefs", taskNames: { technical: "Daniel · technical review", quality: "Nina · QA review", budget: "Budget authorization owner" },
     template: { technical: "Judgment required\nReview the proposed additional small-scale study scope and technical evaluation requirements; assess more than aggregates alone. This does not approve GMP production.\n\nEvidence\n{evidence}\n\nStill missing\nYour recorded technical opinion; QA opinion and final budget authorization remain separate. Laboratory and production resources are not confirmed.\n\nStart\nPlanned start: {plannedStart}. Start by {reviewStart}. Complete the review opinion by {reviewComplete}.", quality: "Judgment required\nDecide whether the proposed study evaluation criteria and quality evidence requirements are adequate. This does not approve process lock or batch release.\n\nEvidence\n{evidence}\n\nStill missing\nYour recorded QA opinion; technical opinion and budget authorization remain separate. Resources are unconfirmed.\n\nStart\nPlanned start: {plannedStart}. Start by {reviewStart}. Complete the review opinion by {reviewComplete}.", budget: "Judgment required\nReview option {plan} and authorize up to {amount}, including only the explicitly selected fallback. Review each fee trigger; authorization does not reserve capacity.\n\nEvidence\n{evidence}\n\nStill missing\nEmma must designate Elena; Daniel and Nina must record their opinions. Ben may prepare the package but cannot approve.\n\nStart\nPre-read on designation at {designation}. The technical and QA review opinions are due {reviewComplete} for the budget authorization. Final budget review: {budgetStart} to {budgetEnd}." },
     yourStep: "Your next step", openTask: "Open task", startReview: "Start review", reviewStarted: "Review in progress", reviewRecorded: "Opinion recorded", reviewReason: "Review opinion and rationale", confirmReview: "Confirm review opinion", reviewBoundary: "This confirmation concerns the additional small-scale study only. It does not authorize GMP start or batch release.", reviewWait: "Review opinion due by",
     assignSupport: "Assign preparation to Ben", supportAssigned: "Preparation assigned to Ben", acceptSupport: "Accept preparation task", supportAccepted: "Ben accepted preparation", designate: "Designate Elena", designated: "Elena is the designated budget approver", coverage: "Budget coverage", coveragePending: "Olivia is on leave. Preparation transfer to Ben and approval designation to Elena are pending.", supportOnly: "Ben can prepare and follow up on the package. His approval limit is {limit}; he cannot approve fees.", cannotApprove: "Ben can prepare the materials, but has no fee approval authority.", approve: "Authorize request", awaitingAssignment: "Await Emma’s assignment before accepting preparation.", awaitingDesignation: "Emma must designate Elena before she can approve.",
-    signature: "Electronic signature · full name", reason: "Authorization reason", signatureHint: "Enter Elena Torres exactly. This is a simulated electronic signature for the demo.", acknowledge: "I have reviewed the technical and QA opinions, the final quote and fee conditions, and authorize only the scope and amount shown.", reviewPeriod: "Budget review period: {start}–{end}. Review the complete technical and QA opinions, final quote and fee conditions before signing.", signedBy: "Signed by", signedAt: "Signed at", authorizationReason: "Recorded reason", budgetBlocked: "Authorization requires Elena’s designation, both recorded review opinions, Ben’s preparation acceptance, and completion of the budget review.",
+    signature: "Electronic signature · full name", reason: "Authorization reason", signatureHint: "Enter Elena Torres exactly. This is a simulated electronic signature for the demo.", acknowledge: "I have reviewed the technical and QA opinions, the final quote and fee conditions, and authorize only the scope and amount shown.", reviewPeriod: "Budget review period: {start}–{end}. Review the complete technical and QA opinions, final quote and fee conditions before signing.", signedBy: "Signed by", signedAt: "Signed at", authorizationReason: "Recorded reason", budgetBlocked: "Authorization requires Elena’s designation, both reviewers agreeing to the current request version, Ben’s preparation acceptance, and completion of the budget review.",
     fillExampleSignature: "Fill example signature",
     exampleReasonHint: "Example rationale · edit before confirming.",
     examples: {
@@ -46,4 +46,42 @@
     projectStatus: "Project status", original: "Original window", estimated: "Estimated", indUnset: "Date not set", draftSaved: "Task brief drafts saved. No tasks have been created.", createdNotice: "Tasks created once; shared status and notifications updated.", advanceNotice: "Scenario time advanced. No task was automatically confirmed.", authorizationNotice: "Customer authorization recorded. Awaiting WuXi confirmation.",
     errors: { ROLE_NOT_ALLOWED: "This role cannot perform this action.", TASKS_REQUIRED: "Emma must confirm the task briefs and assign the review tasks first.", TOO_EARLY: "This action is not yet due. Check its planned work period and prerequisites.", WRONG_SCENARIO_TIME: "This action is available during its planned work period.", REVIEWS_REQUIRED: "Both technical and QA opinions are required.", SUPPORT_ACCEPTANCE_REQUIRED: "Ben must accept the preparation task first.", APPROVER_REQUIRED: "Emma must designate Elena first.", INVALID_SIGNATURE: "Enter the designated approver’s full name: Elena Torres.", REASON_REQUIRED: "Enter a reason before confirming.", ACKNOWLEDGEMENT_REQUIRED: "Confirm that you have reviewed the technical and QA opinions, final quote and fee conditions.", REQUEST_LOCKED: "The request is fixed after tasks are created. Reset to start a different request.", EMPTY_TASK_BRIEF: "Complete all three editable briefs before creating tasks.", DECISION_REQUIRED: "Select an option to create a request first.", REVIEW_NOT_STARTED: "Start this review before recording its opinion.", DECISION_LOCKED: "The request is already authorized.", FALLBACK_ONLY_FOR_A: "Fallback authorization applies only to option A.", default: "Complete the stated prerequisites before continuing." }
   };
+  global.DEMO_MESSAGES.en.decision.reviewFlow = {
+  "outcome": "Review outcome · required",
+  "choose": "Select an outcome…",
+  "outcomes": {
+    "approved": "Agree",
+    "needsInformation": "More information required",
+    "rejected": "Disagree"
+  },
+  "roles": {
+    "technical": "Technical",
+    "quality": "QA"
+  },
+  "summary": "{review}: {outcome}",
+  "blocked": "Authorization blocked",
+  "blockedDetail": "{review}: {outcome}. Owner: Emma. Add supporting evidence or revise the scope, then resubmit for both reviews.",
+  "next": "Emma: address the review concerns and resubmit. Both reviewers must agree to the current request before authorization.",
+  "supplement": "Additional evidence / revised scope",
+  "supplementHint": "Describe the response to the review concerns. This creates a new request version; quoted fees and production dates stay unchanged. Any changed scope is included in the new authorization basis.",
+  "resubmit": "Resubmit as request v{version}",
+  "version": "Request v{version}",
+  "history": "Earlier request reviews",
+  "expired": "Applies to request v{version} · superseded, no longer valid for authorization",
+  "currentScope": "Current request supplement",
+  "recheck": "Both Daniel and Nina must review this version again.",
+  "revisionTiming": "Re-review is a manual demo step at the current scenario time. Its real turnaround is not estimated; the original review schedule is historical.",
+  "resubmitted": "New request version created. Earlier opinions no longer authorize this version.",
+  "revisedPending": "Current request awaits new technical and QA decisions.",
+  "briefBlocked": "Request v{version}: {blockers}. Authorization is blocked; Emma must address the concerns and resubmit for both reviews.",
+  "briefNext": "Emma owns the next update: address the concerns and resubmit; both reviewers must agree before Elena may authorize. Resource confirmation remains pending.",
+  "briefPending": "Request v{version} requires new technical and QA decisions; previous opinions do not apply.",
+  "originalTiming": "Original request review timing · superseded",
+  "approvedBoth": "Technical and QA agree to the current request.",
+  "guided": "Guided path: choose Agree, then submit your review."
+};
+  Object.assign(global.DEMO_MESSAGES.en.decision.errors, {"REVIEW_OUTCOME_REQUIRED":"Select Agree, More information required or Disagree.","REVIEWS_NOT_APPROVED":"The current request requires Agree from both technical and QA reviewers.","REVIEW_RESUBMIT_NOT_AVAILABLE":"Resubmission requires an unresolved review outcome.","SUPPLEMENT_REQUIRED":"Enter the additional evidence or revised scope before resubmitting.","REVIEW_TIMING_EXPIRED":"The planned authorization time has passed. This demo cannot confirm a revised review schedule.","ADVANCE_BLOCKED_resolveReviews":"Emma must address the review concerns and resubmit first."});
+  global.DEMO_MESSAGES.en.decision.guide.resolveReviews = "Switch to Emma · address review concerns";
+  global.DEMO_MESSAGES.en.decision.dependencyCopy.budget = "Elena designated; technical and QA both Agree to this version; final quote";
+  global.DEMO_MESSAGES.en.decision.budgetBlocked = "Authorization requires both reviewers to Agree to the current request, Elena’s designation, Ben’s preparation acceptance and completion of the budget review.";
 })(globalThis);

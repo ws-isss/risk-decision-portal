@@ -119,7 +119,7 @@
     prerequisites: { technical: "technical study-scope review", quality: "QA study-scope review", approver: "approver designation" },
     prerequisitesPending: "Pending before authorization: {items}.",
     listSeparator: "; ",
-    prerequisitesComplete: "Technical and QA study-scope reviews and approver designation: completed.",
+    prerequisitesComplete: "Technical and QA agree to this request; approver designated.",
     heldFallbackScope: "The separate {fallbackCap} fallback cap does not approve a replacement window.",
     enquiryScope: "The planned expedited experiment and analysis slots are unavailable. The enquiry has no financial commitment; replacement resources need confirmation.",
     optionBEnquiryScope: "Option B is selected; its replacement resource arrangement still needs a named WuXi response. The enquiry creates no financial commitment.",

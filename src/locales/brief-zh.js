@@ -119,7 +119,7 @@
     prerequisites: { technical: "技术小试范围审阅", quality: "QA（质量保证）小试范围审阅", approver: "指定授权人" },
     prerequisitesPending: "授权前尚缺：{items}。",
     listSeparator: "、",
-    prerequisitesComplete: "技术及 QA（质量保证）小试范围审阅、授权人指定均已完成。",
+    prerequisitesComplete: "技术及 QA（质量保证）均同意当前请求；授权人已指定。",
     heldFallbackScope: "单独的 {fallbackCap} 后备上限不代表已批准替代窗口。",
     enquiryScope: "计划中的加急实验及配套分析时段无法安排。询期不构成费用承诺，替代资源仍待确认。",
     optionBEnquiryScope: "已选方案 B，替代资源仍需药明具名回复。询期不构成费用承诺。",

@@ -161,18 +161,18 @@ verifyLinks(designated);
 
 session.advanceNext();
 assert.equal(task(session.getState(), 'P06', 'budget').status, 'pendingReview', 'Scheduled review completion is not an opinion');
-session.setViewer('P02'); session.completeReview('technical', 'Technical scope is reviewable.');
-assert.equal(task(session.getState(), 'P02', 'startTechnical').status, 'taskCompleted');
+session.setViewer('P02'); session.completeReview('technical', 'Technical scope is reviewable.', 'approved');
+assert.equal(task(session.getState(), 'P02', 'startTechnical').status, 'approved');
 assert.equal(task(session.getState(), 'P03', 'startQuality').status, 'inProgress');
 assert.equal(task(session.getState(), 'P06', 'budget').status, 'pendingReview');
-session.setViewer('P03'); session.completeReview('quality', 'QA scope is acceptable for the study.');
+session.setViewer('P03'); session.completeReview('quality', 'QA scope is acceptable for the study.', 'approved');
 const reviewed = session.getState();
 for (const [viewer, key] of [['P02', 'startTechnical'], ['P03', 'startQuality']]) {
-  assert.equal(task(reviewed, viewer, key).status, 'taskCompleted');
+  assert.equal(task(reviewed, viewer, key).status, 'approved');
   assert.equal(notification(reviewed, viewer, key).kind, 'reviewCompleted');
 }
 assert.equal(task(reviewed, 'P06', 'budget').status, 'readyForAuthorization');
-assert.equal(workflow.project(data, reviewed).reviewReadiness, 'taskCompleted');
+assert.equal(workflow.project(data, reviewed).reviewReadiness, 'approved');
 assert.equal(notification(reviewed, 'P06', 'budget').kind, 'reviewsCompleted');
 assert.equal(task(reviewed, 'P07', 'receipt').status, 'waiting');
 verifyLinks(reviewed);

@@ -90,10 +90,15 @@
 
   function decisionStatus(state) {
     const view = workflow.project(data,state);
+    if (view.reviewBlockers.length) return `${text.decision.reviewFlow.blocked} · ${reviewBlockerSummary(state)}`;
     if (view.rescheduleStage && view.rescheduleStage !== "none") return text.portal.rescheduleStages[view.rescheduleStage];
     if (view.resourceRejected) return text.portal.unavailable;
     if (view.resourceConfirmed) return text.portal.success;
     return state.decision?.authorization ? text.decision.authorized : text.decision.requestOpen;
+  }
+  function reviewBlockerSummary(state) {
+    const f = text.decision.reviewFlow;
+    return workflow.project(data,state).reviewBlockers.map(b => interpolate(f.summary,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})).join("; ");
   }
   function feeStatement(state) {
     const view = workflow.project(data,state);
@@ -116,6 +121,7 @@
 
   function bannerState(state) {
     const view = workflow.project(data,state);
+    if (view.reviewBlockers.length) return {label:text.overview.decisionBy,at:data.events.latestAuthorization.at,zone:data.baseline.timezone,status:decisionStatus(state)};
     if (view.nextTiming) return {label:text.portal.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : view.nextTiming.kind],at:data.events[view.nextTiming.eventRef].at,zone:view.nextTiming.timezone,status:view.rescheduleRequested ? text.portal.rescheduleStages[view.rescheduleStage] : view.resourceRejected ? text.portal.unavailable : text.portal.pendingReschedule,kind:view.nextTiming.kind};
     if (view.resourceConfirmed) return {label:text.portal.holdExpiry,at:data.plans.A.holdUntil,zone:data.calendars.base.timezone,status:text.portal.success};
     const isWuxi = ["P07","P08"].includes(state.viewer);
@@ -137,7 +143,7 @@
     const basis = authorization.basis;
     const brief = basis.brief;
     const changed = !core.authorizationMatches(data,state,kind);
-    const requestTime = `${core.formatInstant(basis.request.createdAt,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`;
+    const requestTime = `${core.formatInstant(basis.request.createdAt,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}${basis.request.kind === "main" ? ` · ${interpolate(text.decision.reviewFlow.version,{version:basis.request.version || 1})}` : ""}`;
     const briefLabel = brief ? interpolate(t.briefBasis,{version:brief.version,name:brief.attachedBy.name,attachedAt:`${core.formatInstant(brief.attachedAt,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`,dataAsOf:`${core.formatInstant(brief.dataAsOf,data.baseline.timezone,{year:"numeric"})} ${text.common.easternTime}`}) : t.noBriefAtSigning;
     return `<section class="authorization-basis" data-authorization-basis="${kind}" data-authorization-request-key="${escape(basis.request.key)}" data-authorized-brief-version="${brief ? brief.version : "none"}" data-authorization-current="${!changed}"><h4>${t.title}</h4><dl class="info-facts"><dt>${t.boundRequest}</dt><dd>${escape(t.requestKinds[basis.request.kind])} · ${escape(data.project.id)} · ${escape(requestTime)}</dd><dt>${t.amount}</dt><dd>${money(basis.scope.amount)}</dd><dt>${t.boundQuote}</dt><dd>${basis.quotes.map(quote=>`${escape(quote.id)} v${escape(quote.version)} · ${money(quote.amount)} · ${escape(t.quoteScopes[quote.scopeKey])}`).join("<br>")}</dd><dt>${t.supportingBrief}</dt><dd>${escape(briefLabel)}</dd></dl><p class="decision-note">${t.boundary}</p><p class="decision-note">${t.progressOnly}</p>${changed ? `<p class="brief-stale" role="status"><strong>${t.newAuthorization}</strong> · ${t.scopeChanged}</p>` : `<p class="decision-note">${t.scopeChanged}</p>`}</section>`;
   }
@@ -159,6 +165,7 @@
   }
 
   function actionTitle(action) {
+    if (action.key === "resolveReviews") return reviewBlockerSummary(session.getState());
     if (text.portal.actions[action.key]) return text.portal.actions[action.key].title;
     if (action.info === "budgetReview") return text.actions.rows.budgetReview.title;
     return text.overview[action.key] || text.actions.rows[action.key].title;
@@ -207,7 +214,7 @@
     const guide = nextGuidedAction(state);
     const guideButton = guide && guide.key !== "advancePublication";
     const stepZone = data.events[step.nextEvent]?.executionTimezone || (state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone);
-    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
+    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
   }
 
   function nextGuidedAction(state) {
@@ -219,6 +226,7 @@
       return Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? step("publishRisk","P07","#publish-risk") : step("advancePublication","P07","#advance-event");
     }
     if (!d) return step("select","P01","#comparison");
+    if (workflow.project(data,state).reviewBlockers.length) return step("resolveReviews","P01",'#review-resubmit-form textarea[name="supplement"]');
     if (!d.tasksCreated) return Object.values(d.drafts).every(value => value.trim()) ? step("confirm","P01","#confirm-task-briefs") : step("draft","P01","#draft-task-briefs");
     if (d.authorization) {
       const r = d.resource;
@@ -361,6 +369,7 @@
 
   function nextActionCopy(state, person) {
     const d = state.decision, t = text.decision, n = t.next;
+    if (workflow.project(data,state).reviewBlockers.length) return t.reviewFlow.next;
     if (d.authorization) return decisionStatus(state);
     if (!d.tasksCreated) return person.id === "P01" ? n.create : t.blockers.createTasks;
     const reviewsDone = Object.values(d.reviews).every(r => r.status === "completed");
@@ -424,7 +433,7 @@
     const banner = bannerState(state);
     const finding = interpolate(text.overview.finding, { measured: data.risk.hmwPct.toFixed(1), target: data.risk.targetPct.toFixed(1) });
     const nextTimingInfo = view.nextTiming ? `<p>${text.portal.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : view.nextTiming.kind]}: ${instant(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone)} · ${city(view.nextTiming.timezone)}</p>` : "";
-    const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
+    const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.reviewBlockers.length ? note(reviewBlockerSummary(state)) + note(text.decision.reviewFlow.next) : state.decision?.version > 1 && !view.reviewsApproved ? note(text.decision.reviewFlow.recheck) : view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
     root.innerHTML = `<a class="skip-link" href="#main">${text.nav.skip}</a>
       <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools">${language === "zh" ? info("terminology",text.common.glossaryTitle,`<dl class="info-facts">${Object.entries(text.common.glossary).map(([term,meaning])=>`<dt>${escape(term)}</dt><dd>${escape(meaning)}</dd>`).join("")}</dl>`,"end") : ""}<details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.languageCurrent}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="${language === "en"}">${text.common.languageEnglish}</button><button type="button" data-language="zh" aria-current="${language === "zh"}">${text.common.languageChinese}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
       <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction, recordText}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
@@ -737,8 +746,9 @@
     }
     if (field.matches(".decision-form textarea")) fitDraft(field);
     if (form?.id === "resource-response-form" && field.name === "reason") formValues.resourceReason = field.value;
-    if (form?.id === "review-technical-form" && field.name === "reason") formValues.technicalReason = field.value;
-    if (form?.id === "review-quality-form" && field.name === "reason") formValues.qualityReason = field.value;
+    if (form?.id === "review-technical-form") formValues[field.name === "outcome" ? "technicalOutcome" : "technicalReason"] = field.value;
+    if (form?.id === "review-quality-form") formValues[field.name === "outcome" ? "qualityOutcome" : "qualityReason"] = field.value;
+    if (form?.id === "review-resubmit-form") formValues.supplement = field.value;
     if (form?.id === "authorization-form") {
       if (field.name === "reason") formValues.authorizationReason = field.value;
       if (field.name === "signature") formValues.signature = field.value;
@@ -759,6 +769,11 @@
     if (field.setCustomValidity) field.setCustomValidity(field.validity.valueMissing ? text.common.requiredField : text.common.invalidField);
   }, true);
   document.addEventListener("submit", event => {
+    if (event.target.id === "review-resubmit-form") {
+      event.preventDefault(); const values = new FormData(event.target);
+      if (performDecision(() => session.resubmitReviews(String(values.get("supplement"))), text.decision.reviewFlow.resubmitted)) { formValues = {}; render(); }
+      return;
+    }
     if (event.target.id === "reschedule-authorization-form") {
       event.preventDefault(); const form = new FormData(event.target);
       performDecision(() => session.authorizeReschedule({signature:String(form.get("signature")),reason:String(form.get("reason")),acknowledged:form.get("acknowledged") === "on",briefAttachment:global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state:session.getState()})})); return;
@@ -775,7 +790,8 @@
     if (/^review-(technical|quality)-form$/.test(event.target.id)) {
       event.preventDefault();
       const kind = event.target.id.split("-")[1];
-      performDecision(() => session.completeReview(kind,String(new FormData(event.target).get("reason"))));
+      const values = new FormData(event.target);
+      performDecision(() => session.completeReview(kind,String(values.get("reason")),String(values.get("outcome"))));
       return;
     }
     if (event.target.id === "authorization-form") {

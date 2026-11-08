@@ -181,8 +181,10 @@ async function authorizeB(targetPage) {
   await targetPage.locator('#designate-approver').click();
   await advance(targetPage, '2026-11-11T17:00:00-05:00');
   await role(targetPage, 'P02');
+  await targetPage.locator('#review-technical-form select[name="outcome"]').selectOption('approved');
   await targetPage.locator('#review-technical-form [type="submit"]').click();
   await role(targetPage, 'P03');
+  await targetPage.locator('#review-quality-form select[name="outcome"]').selectOption('approved');
   await targetPage.locator('#review-quality-form [type="submit"]').click();
   await advance(targetPage, chapterTimes.authorization);
   await role(targetPage, 'P06');

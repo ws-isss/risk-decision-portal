@@ -194,4 +194,5 @@
       syntheticTerms: "以上是模拟报价条款，不代表药明收费政策。", toggle: "展开费用明细"
     }
   };
+  Object.assign(global.DEMO_MESSAGES.zh.notifications.kinds, {"rejected":{"title":"审阅结果：不同意","body":"{owner} 不同意当前请求。Emma 须处理问题并重新提交；当前不能授权。"},"needsInformation":{"title":"审阅结果：需要补充信息","body":"{owner} 要求补充信息。由 Emma 补充并重新提交；当前不能授权。"},"reviewBlocked":{"title":"审阅结果阻止授权","body":"Emma 须处理审阅问题并重新提交。技术与 QA 必须均同意新版本后，才可授权。"}});
 })(globalThis);

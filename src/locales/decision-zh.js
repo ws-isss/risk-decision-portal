@@ -46,4 +46,42 @@
     projectStatus: "项目状态", original: "原窗口", estimated: "预计", indUnset: "日期未定", draftSaved: "任务草稿已保存，尚未创建任务。", createdNotice: "任务已创建，共享状态和通知已同步；重复操作不会重复创建。", advanceNotice: "演示时间已推进，未自动确认任何任务。", authorizationNotice: "客户授权已记录，等待药明确认。",
     errors: { ROLE_NOT_ALLOWED: "当前角色无权执行此操作。", TASKS_REQUIRED: "Emma 需先确认任务说明并创建任务。", TOO_EARLY: "尚未到办理时间，请查看计划时段及前置条件。", WRONG_SCENARIO_TIME: "请在计划办理时段内执行此操作。", REVIEWS_REQUIRED: "需先记录技术与 QA 两项意见。", SUPPORT_ACCEPTANCE_REQUIRED: "Ben 需先接手材料准备。", APPROVER_REQUIRED: "Emma 需先指定 Elena。", INVALID_SIGNATURE: "请填写指定授权人的全名：Elena Torres。", REASON_REQUIRED: "确认前请填写理由。", ACKNOWLEDGEMENT_REQUIRED: "请确认已审阅技术与 QA 意见、最终报价和费用条款。", REQUEST_LOCKED: "任务创建后，本请求不可更改。请重置场景以体验其他请求。", EMPTY_TASK_BRIEF: "创建任务前请补齐三份任务说明。", DECISION_REQUIRED: "请先选择方案并创建请求。", REVIEW_NOT_STARTED: "请先开始审阅，再记录意见。", DECISION_LOCKED: "此请求已获授权。", FALLBACK_ONLY_FOR_A: "后备授权仅适用于方案 A。", default: "请先完成列明的前置条件。" }
   };
+  global.DEMO_MESSAGES.zh.decision.reviewFlow = {
+  "outcome": "审阅结果 · 必选",
+  "choose": "请选择审阅结果…",
+  "outcomes": {
+    "approved": "同意",
+    "needsInformation": "需要补充信息",
+    "rejected": "不同意"
+  },
+  "roles": {
+    "technical": "技术",
+    "quality": "QA"
+  },
+  "summary": "{review}：{outcome}",
+  "blocked": "授权受阻",
+  "blockedDetail": "{review}：{outcome}。负责人：Emma。补充证据或调整范围后，重新提交两项审阅。",
+  "next": "Emma：处理审阅提出的问题并重新提交。两位审阅人均同意当前请求后，才能授权。",
+  "supplement": "补充说明／调整后的范围",
+  "supplementHint": "说明如何回应审阅问题。提交将生成新请求版本；报价金额和生产日期不变，调整说明纳入新版本的授权依据。",
+  "resubmit": "重新提交为请求 v{version}",
+  "version": "请求 v{version}",
+  "history": "历史请求审阅意见",
+  "expired": "适用于请求 v{version}，已失效，不能用于当前授权",
+  "currentScope": "当前请求补充说明",
+  "recheck": "Daniel 和 Nina 都须针对本版本重新审阅。",
+  "revisionTiming": "重新审阅是当前演示时刻下的手动步骤，实际周转尚未估算；原审阅排期仅作为历史记录。",
+  "resubmitted": "已生成新请求版本，原审阅意见不能用于本版本授权。",
+  "revisedPending": "当前请求等待新的技术与 QA 审阅结果。",
+  "briefBlocked": "请求 v{version}：{blockers}。当前不能授权；Emma 须处理问题并重新提交两项审阅。",
+  "briefNext": "下次更新由 Emma 负责：补充证据或调整范围后重新提交，两位审阅人同意后 Elena 才能授权。药明资源确认仍待办理。",
+  "briefPending": "请求 v{version} 须取得新的技术与 QA 意见；原版本意见不再适用。",
+  "originalTiming": "原请求审阅时间 · 已失效",
+  "approvedBoth": "技术与 QA 已同意当前请求。",
+  "guided": "引导路径：选择“同意”，再提交审阅意见。"
+};
+  Object.assign(global.DEMO_MESSAGES.zh.decision.errors, {"REVIEW_OUTCOME_REQUIRED":"请选择“同意”“需要补充信息”或“不同意”。","REVIEWS_NOT_APPROVED":"技术与 QA 必须均同意当前请求，才可授权。","REVIEW_RESUBMIT_NOT_AVAILABLE":"存在需要处理的审阅结果时，才可重新提交。","SUPPLEMENT_REQUIRED":"请先填写补充说明或调整后的范围。","REVIEW_TIMING_EXPIRED":"已过计划授权时刻，本演示不能确认新的审阅排期。","ADVANCE_BLOCKED_resolveReviews":"Emma 须先处理审阅问题并重新提交。"});
+  global.DEMO_MESSAGES.zh.decision.guide.resolveReviews = "切换到 Emma · 处理审阅问题";
+  global.DEMO_MESSAGES.zh.decision.dependencyCopy.budget = "已指定 Elena；技术与 QA 均同意当前版本；最终报价";
+  global.DEMO_MESSAGES.zh.decision.budgetBlocked = "授权须满足：技术与 QA 均同意当前请求、Elena 已被指定、Ben 已接手准备，并已完成预算审阅。";
 })(globalThis);

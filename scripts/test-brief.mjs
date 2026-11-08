@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const context = { Intl, Date };
-for (const file of ['src/data.js', 'src/core.js', 'src/workflow.js', 'src/locales/en.js', 'src/locales/brief-en.js', 'src/brief.js', 'src/brief-view.js']) vm.runInNewContext(readFileSync(path.join(root, file), 'utf8'), context);
+for (const file of ['src/data.js', 'src/core.js', 'src/workflow.js', 'src/locales/en.js', 'src/locales/decision-en.js', 'src/locales/brief-en.js', 'src/brief.js', 'src/brief-view.js']) vm.runInNewContext(readFileSync(path.join(root, file), 'utf8'), context);
 const { DEMO_DATA: data, DEMO_CORE: core, DEMO_BRIEF: briefModel, DEMO_BRIEF_VIEW: briefView } = context;
 const text = context.DEMO_MESSAGES.en;
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -156,7 +156,7 @@ assert.deepEqual(plain(brief.metadata.sourceVersions),['SEC-001 v1','EXP-001 v1'
 
 function authorizedSession(plan,fallback=false) {
   const s=core.createSession(data);s.selectPlan(plan);if(fallback)s.setFallback(true);s.saveDrafts(fixtures.drafts);s.confirmTasks();
-  s.setViewer('P02');s.startReview('technical');s.setViewer('P03');s.startReview('quality');s.advanceNext();s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceNext();s.setViewer('P01');s.designateApprover();s.advanceNext();s.setViewer('P02');s.completeReview('technical','Accept scope.');s.setViewer('P03');s.completeReview('quality','Accept scope.');s.advanceNext();s.setViewer('P06');s.authorize({signature:data.people.P06.name,reason:'Accept scope.',acknowledged:true});s.setViewer('P01');return s;
+  s.setViewer('P02');s.startReview('technical');s.setViewer('P03');s.startReview('quality');s.advanceNext();s.setViewer('P01');s.assignSupport();s.setViewer('P05');s.acceptSupport();s.advanceNext();s.setViewer('P01');s.designateApprover();s.advanceNext();s.setViewer('P02');s.completeReview('technical','Accept scope.', 'approved');s.setViewer('P03');s.completeReview('quality','Accept scope.', 'approved');s.advanceNext();s.setViewer('P06');s.authorize({signature:data.people.P06.name,reason:'Accept scope.',acknowledged:true});s.setViewer('P01');return s;
 }
 // Completion comes from explicit shared records, not the phase label or clock.
 // Exercise all prerequisite combinations, including an early brief that still

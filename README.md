@@ -1,6 +1,6 @@
 # DaVinci delivery decisions — concept demo
 
-When a development deviation threatens a GMP production window, customers and WuXi need to understand the options, obtain the right authorization and confirm resources before options expire. This synthetic HBT-101 demo shows that decision workflow as an extension of DaVinci’s existing capabilities. Built as a concept extension of DaVinci's client portal.
+When a development deviation threatens a GMP production window, customers and WuXi need to understand the options, obtain the right authorization and confirm resources before options expire. This synthetic HBT-101 demo shows that decision workflow, built as a concept extension of DaVinci’s client portal.
 
 ## Why this, for whom
 

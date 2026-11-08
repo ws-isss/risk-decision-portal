@@ -23,7 +23,7 @@
     hiddenTitle: "No published risk to review",
     hiddenBody: "Alex is preparing the risk update. Client evidence, task briefs and decisions will become available only after publication.",
     privateDraft: "Risk draft · internal preview",
-    resourceDue: "WuXi resource confirmation due",
+    resourceDue: "Latest resource confirmation deadline (quotation expiry)",
     resourceDueInfo: "Complete the resource response before this quote expires. Customer authorization, resource confirmation and process readiness are separate decisions.",
     terminal: "Demonstration endpoint reached",
     awaiting: "Awaiting WuXi confirmation",

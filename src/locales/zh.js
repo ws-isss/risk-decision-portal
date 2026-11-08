@@ -166,7 +166,7 @@
         leaveSupport: { title: "Olivia 休假中", body: "请安排 Ben 准备材料，转交尚未完成。" },
         leaveApprover: { title: "需要替代授权人", body: "请指定 Elena 审阅授权材料，目前尚未指定。" },
         leaveBudget: { title: "需要安排代办及授权人", body: "Emma 正在协调。Ben 可以准备材料；Elena 尚需被指定为授权人。" },
-        reviewReady: { title: "证据已发布", body: "SEC-001、EXP-001 已可查看。Emma 尚未确认审阅任务说明，审阅任务尚未分派。" },
+        reviewReady: { title: "客户团队收到证据", body: "SEC-001、EXP-001 已可查看。Emma 尚未确认审阅任务说明，审阅任务尚未分派。" },
         taskBriefPending: { title: "任务说明待确认", body: "Emma 尚未确认审阅任务说明。任务分派后，Daniel 和 Nina 才可以开始审阅。" },
         tasksAssigned: { title: "可以开始审阅", body: "Emma 已确认任务说明并分派审阅任务。{owner} 可以打开已分派的任务，开始审阅已发布的证据材料。" },
         reviewStarted: { title: "审阅已开始", body: "{owner} 已开始审阅，最终意见尚待提交。" },

@@ -2,7 +2,7 @@
   "use strict";
   global.DEMO_MESSAGES.zh.wuxi = {
     title: "药明资源回复",
-    deadline: "药明资源确认截止",
+    deadline: "资源确认最晚期限（报价有效期）",
     chapters: { customer: "客户决策", publication: "药明风险发布", resourceUnavailable: "资源不可用" },
     publicationHiddenTitle: "暂无已发布风险",
     publicationHiddenBody: "Alex 正在准备风险更新。发布后，客户才能查看证据、决策和任务。",
@@ -41,7 +41,7 @@
     startDue: "资源评估开始时间",
     started: "资源评估中",
     startedAt: "开始时间",
-    responseDue: "计划排产回复时间",
+    responseDue: "资源及暂留回复 · 计划时间（最晚 {latestDate}）",
     scheduleOwner: "排产负责人",
     response: "记录资源与窗口回复",
     outcome: "排产结果",

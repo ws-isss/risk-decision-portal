@@ -137,6 +137,7 @@
   }
 
   function renderManagementBrief(state) {
+    if (activePage !== "overview") return "";
     const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
     if (state.viewer === "P06" && !briefAttachments.length) return "";
     if (!briefOpen && !(state.viewer === "P06" && briefAttachments.length)) return "";
@@ -625,6 +626,10 @@
   function generateManagementBrief(replace = false) {
     const state = session.getState();
     if (briefLoading || state.viewer !== "P01" || state.publication.status !== "published") return;
+    if (activePage !== "overview") {
+      activePage = "overview";
+      history.pushState(null,"","#management-brief");
+    }
     briefOpen = true;
     if (managementBrief && !replace) {
       render(); focusOperation(document.getElementById("management-brief"));

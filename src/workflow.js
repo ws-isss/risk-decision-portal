@@ -285,7 +285,7 @@
       if (!view.authorized) timings.push(event("latestAuthorization","authorization",data.baseline.timezone));
       timings.push(event("resourceConfirmationDeadline","resource",data.calendars.base.timezone));
     }
-    return {view,blockerOwner:view.reviewBlockers[0]?.owner || null,...outlook(data,state),showOptions:!view.authorized,timings,
+    return {view,blockerOwner:view.reviewBlockers[0]?.owner || null,...outlook(data,state),showOptions:!d,timings,
       groups:[
         {key:"decisions",count:Number(decisionPending),blocked:view.reviewBlockers.length>0,role:decisionRole,href:!d?"#comparison":view.rescheduleStage!=="none"?"#wuxi":"#decision"},
         {key:"reviews",count:pendingReviews.length,role:pendingReviews[0]?.owner || "P02",href:"#decision"},

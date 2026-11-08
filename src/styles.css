@@ -867,3 +867,10 @@ button:disabled, .button:disabled, [aria-disabled="true"] {
 .resubmission-choices legend { font-size: 12px; font-weight: 600; }
 .resubmission-choices label { margin: 0; display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 13px; }
 .decision-form .resubmission-choices input[type="radio"] { height: 16px; min-height: 16px; flex: 0 0 16px; width: 16px; margin: 3px 0 0; padding: 0; accent-color: #353d47; }
+
+.dashboard-impact { margin: 18px 0; }
+.dashboard-impact > div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:8px 0; }
+.dashboard-impact dt { font-weight:600; }
+.dashboard-impact dd { margin:0; line-height:1.65; overflow-wrap:anywhere; }
+.dashboard-impact [data-dashboard-blocker-owner] { font-weight:600; }
+@media(max-width:760px) { .dashboard-impact > div { grid-template-columns:1fr; gap:3px; } }

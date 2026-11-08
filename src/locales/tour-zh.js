@@ -72,7 +72,6 @@
     "报价",
     "物流"
   ],
-  "selected": "已选方案 {plan}",
   "initialEstimate": "方案 {plan} 预计 · 以条件满足为前提",
   "summary": "下一步：评估聚集体改善和工艺就绪。暂留不代表可以开始 GMP 生产。",
   "noTasks": "暂无待处理事项",
@@ -83,5 +82,37 @@
   "blocked": "受阻",
   "blockerNext": "{name}：补充原范围内的证据后重新提交审阅。",
   "scheduledUpdate": "下次预计更新"
+};
+})(globalThis);
+
+(function(global) {
+  global.DEMO_MESSAGES.zh.dashboard.impact = {
+  "labels": {
+    "decision": "待决事项",
+    "delivery": "交付影响",
+    "resource": "资源影响"
+  },
+  "join": "；",
+  "deliveryPlan": "{plan}：预计{gap}",
+  "early": "比需求日提前 {days} 天",
+  "late": "比需求日晚 {days} 天",
+  "onTime": "在需求日交付",
+  "deliveryInvalid": "{plan}：交付待重新评估，原预测不再作为当前交期。",
+  "resourceA": "A：加急并申请暂留 {window}窗口（上海；药明最晚 {deadline} 确认）",
+  "resourceB": "B：排队 {days} 个工作日，改到 {window}候选窗口（上海），待确认",
+  "decide": "客户须在 {due} 前决定授权 A（{a}）或 B（{b}）。",
+  "decideSelected": "已选择方案 {plan}；客户须在 {due} 前授权 {amount}。选择不等于授权。",
+  "authorized": "客户已授权 {plan}（{amount}），等待药明确认资源和窗口。",
+  "held": "A：加急时段已确认；{window}原窗口已暂留至 {until}。",
+  "internalHeld": "A：Mei 已在内部确认加急时段和原窗口暂留至 {until}，Alex 尚未向客户回传。",
+  "internalUnavailable": "A：Mei 已在内部回复无法暂留原窗口，Alex 尚未向客户回传。",
+  "unavailable": "A：药明无法安排加急时段及原窗口暂留；由 Alex 协调后续窗口和报价。",
+  "heldNext": "本轮协调已完成；下一步评估聚集体改善和工艺就绪，不代表已批准 GMP 生产。",
+  "blocker": "授权受阻：{reviews}。",
+  "quoteCandidate": "候选窗口：{window}（上海），待确认；改期报价：{amount}。",
+  "confirmedWindow": "新窗口已确认：{window}（上海）；技术就绪仍待评估。",
+  "rescheduleDone": "改期已确认，已产生费用 {amount}。由 Alex 协调技术重评估和下次更新。",
+  "rescheduleDecision": "{status}；改期金额 {amount}。",
+  "awaitQuote": "等待药明回复后续窗口和改期报价，尚未确认新窗口。"
 };
 })(globalThis);

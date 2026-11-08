@@ -23,7 +23,7 @@
     hiddenTitle: "暂无已发布风险",
     hiddenBody: "Alex 正在准备风险更新。发布后，客户才能查看证据、起草任务和发起决策。",
     privateDraft: "风险草稿 · 内部预览",
-    resourceDue: "药明资源确认截止",
+    resourceDue: "资源确认最晚期限（报价有效期）",
     resourceDueInfo: "请在报价有效期内完成资源回复。客户授权、资源确认和工艺就绪是不同事项。",
     terminal: "已到演示终点",
     awaiting: "等待药明确认",

@@ -40,6 +40,7 @@ try {
   assert.equal(await p.locator('.tour-timeline').getAttribute('data-tour-act'),'2');assert.match(await p.locator('.tour-guidance').innerText(),lang==='zh'?/预置演示记录/:/Preset demo records/);
   assert.ok((await p.locator('[data-created-task="technical"] p').textContent()).includes(edited));
   await next(p,'managementBrief');await next(p,'previewBrief');await next(p,'attachBrief');await next(p,'viewAttachment');
+  assert.equal(await p.locator('main').getAttribute('data-page'),'overview','Brief steps remain in the project workspace');
   assert.equal(await p.locator('#management-brief-editor').count(),0,'Elena cannot see private editor');
   await next(p,'authorize');
   assert.equal(await p.locator('#notice').getAttribute('class'),'notice visible');
@@ -57,11 +58,20 @@ try {
   await next(p,'replyReceipt');await next(p,'finish');
   assert.equal(await p.locator('#notice').textContent(),'','No old authorization toast on the completed dashboard');
   assert.equal(await p.locator('#notice.visible').count(),0);assert.equal(await p.locator('main').getAttribute('data-page'),'home');assert.equal(await p.locator('#tour-summary').count(),1);
+  assert.equal(await p.locator('#management-brief').count(),0,'Completed dashboard never renders the open, now-stale brief');
+  await p.locator('.workspace-nav [href="#main"]').click();
+  await p.locator('main[data-page="overview"]').waitFor();
+  assert.equal(await p.locator('#management-brief[data-brief-stale="true"]').count(),1,'The retained draft and stale warning remain available in the workspace');
+  await p.locator('.workspace-nav [href="#home"]').click();
+  await p.locator('main[data-page="home"]').waitFor();
+  assert.equal(await p.locator('#management-brief').count(),0,'Returning home hides the brief without deleting it');
   assert.equal(await p.locator('[data-dashboard-plan]').count(),0);assert.equal(await p.locator('[data-dashboard-selected="A"]').count(),1);
   assert.equal(await p.locator('[data-dashboard-timing="holdExpiry"] time').getAttribute('datetime'),data.plans.A.holdUntil);
   assert.equal(await p.locator('[data-dashboard-timing="authorization"]').count(),0);assert.equal(await p.locator('[data-dashboard-timing="resource"]').count(),0);
   assert.deepEqual(times,[data.initialClock,data.events.budgetAuthorized.at,data.events.resourceConfirmed.at]);
   assert.equal(await p.locator('[data-exception]').first().getAttribute('data-exception'),'quality');
+  await p.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});
+  await p.setViewportSize({width:1440,height:await p.evaluate(()=>document.documentElement.scrollHeight)});
   await p.screenshot({path:path.join(root,'output',`tour-complete-${lang}.png`),fullPage:true});
   await p.setViewportSize({width:390,height:844});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);await p.screenshot({path:path.join(root,'output',`dashboard-mobile-${lang}.png`),fullPage:true});
   await p.locator('[data-exception="quality"]').click();await p.locator('[data-enter-exception="quality"]').click();assert.equal(await p.locator('#viewer').inputValue(),'P03');assert.equal(await p.locator('#review-quality-form [name="outcome"]').inputValue(),'');

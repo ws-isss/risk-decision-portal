@@ -168,7 +168,7 @@
         leaveSupport: { title: "Olivia is on leave", body: "Arrange Ben’s preparation support. The handoff is still pending." },
         leaveApprover: { title: "Alternate approver needed", body: "Designate Elena to review the authorization package. Designation is still pending." },
         leaveBudget: { title: "Approval coverage needed", body: "Emma is arranging coverage. Ben can prepare materials; Elena still needs to be designated to approve." },
-        reviewReady: { title: "Evidence published", body: "SEC-001 and EXP-001 are available to view. Emma has not yet confirmed the review task briefs; the review tasks are not assigned." },
+        reviewReady: { title: "Customer team received evidence", body: "SEC-001 and EXP-001 are available to view. Emma has not yet confirmed the review task briefs; the review tasks are not assigned." },
         taskBriefPending: { title: "Task briefs awaiting confirmation", body: "Emma has not yet confirmed the review task briefs. Daniel and Nina can start after the tasks are assigned." },
         tasksAssigned: { title: "Ready to start review", body: "Emma confirmed the task briefs and assigned the reviews. {owner} can open the assigned task and start reviewing the published evidence." },
         reviewStarted: { title: "Review started", body: "{owner} has started the assigned review. The final opinion is still pending." },

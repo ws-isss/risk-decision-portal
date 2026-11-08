@@ -18,12 +18,13 @@ const errors = [], network = [], checked = [];
 const taskKeys = ['startTechnical', 'startQuality'];
 const oldAmbiguousText = /complete review packet|combined review package|完整审阅材料|合并审阅材料|审阅材料已齐备/i;
 const copy = {
-  en: { evidence: /Evidence published/i, pending: /Task briefs (?:pending|awaiting) confirmation/i, ready: /Ready to start review/i, sent: /Received at/i, start: /Start by/i },
-  zh: { evidence: /证据已发布/, pending: /任务说明待确认/, ready: /可以开始审阅/, sent: /收到于/, start: /最晚开始/ }
+  en: { evidence: /Customer team received evidence/i, pending: /Task briefs (?:pending|awaiting) confirmation/i, ready: /Ready to start review/i, sent: /Received at/i, start: /Start by/i },
+  zh: { evidence: /客户团队收到证据/, pending: /任务说明待确认/, ready: /可以开始审阅/, sent: /收到于/, start: /最晚开始/ }
 };
 const clock = page => page.locator('.demo-clock time').getAttribute('datetime');
 async function role(page, id) {
   const before = await clock(page);
+  await page.locator('.more-roles').evaluate(el=>el.open=true);
   await page.locator('#viewer').selectOption(id);
   assert.equal(await clock(page), before, 'Role switching cannot move the simulated clock');
 }
@@ -100,7 +101,7 @@ async function makePage(lang, mobile = false) {
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { if (/^https?:/.test(request.url())) network.push(request.url()); });
-  await page.goto(pathToFileURL(standalone).href);
+  await page.goto(pathToFileURL(standalone).href+'#main');
   await page.locator('#risk-title').waitFor();
   if (lang === 'zh') {
     await page.locator('#language-menu summary').click();

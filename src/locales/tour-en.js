@@ -72,7 +72,6 @@
     "Quotes",
     "Logistics"
   ],
-  "selected": "Selected option {plan}",
   "initialEstimate": "Option {plan} estimate · conditional",
   "summary": "Next: assess aggregate reduction and process readiness. The hold does not authorize GMP production.",
   "noTasks": "No pending items",
@@ -83,5 +82,37 @@
   "blocked": "Blocked",
   "blockerNext": "{name}: add evidence within the original scope, then resubmit for review.",
   "scheduledUpdate": "Next scheduled update"
+};
+})(globalThis);
+
+(function(global) {
+  global.DEMO_MESSAGES.en.dashboard.impact = {
+  "labels": {
+    "decision": "Decision pending",
+    "delivery": "Delivery impact",
+    "resource": "Resource impact"
+  },
+  "join": "; ",
+  "deliveryPlan": "{plan}: estimated {gap}",
+  "early": "{days} days before need date",
+  "late": "{days} days after need date",
+  "onTime": "on the need date",
+  "deliveryInvalid": "{plan}: delivery needs reassessment; the previous forecast is no longer current.",
+  "resourceA": "A: expedite and request a hold on the {window} window, Shanghai (WuXi confirmation due by {deadline})",
+  "resourceB": "B: queue for {days} working days, then move to the {window} candidate window, Shanghai; pending confirmation",
+  "decide": "Customer authorization due {due}: A ({a}) or B ({b}).",
+  "decideSelected": "Option {plan} selected; customer authorization of {amount} due {due}. Selection is not authorization.",
+  "authorized": "Customer authorized {plan} ({amount}); awaiting WuXi resource and window confirmation.",
+  "held": "A: expedited slots confirmed; original {window} window held until {until}.",
+  "internalHeld": "A: Mei has confirmed expedited slots and the original-window hold internally until {until}; Alex has not returned the receipt to the customer.",
+  "internalUnavailable": "A: Mei reported that the original window cannot be held; Alex has not returned the result to the customer.",
+  "unavailable": "A: WuXi cannot arrange the expedited slots or hold the original window; Alex coordinates the next window and quote.",
+  "heldNext": "This coordination round is complete. Next: assess aggregate reduction and process readiness; this is not GMP production approval.",
+  "blocker": "Authorization blocked — {reviews}.",
+  "quoteCandidate": "Candidate window: {window}, Shanghai; pending confirmation. Rescheduling quote: {amount}.",
+  "confirmedWindow": "New window confirmed for {window}, Shanghai; technical readiness remains under assessment.",
+  "rescheduleDone": "Rescheduling confirmed; incurred fee {amount}. Alex coordinates the technical reassessment and next update.",
+  "rescheduleDecision": "{status}; rescheduling amount {amount}.",
+  "awaitQuote": "Awaiting WuXi’s next-window and rescheduling-quote response; no new window is confirmed."
 };
 })(globalThis);

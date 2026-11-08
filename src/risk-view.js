@@ -8,6 +8,8 @@
     const b = data.plans.B;
     const baseZone = data.calendars.base.timezone;
     const customerZone = data.calendars.customer.timezone;
+    const latestDate = core.formatInstant(data.events.resourceConfirmationDeadline.at, baseZone, {month:"numeric",day:"numeric",year:undefined,hour:undefined,minute:undefined});
+    const resourceResponseLabel = interpolate(t.timelineEvents.resourceConfirmed, {latestDate});
     const decision = state.decision;
     const workflow = global.DEMO_WORKFLOW;
     const view = workflow.project(data, state, person.id);
@@ -99,7 +101,7 @@
       const evidence = data.risk.evidence;
       const report = data.reports[evidence.reportRef];
       const publisher = data.people[evidence.publisherId];
-      return `<section id="risk-evidence" class="section" aria-labelledby="risk-evidence-title"><div class="section-heading"><h2 id="risk-evidence-title">${t.evidence}</h2><button class="button button-secondary" data-report="${report.id}">${icon("report")}${t.reportAction}</button><button class="button button-secondary" data-source-report="EXP-001">EXP-001 · v${data.reports["EXP-001"].version}</button></div><div class="table-wrap"><table class="risk-evidence-table"><thead><tr><th scope="col">${t.method}</th><th scope="col">${t.measured}</th><th scope="col">${t.target}</th><th scope="col">${t.sample}</th><th scope="col">${t.report}</th><th scope="col">${t.version}</th></tr></thead><tbody><tr><td data-field="method" data-label="${escape(t.method)}">${t.methodValue}<small>${t.measurement}</small></td><td class="risk-measurement" data-field="measured" data-label="${escape(t.measured)}">${data.risk.hmwPct.toFixed(1)}%</td><td data-field="target" data-label="${escape(t.target)}">≤ ${data.risk.targetPct.toFixed(1)}%</td><td data-field="sample" data-label="${escape(t.sample)}">${t.sampleValue}</td><td data-field="report" data-label="${escape(t.report)}">${report.id}</td><td data-field="version" data-label="${escape(t.version)}">v${report.version}</td></tr></tbody></table></div><div class="risk-evidence-meta"><span>${t.source}</span><span>${copy(t.publishedBy, { name: publisher.name, role: text.roles[publisher.roleKey] })}</span>${info("evidenceVersion", t.evidenceAvailable, `<p>${time(data.events[evidence.availableAtEvent].at, baseZone)} ${city(baseZone)}</p>`)}</div></section>`;
+      return `<section id="risk-evidence" class="section" aria-labelledby="risk-evidence-title"><div class="section-heading"><h2 id="risk-evidence-title">${t.evidence}</h2><button class="button button-secondary" data-report="${report.id}">${icon("report")}${t.reportAction}</button><button class="button button-secondary" data-source-report="EXP-001">EXP-001 · v${data.reports["EXP-001"].version}</button></div><div class="table-wrap"><table class="risk-evidence-table"><thead><tr><th scope="col">${t.method}</th><th scope="col">${t.measured}</th><th scope="col">${t.target}</th><th scope="col">${t.sample}</th><th scope="col">${t.report}</th><th scope="col">${t.version}</th></tr></thead><tbody><tr><td data-field="method" data-label="${escape(t.method)}">${t.methodValue}<small>${t.measurement}</small></td><td class="risk-measurement" data-field="measured" data-label="${escape(t.measured)}">${data.risk.hmwPct.toFixed(1)}%</td><td data-field="target" data-label="${escape(t.target)}">≤ ${data.risk.targetPct.toFixed(1)}%</td><td data-field="sample" data-label="${escape(t.sample)}">${t.sampleValue}</td><td data-field="report" data-label="${escape(t.report)}">${report.id}</td><td data-field="version" data-label="${escape(t.version)}">v${report.version}</td></tr></tbody></table></div><div class="risk-evidence-meta"><span>${t.source}</span><span>${copy(t.publishedBy, { name: publisher.name, role: text.roles[publisher.roleKey] })}</span>${info("evidenceVersion", t.evidenceAvailable, `<p>${time(data.events[evidence.availableAtEvent].at, baseZone)} ${city(baseZone)}<br><span data-evidence-new-york>${time(data.events[evidence.availableAtEvent].at, customerZone)} ${city(customerZone)}</span></p>`)}</div></section>`;
     }
 
     function assessment() {
@@ -126,7 +128,7 @@
       const update = workflow.eventTiming(data, state, selectedUpdate) || data.events[selectedUpdate];
       const updated = view.reviewsComplete && selectedUpdate === "reviewsComplete";
       const resourcePlanned = selectedUpdate === "resourceConfirmed";
-      const heading = updated ? t.reviewUpdateAvailable : t.nextUpdate;
+      const heading = resourcePlanned ? resourceResponseLabel : updated ? t.reviewUpdateAvailable : t.nextUpdate;
       const explanation = resourcePlanned ? t.resourceUpdateExplanation : updated ? t.reviewUpdateExplanation : t.updateExplanation;
       const opinions = resourcePlanned ? "" : `<ul>${["technical", "quality"].map(kind => `<li data-review-opinion="${kind}">${t.reviewOpinionLabels[kind]}: ${view[kind + "Complete"] ? f.outcomes[decision.reviews[kind].outcome] : t.reviewOpinionPending}</li>`).join("")}</ul>`;
       return `<section class="risk-update-strip" data-update-state="${resourcePlanned ? "resourcePlanned" : updated ? "reviewsRecorded" : "reviewsPlanned"}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${heading}</h2><strong>${time(update.at, person.timezone, { weekday: "short" })} ${zoneLabel(person.timezone)}</strong><span>${t.updateOwner}: ${escape(owner.name)}</span>${resourcePlanned ? `<span class="status">${t.plannedResponse}</span>` : ""}${info("riskNextUpdate", resourcePlanned ? t.resourceUpdatePurpose : t.updatePurpose, note(explanation) + opinions)}</section>`;
@@ -151,6 +153,7 @@
         if (status === "planned" && Date.parse(at) <= Date.parse(state.clock)) status = "pending";
         if (status === "conditionalForecast" && forecastReassessment) status = "historicalEstimate";
         let label = status === "recorded" && t.recordedTimelineEvents[entry.id] ? t.recordedTimelineEvents[entry.id] : t.timelineEvents[entry.id];
+        if (entry.id === "resourceConfirmed" && status !== "recorded") label = resourceResponseLabel;
         if (entry.id === "budgetStart" && view.budgetReadyAt) label = record ? text.decision.timingRules.budgetRecord : text.decision.timingRules.budgetReady;
         if (decision?.version > 1 && entry.id === "latestReviewStart") { status = "historicalEstimate"; label = f.originalTiming; }
         if (entry.id === "reviewsComplete" && view.reviewsComplete) label += " · " + ["technical","quality"].map(kind=>interpolate(f.summary,{review:f.roles[kind],outcome:f.outcomes[decision.reviews[kind].outcome]})).join(" / ");
@@ -176,7 +179,8 @@
         const eventTiming = entry.eventRef ? workflow.eventTiming(data, state, entry.eventRef) : null;
         const taskKeys = entry.eventRef ? Object.values(view.records).filter(task => [task.timing, task.completionTiming].some(value => value?.eventRef === entry.eventRef)).map(task => task.key) : [];
         const timingLabel = status !== "recorded" && eventTiming ? `<small data-task-timing-label>${text.portal.taskTimingLabels[eventTiming.kind]}</small>` : "";
-        const when = `${timingLabel}${time(at, zone, { year: "numeric", weekday: "short" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}`;
+        const newYorkTime = entry.id === "materialReady" && zone !== customerZone ? `<small data-new-york-time>${time(at, customerZone)} ${city(customerZone)}</small>` : "";
+        const when = `${timingLabel}${time(at, zone, { year: "numeric", weekday: "short" })}<small>${zoneLabel(zone)}</small>${shanghaiTime}${newYorkTime}`;
         return `<tr data-risk-event="${entry.id}" data-event-status="${status}"${taskKeys.length ? ` data-task-keys="${taskKeys.join(" ")}"` : ""}><td data-field="time" data-label="${escape(t.timelineDate)}">${when}</td><td data-field="event" data-label="${escape(t.timelineEvent)}">${escape(label)}</td><td data-field="owner" data-label="${escape(t.timelineOwner)}">${owners}</td><td data-field="status" data-label="${escape(t.timelineStatus)}"><span class="status status-${status}">${t.timelineStatuses[status]}</span></td></tr>`;
       }
       // Recorded actions stay above Now, even when their audit row was added later.

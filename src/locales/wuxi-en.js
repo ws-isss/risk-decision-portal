@@ -2,7 +2,7 @@
   "use strict";
   global.DEMO_MESSAGES.en.wuxi = {
     title: "WuXi resource response",
-    deadline: "WuXi resource confirmation due",
+    deadline: "Latest resource confirmation deadline (quotation expiry)",
     chapters: { customer: "Customer decision", publication: "WuXi risk publication", resourceUnavailable: "Resource unavailable" },
     publicationHiddenTitle: "No published risk to display",
     publicationHiddenBody: "Alex is preparing the risk update. Customer evidence, decisions and tasks become available after publication.",
@@ -41,7 +41,7 @@
     startDue: "Resource review starts",
     started: "Resource review in progress",
     startedAt: "Started at",
-    responseDue: "Planned scheduling response",
+    responseDue: "Resource and hold response · planned time (latest {latestDate})",
     scheduleOwner: "Scheduling owner",
     response: "Record the resource and window response",
     outcome: "Scheduling result",

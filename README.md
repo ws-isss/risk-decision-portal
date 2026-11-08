@@ -1,6 +1,14 @@
 # DaVinci delivery decisions — concept demo
 
-When a development deviation threatens a GMP production window, customers and WuXi need to understand the options, obtain the right authorization and confirm resources before options expire. This synthetic HBT-101 demo shows that decision workflow as an extension of DaVinci’s existing capabilities. It does not claim that DaVinci lacks these features.
+When a development deviation threatens a GMP production window, customers and WuXi need to understand the options, obtain the right authorization and confirm resources before options expire. This synthetic HBT-101 demo shows that decision workflow as an extension of DaVinci’s existing capabilities. Built as a concept extension of DaVinci's client portal.
+
+## Why this, for whom
+
+- Users: customer CMC PM (Emma) and her technical, QA and budget approvers; WuXi project manager (Alex) and scheduling (Mei).
+- Pain: when a development deviation threatens a GMP window, options, quotes and evidence versions are spread across email and meetings in two time zones. Customer authorization is easily confused with confirmed resources, and windows can expire while decisions wait.
+- MVP scope: one deviation → compare options → structured reviews → authorization bound to request and quote versions → WuXi resource confirmation → shared status and brief.
+- Proposed success metrics (not measured): time from risk publication to customer authorization; share of decisions completed before the resource-confirmation deadline; clarification loops per decision; zero authorizations on outdated evidence or quotes.
+- Next (backlog): withdraw and reselect before authorization; WuXi re-quote when scope changes; links to the QA evaluation basis; real identity and Part 11-compliant e-signature; integration with quotation, LIMS and scheduling systems.
 
 ## Five-minute tour
 
@@ -64,7 +72,7 @@ The bottom **Jump to chapter** selector explicitly resets the scenario. It offer
 | Obtain a fresh decision | Emma launches the rescheduling decision. Elena reviews the returned quote, enters or fills her example signature, reviews the reason, checks the scope acknowledgement and explicitly authorizes. Until she submits, the customer decision remains pending and no fee is incurred. The earlier fallback checkbox does not bypass this approval. |
 | Formally confirm | After Elena's authorization, the guide switches to Alex for **Confirm rescheduling**. Only this action confirms the quoted replacement window and incurs the $10,000 rescheduling fee. Technical readiness and delivery remain under assessment; option B's former delivery estimate is not adopted. Emma can manually update the brief. |
 
-The original six chapter entries remain available alongside the QA exception. The exception has its own preset timeline: Alex enquires Monday Nov 16 at 09:00 Shanghai; Mei quotes Tuesday Nov 17 at 15:00 Shanghai; Alex returns it at 17:00 Shanghai. Customer handling opens Tuesday at 09:00 New York; Emma initiates by 11:00, Elena authorizes by Thursday Nov 19 at 17:00, and Alex formally confirms Friday Nov 20 at 17:00 Shanghai. The next progress update is expected Monday Nov 23 at 17:00 Shanghai. No weekend duty is assumed. All are case design assumptions from PRD E01–E08. Advance time between steps; advancing never records a decision. The frozen simulation clock does not move backwards.
+The original six chapter entries remain available alongside the QA exception. The WuXi-unable-to-hold exception has its own preset timeline: Alex enquires Monday Nov 16 at 09:00 Shanghai; Mei quotes Tuesday Nov 17 at 15:00 Shanghai; Alex returns it at 17:00 Shanghai. Customer handling opens Tuesday at 09:00 New York; Emma initiates by 11:00, Elena authorizes by Thursday Nov 19 at 17:00, and Alex formally confirms Friday Nov 20 at 17:00 Shanghai. The next progress update is expected Monday Nov 23 at 17:00 Shanghai. No weekend duty is assumed. All are case design assumptions from PRD E01–E08. Advance time between steps; advancing never records a decision. The frozen simulation clock does not move backwards.
 
 Before a completed response, WuXi banners show the existing resource-response deadline. After a successful hold, the next key date is the hold expiry. Exception banners distinguish **Expected WuXi response** from **Customer action due**, alongside the actual owner and pending state. The clock, action times, separate exception timeline, notifications and briefs all use the same preset event data. Mei's explicit original-resource confirmation commits $50,000 in resource/hold fees; the failed original-resource branch does not incur those fees.
 
@@ -124,6 +132,4 @@ Browser checks cover standalone offline execution, the relative-path source entr
 
 ## Publication and private inputs
 
-After the required checks, publishing `main` runs `.github/workflows/pages.yml`: validate, unit-test, build, audit and upload only `dist/` to GitHub Pages. The same repository and URL are retained. Before each push, stage only reviewed source files and run the public-input audit; never push local app snapshot refs. After deployment, `scripts/test-deployed.mjs` compares the online HTML SHA-256 with the local artifact and checks the published interface.
-
-`reference/`, derived research, local archives and conversation exports remain private and ignored. The build and browser checks neither read nor package research inputs. A real development-conversation export is a separate private deliverable. The PRD is the specification; AGENTS.md holds the stable business and implementation rules. All people, findings, dates and prices shown in the application are synthetic case assumptions.
+Public content excludes original research materials and derived research. The development-conversation record is delivered separately and is not included in the public repository or site. All people, findings, dates and prices shown in the application are synthetic case assumptions.

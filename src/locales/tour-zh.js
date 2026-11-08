@@ -9,6 +9,7 @@
   "seededShort": "预置演示记录",
   "aOnly": "本导览按方案 A 演示；完整流程仍支持两个方案。",
   "nextAct": "进入下一幕",
+  "coverageNext": "下一幕将预置：{support} 已接手准备工作，{approver} 已被指定为审批人。",
   "start": "开始 5 分钟导览",
   "restart": "重新开始导览",
   "full": "进入完整流程",

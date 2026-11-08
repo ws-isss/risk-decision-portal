@@ -1,6 +1,6 @@
 (function (global) {
   "use strict";
-  function render({data, core, state, text, helpers, draftLoading = false, error = "", formValues = {}}) {
+  function render({data, core, state, text, helpers, draftLoading = false, error = "", formValues = {}, tourAct = 0}) {
     const t = text.decision;
     const {escape, interpolate, money, instant, zoneLabel, decisionStatus, feeStatement} = helpers;
     const recordText = helpers.recordText || (value => value);
@@ -42,6 +42,7 @@
       const role = state.viewer;
       let body = "";
       if (d.authorization) body = `<p>${decisionStatus(state)}</p><a class="button button-secondary" href="#wuxi">${text.portal.openResources}</a>`;
+      else if (role === "P01" && tourAct === 1) body = `<p id="tour-coverage-preview">${escape(interpolate(text.tour.coverageNext,{support:data.people.P05.name.split(" ")[0],approver:data.people.P06.name.split(" ")[0]}))}</p>`;
       else if (role === "P01") body = `<div class="decision-action-group">${d.support.assignedAt ? `<span class="status">${t.supportAssigned}</span>` : action("assign-support", t.assignSupport)}${d.approver.id ? `<span class="status">${t.designated}</span>` : action("designate-approver", t.designate)}</div><p class="decision-note">${t.pmWait}</p>`;
       else if (["P02","P03"].includes(role)) {
         const key = role === "P02" ? "technical" : "quality";

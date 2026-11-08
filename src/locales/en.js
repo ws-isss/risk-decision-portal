@@ -198,3 +198,57 @@
   } };
   Object.assign(global.DEMO_MESSAGES.en.notifications.kinds, {"rejected":{"title":"Review outcome: Disagree","body":"{owner} disagrees with the current request. Emma must address the concerns and resubmit; authorization is blocked."},"needsInformation":{"title":"Review outcome: More information required","body":"{owner} requires additional information. Emma owns the response and resubmission; authorization is blocked."},"reviewBlocked":{"title":"Authorization blocked by review outcome","body":"Emma must address the review concerns and resubmit. Technical and QA must both agree to the new version."}});
 })(globalThis);
+
+(function (global) {
+  global.DEMO_MESSAGES.en.delivery.timeline = {
+  "whyLate": "Why {days} days late?",
+  "whyLateOne": "Why {days} day late?",
+  "title": "Why B arrives {days} days later than A",
+  "explanation": "B first queues for {queue} working days. Study results arrive {weeks} weeks later ({reportDate}), missing the {originalWindow} window and requiring a wait until {candidateWindow}. Production itself takes the same time.",
+  "phases": [
+    "Wait for lab resources",
+    "Study and technical / QA assessment",
+    "Production preparation and window wait",
+    "Production, release and transport"
+  ],
+  "proposedHold": "Proposed hold until",
+  "heldUntil": "Held until",
+  "invalidHold": "Previous proposed hold · no longer valid",
+  "originalWindow": "Original production window",
+  "needDate": "Customer need date",
+  "held": "Held · process readiness still under assessment",
+  "conditional": "Conditional estimate",
+  "historical": "Previous plan only · requires reassessment",
+  "noQueue": "No additional queue",
+  "fullResults": "Estimated full study results",
+  "productionWindow": "Production window",
+  "pureWait": "Window wait after preparation and buffer",
+  "noEndpoint": "No estimated delivery date is available. This box is outside the time scale.",
+  "hatchingNote": "Hatching indicates the wait for a production window.",
+  "phaseDetails": [
+    "Additional queue before the study can start. A has no additional queue. All phase boundaries include overnight and non-working-day handoffs.",
+    "Includes the study, internal assessment, customer technical / QA review and readiness / window-use confirmation.",
+    "Includes production preparation and its buffer. Hatching marks the subsequent wait for a production window.",
+    "Includes production, release, transport and delivery buffer. Parallel release testing and record review are not added twice."
+  ],
+  "zoneSummary": "Lab work and production windows use Shanghai time; customer review and delivery use New York time.",
+  "zoneHelp": "Execution time zones",
+  "zoneDetails": "The assessment phase includes both locations; customer technical / QA review uses New York time. See the execution-zone dates in the detail table below. Month positions provide an overview; each labeled date retains its execution time zone."
+};
+})(globalThis);
+
+(function (global) {
+  global.DEMO_MESSAGES.en.overview.arrangements = {
+    resources: "Resource arrangement", expedited: "Expedited", noQueue: "No additional queue", queue: "Queue for {days} working days",
+    hold: "Window hold", requestHoldUntil: "Request original-window hold until", heldUntil: "Original window held until",
+    holdConditional: "Subject to WuXi confirmation; hold fee non-refundable once confirmed.",
+    holdCommitted: "Hold fee incurred and non-refundable.",
+    noHold: "No original-window hold.", candidateUnconfirmed: "Candidate window not yet confirmed.",
+    separateReschedule: "Later window handled by the separate rescheduling request.",
+    holdUnavailable: "Original-window hold unavailable; see the resource response.",
+    holdNotPursued: "Proceeding with the separate rescheduling request, without an original-window hold.",
+    reassessResources: "Previous arrangement; resource availability needs reassessment.",
+    scope: "Study scope", sameScope: "Same for both",
+    scopeDescription: "Purification-condition screening, candidate confirmation, HMW and recovery assessment, and agreed analyses; excludes additional method development."
+  };
+})(globalThis);

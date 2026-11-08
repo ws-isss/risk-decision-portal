@@ -9,6 +9,7 @@
   "seededShort": "Preset demo records",
   "aOnly": "This tour follows option A. The full workflow supports both options.",
   "nextAct": "Enter next act",
+  "coverageNext": "The next act will preset: {support} has taken over preparation, and {approver} has been designated as approver.",
   "start": "Start 5-minute tour",
   "restart": "Restart tour",
   "full": "Continue in full workflow",

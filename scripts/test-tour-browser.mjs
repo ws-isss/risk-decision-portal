@@ -33,6 +33,8 @@ try {
   await next(p,'openRisk');await next(p,'compare');await next(p,'select');await next(p,'draft');
   const editor=p.locator('[data-draft-role="technical"]');await editor.fill(lang==='zh'?'Emma 实际编辑的技术任务。':'Emma edited this technical task.');
   const edited=await editor.inputValue();await next(p,'confirm');
+  assert.equal(await p.locator('#assign-support, #designate-approver').count(),0,'Act 1 does not distract with coverage actions');
+  assert.match(await p.locator('#tour-coverage-preview').innerText(),lang==='zh'?/下一幕将预置：Ben 已接手准备工作，Elena 已被指定为审批人/:/next act will preset: Ben has taken over preparation, and Elena has been designated as approver/);
   assert.equal(await p.locator('#tour-next-act').isEnabled(),true);await p.locator('#tour-next-act').click();times.push(await clock(p));
   assert.equal(await p.locator('#notice').textContent(),'','Act transition clears both toast and live-region text');
   assert.equal(await p.locator('.tour-timeline').getAttribute('data-tour-act'),'2');assert.match(await p.locator('.tour-guidance').innerText(),lang==='zh'?/预置演示记录/:/Preset demo records/);
@@ -77,6 +79,15 @@ try {
   await p.locator('[data-select-plan="B"]').click();await p.locator('#draft-task-briefs').click();await p.locator('#confirm-task-briefs').click();
   assert.equal(await p.locator('#tour-next-act').isDisabled(),true);assert.equal(await p.locator('#tour-choose-a').count(),0,'Created task scope remains locked');
   const beforeExit=await clock(p);await p.locator('#tour-full').click();assert.equal(await clock(p),beforeExit);assert.equal(await p.locator('.tour-timeline').count(),0);assert.equal(await p.locator('#decision').getAttribute('data-task-count'),'3');
+  for(const id of ['assign-support','designate-approver']) assert.equal(await p.locator('#'+id).isEnabled(),true,'Leaving the tour restores ordinary coverage actions');
+  assert.equal(await p.locator('#tour-coverage-preview').count(),0);
+  await p.locator('#chapter-select').selectOption('coverage');
+  for(const id of ['assign-support','designate-approver']) assert.equal(await p.locator('#'+id).isEnabled(),true,'Approver-leave chapter retains both actions');
+  assert.equal(await p.locator('#tour-coverage-preview').count(),0);
+  // A complete non-tour A flow keeps the actions after creating tasks as well.
+  await p.locator('#chapter-select').selectOption('selection');await p.locator('[data-select-plan="A"]').click();await p.locator('#draft-task-briefs').click();await p.locator('#confirm-task-briefs').click();
+  for(const id of ['assign-support','designate-approver']) assert.equal(await p.locator('#'+id).isEnabled(),true);
+  assert.equal(await p.locator('#tour-coverage-preview').count(),0);
   assert.deepEqual(await p.evaluate(()=>JSON.parse(JSON.stringify(DEMO_DATA))),data);
   results.push({lang,times,disabled});await context.close();
  }

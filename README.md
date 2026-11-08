@@ -82,6 +82,8 @@ The dashboard presents project risk, current milestones and deadlines, pending c
 
 ## Develop and verify
 
+The expanded forecast basis includes a shared A/B timeline with execution-zone dates, continuous phase handoffs and an unscaled reassessment placeholder when delivery estimates are invalid. Run `node scripts/test-forecast-browser.mjs` for bilingual offline, mobile and state-sync checks using the existing Playwright environment.
+
 Node.js 18 or newer is needed for development checks, not for opening the HTML. No application dependencies are required.
 
 ```sh

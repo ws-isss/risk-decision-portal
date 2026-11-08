@@ -395,7 +395,7 @@
   function stageDate(stage) {
     return `${dateOnly(stage.start, stage.executionTimezone)}<span class="range-arrow">→</span>${dateOnly(stage.end, stage.executionTimezone)}`;
   }
-  function renderBasis() {
+  function renderBasis(state) {
     const keys = ["sampleCheck", "screening", "firstAnalysis", "candidateConfirmation", "finalAnalysis", "internalAssessment", "customerResultReview", "windowUseConfirmation", "productionPreparation", "preparationBuffer", "windowWait", "seedExpansion", "productionCulture", "harvestPurification", "releaseTesting", "recordReview", "finalQA", "dispatchPreparation", "transport", "deliveryBuffer"];
     const row = key => {
       const a = data.plans.A.stages.find(stage => stage.id === key);
@@ -403,7 +403,7 @@
       const duration = a.unit === "workdays" ? a.duration === 1 ? text.delivery.workdayOne : interpolate(text.delivery.workdays, { days: a.duration }) : a.unit === "calendarDays" ? a.duration === 1 ? text.delivery.calendarDayOne : interpolate(text.delivery.calendarDays, { days: a.duration }) : text.delivery.elapsedWait;
       return `<tr data-stage="${key}"><th scope="row">${escape(text.delivery.phaseNames[key])}<small>${escape(duration)}</small></th><td class="execution-zone" data-zone="${a.executionTimezone}">${city(a.executionTimezone)}${a.executionTimezoneNoteKey ? " *" : ""}</td><td data-plan="A">${stageDate(a)}</td><td data-plan="B">${stageDate(b)}</td></tr>`;
     };
-    return `<details id="forecast-basis" class="forecast-basis"><summary>${icon("chevron")}<span>${text.delivery.basis}</span></summary><div class="basis-content"><div class="section-heading"><h3>${text.delivery.basisTitle}</h3><span class="data-tag">${text.common.assumption}</span></div><p>${text.delivery.basisIntro}</p><div class="queue-summary">${text.delivery.phaseNames.resourceQueue} · ${text.common.shanghai}: <strong>A ${interpolate(text.delivery.workdays, { days: data.plans.A.queueWorkdays })}</strong><span>/</span><strong>B ${interpolate(text.delivery.workdays, { days: data.plans.B.queueWorkdays })}</strong></div><div class="table-wrap basis-table-wrap" role="region" aria-label="${escape(text.delivery.basisTitle)}" tabindex="0"><table><caption>${text.delivery.executionDates}</caption><thead><tr><th scope="col">${text.delivery.phase}</th><th scope="col">${text.delivery.executionTimezone}</th><th scope="col">${text.delivery.originalPath}</th><th scope="col">${text.delivery.candidatePath}</th></tr></thead><tbody>${keys.map(row).join("")}</tbody></table></div><div class="basis-notes"><p>* ${text.delivery.timezoneNotes.crossBorderShanghaiReference}</p><p>${text.delivery.parallelNote}</p><p>${text.delivery.bufferNote}</p><p>${text.delivery.assumptions}</p></div></div></details>`;
+    return `<details id="forecast-basis" class="forecast-basis"><summary>${icon("chevron")}<span>${text.delivery.basis}</span></summary><div class="basis-content"><div class="section-heading"><h3>${text.delivery.basisTitle}</h3><span class="data-tag">${text.common.assumption}</span></div><p>${text.delivery.basisIntro}</p>${global.DEMO_FORECAST.render({data,state,text,core,gapMarkup,info})}<div class="queue-summary">${text.delivery.phaseNames.resourceQueue} · ${text.common.shanghai}: <strong>A ${interpolate(text.delivery.workdays, { days: data.plans.A.queueWorkdays })}</strong><span>/</span><strong>B ${interpolate(text.delivery.workdays, { days: data.plans.B.queueWorkdays })}</strong></div><div class="table-wrap basis-table-wrap" role="region" aria-label="${escape(text.delivery.basisTitle)}" tabindex="0"><table><caption>${text.delivery.executionDates}</caption><thead><tr><th scope="col">${text.delivery.phase}</th><th scope="col">${text.delivery.executionTimezone}</th><th scope="col">${text.delivery.originalPath}</th><th scope="col">${text.delivery.candidatePath}</th></tr></thead><tbody>${keys.map(row).join("")}</tbody></table></div><div class="basis-notes"><p>* ${text.delivery.timezoneNotes.crossBorderShanghaiReference}</p><p>${text.delivery.parallelNote}</p><p>${text.delivery.bufferNote}</p><p>${text.delivery.assumptions}</p></div></div></details>`;
   }
 
   function renderFeeBreakdown(id = "cost-detail") {
@@ -442,7 +442,24 @@
   function renderComparison(state) {
     const a = data.plans.A;
     const b = data.plans.B;
-    const reassess = workflow.project(data,state).forecastReassessmentRequired;
+    const comparisonView = workflow.project(data,state);
+    const reassess = comparisonView.forecastReassessmentRequired;
+    const terms = text.overview.arrangements;
+    const resourceArrangement = plan => {
+      const queue = plan.queueWorkdays === 0 ? terms.noQueue : interpolate(terms.queue,{days:plan.queueWorkdays});
+      return `<span class="comparison-arrangement">${escape(plan.id === "A" ? terms.expedited + " · " + queue : queue)}${reassess ? `<small>${escape(terms.reassessResources)}</small>` : ""}</span>`;
+    };
+    const holdArrangement = plan => {
+      if (plan.id === "B") return `<span class="comparison-arrangement">${escape(terms.noHold)}<small>${escape(comparisonView.rescheduleRequested ? terms.separateReschedule : terms.candidateUnconfirmed)}</small></span>`;
+      if (reassess) return `<span class="comparison-arrangement">${escape(comparisonView.resourceRejected ? terms.holdUnavailable : terms.holdNotPursued)}</span>`;
+      const held = comparisonView.resourceConfirmed;
+      return `<span class="comparison-arrangement">${escape(held ? terms.heldUntil : terms.requestHoldUntil)} <time datetime="${plan.holdUntil}">${instant(plan.holdUntil,data.calendars.base.timezone)}</time> <span class="comparison-hold-zone">· ${text.common.shanghai}</span><small>${escape(held ? terms.holdCommitted : terms.holdConditional)}</small></span>`;
+    };
+    const comparisonGap = plan => {
+      const daysLate = -core.calendarGap(state.needByLocalDate, plan.forecast.localDate);
+      const explanation = plan.id === "B" && !reassess && daysLate > 0 ? `<a id="explain-delivery-gap" class="forecast-explanation-link" href="#forecast-timeline" aria-controls="forecast-basis">${escape(interpolate(daysLate === 1 ? text.delivery.timeline.whyLateOne : text.delivery.timeline.whyLate, {days:daysLate}))}</a>` : "";
+      return `<div class="comparison-gap">${gapMarkup(plan,state)}${explanation}</div>`;
+    };
     const select = plan => state.viewer === "P01" ? `<button class="button button-secondary select-plan" data-select-plan="${plan}"${state.decision?.tasksCreated || draftLoading ? " disabled" : ""}>${state.decision?.planId === plan ? text.decision.selected : interpolate(text.decision.choose, {plan})}</button>` : "";
     const requirement = `<dl class="info-facts"><dt>${text.delivery.deliveryItem}</dt><dd id="requirement-item-display">${escape(state.deliverableOverride || text.project.released)}</dd><dt>${text.delivery.destination}</dt><dd id="requirement-destination-display">${escape(state.destinationOverride || text.project.newJerseyFormulationSite)}</dd><dt>${text.delivery.needBy}</dt><dd>${core.formatLocalDate(state.needByLocalDate)} · ${text.common.newYork}</dd></dl>${note(text.delivery.calendarNote)}`;
     const row = (key, heading, content, help = "") => `<tr data-metric="${key}"><th scope="row"><div class="metric-label">${heading}${help}</div></th>${[a,b].map(plan => `<td data-plan="${plan.id}"${key === "delivery" ? ` data-forecast="${plan.id}"` : ""}>${content(plan)}</td>`).join("")}</tr>`;
@@ -451,11 +468,14 @@
       <div class="comparison-panel"><div class="table-wrap comparison-wrap"><table id="comparison-table"><thead><tr><th scope="col">${text.overview.factor}</th><th scope="col"><div>${text.overview.optionA}${info("optionA", text.overview.optionAInfo, note(text.delivery.originalCondition))}</div>${select("A")}</th><th scope="col"><div>${text.overview.optionB}${info("optionB", text.overview.optionBInfo, note(text.delivery.candidateCondition), "end")}</div>${select("B")}</th></tr></thead><tbody>
         ${row("cost", `<button id="toggle-costs" class="cost-toggle" aria-expanded="${feesExpanded}" aria-controls="cost-details" aria-label="${text.fees.toggle}">${icon("chevron")}${text.overview.cost}</button>`, plan => `<strong class="amount">${money(plan.total)}</strong>${plan.id === "A" ? `<span class="cost-difference">${interpolate(text.overview.premium, { amount: money(a.total - b.total) })}</span>` : ""}`)}
         <tr id="cost-details"${feesExpanded ? "" : " hidden"}><td colspan="3">${renderFeeBreakdown("overview-cost-detail")}</td></tr>
+        ${row("resources", terms.resources, resourceArrangement)}
+        ${row("hold", terms.hold, holdArrangement)}
+        <tr data-metric="scope"><th scope="row">${escape(terms.scope)}</th><td colspan="2"><span class="comparison-arrangement"><strong>${escape(terms.sameScope)}</strong> · ${escape(terms.scopeDescription)}</span></td></tr>
         ${row("window", text.overview.window, plan => `<time datetime="${plan.window.at}">${dateOnly(plan.window.at, data.calendars.base.timezone)}</time><span class="inline-meta">${text.common.shanghai}</span>`, info("window", text.overview.windowInfo, note(text.overview.windowExplanation)))}
         ${row("delivery", text.overview.estimatedDelivery, plan => `${reassess ? `<strong>${text.portal.reassessment}</strong><small>${text.portal.previousEstimate}</small>` : ""}<time datetime="${plan.forecast.delivery}">${dateOnly(plan.forecast.delivery, data.baseline.timezone)}</time><span class="inline-meta">${text.common.newYork}</span>`, info("delivery", text.overview.deliveryInfo, note(reassess ? text.portal.forecastInvalid : text.overview.deliveryExplanation)))}
-        ${row("gap", text.overview.difference, plan => gapMarkup(plan, state))}
+        ${row("gap", text.overview.difference, comparisonGap)}
         ${row("confirmation", text.overview.confirmed, plan => `<span class="confirmation-status" data-confirmation="${plan.id}">${windowStatus(plan,state)}</span>`)}
-      </tbody></table></div><p class="shared-prerequisite">${text.overview.sharedPrerequisite}</p>${state.viewer === "P01" && state.decision?.tasksCreated ? `<p class="decision-note">${text.decision.timingRules.scopeLocked}</p>` : ""}${renderBasis()}</div>
+      </tbody></table></div><p class="shared-prerequisite">${text.overview.sharedPrerequisite}</p>${state.viewer === "P01" && state.decision?.tasksCreated ? `<p class="decision-note">${text.decision.timingRules.scopeLocked}</p>` : ""}${renderBasis(state)}</div>
     </section>`;
   }
 
@@ -498,7 +518,7 @@
       <header class="topbar"><div class="app-identity"><a class="brand" href="#home">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools">${language === "zh" ? info("terminology",text.common.glossaryTitle,`<dl class="info-facts">${Object.entries(text.common.glossary).map(([term,meaning])=>`<dt>${escape(term)}</dt><dd>${escape(meaning)}</dd>`).join("")}</dl>`,"end") : ""}<details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.languageCurrent}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="${language === "en"}">${text.common.languageEnglish}</button><button type="button" data-language="zh" aria-current="${language === "zh"}">${text.common.languageChinese}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="primary-roles" aria-label="${text.common.viewAs}">${["P01","P06","P07"].map(id=>`<button class="role-button" data-viewer="${id}" aria-pressed="${state.viewer===id}">${escape(data.people[id].name.split(" ")[0])}</button>`).join("")}</div><details class="more-roles"><summary>${text.tour.moreRoles}${!["P01","P06","P07"].includes(state.viewer)?` · ${escape(person.name)}`:""}</summary><div class="viewer-picker"><label for="viewer">${text.common.viewAs}</label><select id="viewer">${Object.values(data.people).map(p=>`<option value="${p.id}"${p.id===state.viewer?" selected":""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div></details>${renderNotifications(state, person)}</div></header>
       <nav class="workspace-nav" aria-label="${text.nav.workspace}"><a href="#home"${activePage==="home"?' aria-current="page"':""}>${text.tour.home}</a><a href="#main"${activePage==="overview"?' aria-current="page"':""}>${text.tour.workspace}</a></nav><main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : activePage === "home" ? "home" : "overview"}">${unpublished ? renderUnpublished(state,person) : activePage === "home" ? global.DEMO_DASHBOARD_VIEW.render({data,state,text,core,complete:tourComplete,helpers:{escape,interpolate,instant,dateOnly,city,badge,gapMarkup,decisionStatus}}) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction, recordText}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
       <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-timing-kind="${banner.kind || "milestone"}" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
-      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief,renderAuthorizationBasis,recordText}})}${renderWuxi(state)}${renderContext(state)}`}
+      ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,tourAct,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief,renderAuthorizationBasis,recordText}})}${renderWuxi(state)}${renderContext(state)}`}
       ${renderManagementBrief(state)}${renderAdvance(state,person)}
       <footer class="page-footer">${text.overview.footer}</footer></main>`;
     explainTerms(root);
@@ -656,6 +676,12 @@
   }
 
   document.addEventListener("click", event => {
+    if (event.target.closest("#explain-delivery-gap")) {
+      event.preventDefault();
+      document.getElementById("forecast-basis").open = true;
+      focusOperation(document.getElementById("forecast-timeline"));
+      return;
+    }
     if (event.target.closest("#tour-start, #tour-restart")) {
       openDialog(`${dialogHeading(text.tour.resetTitle)}<p>${text.tour.resetBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-tour-start">${text.tour.resetConfirm}</button></div>`); return;
     }

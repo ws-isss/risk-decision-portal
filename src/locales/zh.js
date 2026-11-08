@@ -196,3 +196,57 @@
   };
   Object.assign(global.DEMO_MESSAGES.zh.notifications.kinds, {"rejected":{"title":"审阅结果：不同意","body":"{owner} 不同意当前请求。Emma 须处理问题并重新提交；当前不能授权。"},"needsInformation":{"title":"审阅结果：需要补充信息","body":"{owner} 要求补充信息。由 Emma 补充并重新提交；当前不能授权。"},"reviewBlocked":{"title":"审阅结果阻止授权","body":"Emma 须处理审阅问题并重新提交。技术与 QA 必须均同意新版本后，才可授权。"}});
 })(globalThis);
+
+(function (global) {
+  global.DEMO_MESSAGES.zh.delivery.timeline = {
+  "whyLate": "为什么晚 {days} 天？",
+  "whyLateOne": "为什么晚 {days} 天？",
+  "title": "为什么 B 比 A 晚 {days} 天",
+  "explanation": "B 要先排队 {queue} 个工作日，小试结果晚 {weeks} 周（{reportDate}），赶不上 {originalWindow} 的窗口，只能等到 {candidateWindow}。生产本身的时长不变。",
+  "phases": [
+    "等实验资源",
+    "小试和技术／QA 评估",
+    "生产准备及等窗口",
+    "生产、放行和运输"
+  ],
+  "proposedHold": "拟暂留至",
+  "heldUntil": "已暂留至",
+  "invalidHold": "原拟暂留日期 · 已失效",
+  "originalWindow": "原生产窗口",
+  "needDate": "客户需求日",
+  "held": "已暂留 · 工艺就绪仍在评估",
+  "conditional": "条件性预测",
+  "historical": "原计划参考 · 需重新评估",
+  "noQueue": "无额外排队",
+  "fullResults": "预计小试完整结果",
+  "productionWindow": "生产窗口",
+  "pureWait": "准备及缓冲结束后等待窗口",
+  "noEndpoint": "暂无预计交付日期。本占位区位于时间刻度之外。",
+  "hatchingNote": "斜线表示等待生产窗口。",
+  "phaseDetails": [
+    "小试开始前的额外资源排队，A 无额外排队。所有阶段的夜间及非工作日交接均计入对应区间。",
+    "包含小试、内部评估、客户技术／QA 审阅，以及工艺就绪／窗口使用确认。",
+    "包含生产准备及缓冲，斜线部分为之后等待生产窗口的时间。",
+    "包含生产、放行、运输及交付缓冲。放行检测与记录审阅的并行时间不重复累加。"
+  ],
+  "zoneSummary": "实验和生产窗口按上海时间，客户审阅和交付按纽约时间。",
+  "zoneHelp": "执行时区说明",
+  "zoneDetails": "评估段包含两地工作，客户技术／QA 审阅按纽约时间，具体执行时区见下方日期明细表。月份位置用于概览，各节点日期保留其执行地时区。"
+};
+})(globalThis);
+
+(function (global) {
+  global.DEMO_MESSAGES.zh.overview.arrangements = {
+    resources: "资源安排", expedited: "加急", noQueue: "无需额外排队", queue: "先排队 {days} 个工作日",
+    hold: "窗口暂留", requestHoldUntil: "申请原生产窗口暂留至", heldUntil: "原生产窗口已暂留至",
+    holdConditional: "待药明确认；确认后暂留费不退。",
+    holdCommitted: "暂留费已产生且不退。",
+    noHold: "不暂留原生产窗口。", candidateUnconfirmed: "候选窗口尚未确认。",
+    separateReschedule: "后续窗口由单独的改期请求处理。",
+    holdUnavailable: "无法暂留原生产窗口，详见资源回执。",
+    holdNotPursued: "当前按单独的改期请求推进，不申请原窗口暂留。",
+    reassessResources: "原安排参考，资源可行性需重新评估。",
+    scope: "研究范围", sameScope: "两者相同",
+    scopeDescription: "纯化条件筛选、候选条件确认、HMW 和回收率评估及约定的分析，不含额外的方法开发。"
+  };
+})(globalThis);

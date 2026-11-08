@@ -8,8 +8,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 const allowedRoot = new Set(['.gitignore', '.gitattributes', 'AGENTS.md', 'PRD.md', 'README.md', 'index.html', 'package.json']);
 const allowed = file => allowedRoot.has(file) || /^src\/(?:locales\/)?[\w-]+\.(?:js|css|html)$/.test(file) || /^scripts\/[\w-]+\.mjs$/.test(file) || file === '.github/workflows/pages.yml';
-const files = git(['ls-files', '-z']).split('\0').filter(Boolean);
-assert.ok(files.length, 'Stage the audited source files before checking the public manifest.');
+const tracked = git(['ls-files', '-z']).split('\0').filter(Boolean);
+const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+const files = [...new Set([...tracked, ...untracked])];
+assert.ok(files.length, 'No source files found to audit.');
 for (const file of files) {
   assert.ok(allowed(file), `Unapproved public file: ${file}`);
   assert.equal((await lstat(path.join(root, file))).isSymbolicLink(), false, `Symlink not allowed: ${file}`);

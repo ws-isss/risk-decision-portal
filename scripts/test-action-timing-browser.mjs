@@ -33,7 +33,7 @@ async function step(p,outcome,trace) {
 try {
   for(const lang of ['en','zh']) for(const chapter of ['selection','prepublication','hold','unavailable']) {
     const context=await browser.newContext({offline:true,viewport:lang==='zh'?{width:390,height:844}:{width:1440,height:1050}}),p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));
-    await p.goto(pathToFileURL(path.join(root,'dist/index.html')).href);
+    await p.goto(pathToFileURL(path.join(root,'dist/index.html')).href+'#main');
     if(lang==='zh'){await p.locator('#language-menu summary').click();await p.locator('[data-language="zh"]').click();}
     const data=await p.evaluate(()=>JSON.parse(JSON.stringify(DEMO_DATA))),trace=[];
     if(chapter!=='selection') await p.locator('#chapter-select').selectOption(chapter);
@@ -42,13 +42,13 @@ try {
       assert.equal(await clock(p),data.initialClock);assert.equal(await p.locator('#assign-support').isEnabled(),true);assert.equal(await p.locator('#designate-approver').isEnabled(),true);
       await p.locator('#assign-support').click();await p.locator('#designate-approver').click();assert.equal(await clock(p),data.initialClock);
       for(const id of ['P05','P06']) {
-        await p.locator('#viewer').selectOption(id);await p.locator('#notifications-toggle').click();
+        await p.locator('#viewer').selectOption(id,{force:true});await p.locator('#notifications-toggle').click();
         const notice=p.locator('[data-notification-received]').first();assert.match(await notice.innerText(),lang==='zh'?/收到于/:/Received at/);
         assert.equal(await notice.locator('time').getAttribute('datetime'),data.initialClock);
         await p.locator('#notifications-toggle').click();
       }
       assert.equal(await p.locator('#authorize-budget').isDisabled(),true);assert.match(await p.locator('#budget-action-blocker').innerText(),/QA/);
-      await p.locator('#viewer').selectOption('P01');
+      await p.locator('#viewer').selectOption('P01',{force:true});
       assert.match(await p.locator('#task-assignBen [data-task-actual]').innerText(),/9:00|09:00/);
       assert.equal(await p.locator('#task-assignBen .action-due > time').getAttribute('datetime'),data.events.backupAssigned.at);
       await p.screenshot({path:path.join(root,'output',`early-assignment-${lang}.png`),fullPage:true});

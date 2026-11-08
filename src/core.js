@@ -159,6 +159,36 @@
     function bothReviews(d) { return d.reviews.technical.status === "completed" && d.reviews.quality.status === "completed"; }
     function reviewsApproved(d) { return bothReviews(d) && Object.values(d.reviews).every(r => r.outcome === "approved" && r.requestVersion === d.version); }
     function reviewBlocked(d) { return d && Object.values(d.reviews).some(r => r.status === "completed" && r.outcome !== "approved"); }
+    // Shared preparation for explicit chapters and forward-only tour acts.
+    // Only missing records are inserted; actual actions and their text survive.
+    function prepareReviews(fixtures, quality = true) {
+      const d = tasksRequired();
+      const forward = key => { if (Date.parse(state.clock) < Date.parse(data.events[key].at)) api.advanceTo(key); };
+      for (const kind of ["technical", "quality"]) {
+        if (d.reviews[kind].status === "notStarted") { api.setViewer(reviewOwners[kind]); api.startReview(kind); }
+      }
+      if (!d.support.assignedAt) { forward("backupAssigned"); api.setViewer("P01"); api.assignSupport(); }
+      if (!d.support.acceptedAt) { api.setViewer("P05"); api.acceptSupport(); }
+      if (!d.approver.id) { forward("alternateAssigned"); api.setViewer("P01"); api.designateApprover(); }
+      forward("reviewsComplete");
+      for (const kind of quality ? ["technical", "quality"] : ["technical"]) {
+        if (d.reviews[kind].status !== "completed") { api.setViewer(reviewOwners[kind]); api.completeReview(kind, fixtures.reviewReasons[kind], "approved"); }
+      }
+    }
+    function tourTransitionInfo(act) {
+      const d = state.decision;
+      const target = act === 2 ? "budgetAuthorized" : "resourceConfirmed";
+      let reason = null;
+      if (![2,3].includes(act)) reason = "invalid";
+      else if (Date.parse(state.clock) > Date.parse(data.events[target].at)) reason = "past";
+      else if (d?.planId === "B") reason = "planB";
+      else if (!d?.tasksCreated) reason = "tasks";
+      else if (reviewBlocked(d) || d.version > 1) reason = "blocked";
+      else if (act === 2 && d.authorization) reason = "alreadyAuthorized";
+      else if (act === 3 && !d.authorization) reason = "authorization";
+      else if (act === 3 && (!authorizationMatches(data,state,"main") || !reviewsApproved(d) || d.resource?.scheduling?.outcome === "unavailable" || d.resource?.rescheduleRequest)) reason = "blocked";
+      return {allowed:!reason,reason,target};
+    }
     function getAdvanceInfo() {
       if (state.publication.status === "draft") {
         return Date.parse(state.clock) < Date.parse(data.events.materialReady.at)
@@ -463,7 +493,7 @@
         return changed();
       },
       enterChapter(id, fixtures = {}) {
-        ensure(["prepublication", "selection", "coverage", "authorization", "hold", "unavailable"].includes(id), "UNKNOWN_CHAPTER");
+        ensure(["prepublication", "selection", "coverage", "authorization", "hold", "unavailable", "quality"].includes(id), "UNKNOWN_CHAPTER");
         const seeded = !["prepublication", "selection"].includes(id);
         if (seeded) {
           ensure(fixtures.drafts && ["technical", "quality", "budget"].every(key => typeof fixtures.drafts[key] === "string" && fixtures.drafts[key].trim()), "INVALID_CHAPTER_FIXTURE");
@@ -476,10 +506,9 @@
           api.setViewer("P02"); api.startReview("technical"); api.setViewer("P03"); api.startReview("quality"); api.advanceTo("backupAssigned");
           api.setViewer("P01");
           if (id !== "coverage") {
-            api.assignSupport(); api.setViewer("P05"); api.acceptSupport(); api.advanceTo("alternateAssigned");
-            api.setViewer("P01"); api.designateApprover(); api.advanceTo("reviewsComplete");
-            api.setViewer("P02"); api.completeReview("technical", fixtures.reviewReasons.technical, "approved");
-            api.setViewer("P03"); api.completeReview("quality", fixtures.reviewReasons.quality, "approved"); api.advanceTo("budgetAuthorized"); api.setViewer("P06");
+            prepareReviews(fixtures, id !== "quality");
+            if (id !== "quality") { api.advanceTo("budgetAuthorized"); api.setViewer("P06"); }
+            else api.setViewer("P03");
             if (["hold", "unavailable"].includes(id)) {
               api.authorize({ signature: data.people.P06.name, reason: fixtures.authorizationReason, acknowledged: true });
               api.advanceTo("resourceReviewStart"); api.setViewer("P07");
@@ -491,6 +520,29 @@
         state.branchIntent = id === "unavailable" ? "unavailable" : id === "hold" ? "held" : null;
         state.resetNotice = true;
         return snapshot();
+      },
+      tourTransitionInfo,
+      enterTourAct(act, fixtures = {}) {
+        const info = tourTransitionInfo(act);
+        ensure(info.allowed, "TOUR_TRANSITION_BLOCKED");
+        ensure(fixtures.reviewReasons && ["technical","quality"].every(k => typeof fixtures.reviewReasons[k] === "string" && fixtures.reviewReasons[k].trim()), "INVALID_CHAPTER_FIXTURE");
+        if (act === 3) ensure(typeof fixtures.resourceReason === "string" && fixtures.resourceReason.trim(), "INVALID_CHAPTER_FIXTURE");
+        const before = new Set(state.eventIds);
+        if (act === 2) {
+          prepareReviews(fixtures);
+          api.advanceTo("budgetAuthorized"); api.setViewer("P01");
+        } else {
+          if (!state.decision.resource.startedAt) {
+            if (Date.parse(state.clock) < Date.parse(data.events.resourceReviewStart.at)) api.advanceTo("resourceReviewStart");
+            api.setViewer("P07"); api.startResourceReview();
+          }
+          api.advanceTo("resourceConfirmed");
+          if (!state.decision.resource.scheduling) { api.setViewer("P08"); api.respondScheduling({outcome:"held",reason:fixtures.resourceReason}); }
+          api.setViewer("P07");
+        }
+        state.seededEventIds = [...new Set([...state.seededEventIds, ...state.eventIds.filter(id => !before.has(id))])];
+        state.chapterSeeded = true;
+        return changed();
       },
       reset(scene) {
         ensure(scene === "customer" || scene === "prepublication", "UNKNOWN_SCENE");

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const c={Intl,Date};for(const name of ['data','core','workflow']) vm.runInNewContext(readFileSync(new URL(`../src/${name}.js`,import.meta.url),'utf8'),c);
+const {DEMO_DATA:d,DEMO_CORE:core,DEMO_WORKFLOW:w}=c,s=core.createSession(d),f={drafts:{technical:'Review.',quality:'Review.',budget:'Review.'},reviewReasons:{technical:'Agree.',quality:'Agree.'},authorizationReason:'Authorize.',resourceReason:'Held.'};
+const model=()=>w.dashboard(d,s.getState()),counts=()=>model().groups.map(g=>g.count).join(',');
+assert.equal(counts(),'1,0,0');assert.equal(model().showOptions,true);
+s.selectPlan('A');s.saveDrafts(f.drafts);s.confirmTasks();assert.equal(counts(),'1,2,0');
+s.enterTourAct(2,f);assert.equal(counts(),'1,0,0');s.setViewer('P06');s.authorize({signature:d.people.P06.name,reason:'Authorize.',acknowledged:true});
+assert.equal(model().showOptions,false);assert.equal(counts(),'0,0,1');assert.ok(!model().timings.some(t=>t.label==='authorization'));
+s.enterTourAct(3,f);assert.equal(counts(),'0,0,1');assert.equal(model().view.resourceConfirmed,false);
+s.returnResourceReceipt();assert.equal(counts(),'0,0,0');assert.equal(model().timings.map(t=>t.label).join(','),'holdExpiry,firstResults');assert.equal(model().timings[0].at,d.plans.A.holdUntil);
+s.enterChapter('unavailable',f);s.respondScheduling({outcome:'unavailable',reason:'Slots unavailable.'});s.setViewer('P07');s.returnResourceReceipt();assert.equal(model().forecast,null);assert.equal(model().timings[0].label,'expectedResponse');assert.equal(counts(),'0,0,1');
+s.requestReschedule();s.advanceNext();s.setViewer('P08');s.respondRescheduleQuote();s.setViewer('P07');s.returnRescheduleQuote();assert.equal(counts(),'1,0,0');assert.equal(model().timings[0].label,'customerActionDue');
+s.enterChapter('quality',f);s.completeReview('quality','Need evidence.','needsInformation');assert.equal(counts(),'1,0,0');assert.equal(model().view.reviewBlockers.length,1);assert.equal(model().blockerOwner,'P01');assert.equal(model().groups[0].blocked,true);
+console.log('Dashboard checks passed: actionable counts, authorization versus client confirmation, effective times, invalidated delivery and QA blockers share canonical records.');

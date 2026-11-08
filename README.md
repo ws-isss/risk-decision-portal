@@ -1,6 +1,25 @@
 # DaVinci delivery decisions — concept demo
 
-The demo now covers the complete customer decision, WuXi publication and resource response, a separately authorized rescheduling process, and editable simulated management briefs. The successful hold ends with this coordination round complete while the aggregate issue and process readiness remain under assessment. The unavailable path proceeds through a candidate quotation, a new customer decision and authorization, and Alex's formal rescheduling confirmation. The original scenario dates, costs and people remain frozen; the separately documented exception timeline adds business-calendar dates for rescheduling actions. The interface defaults to English and includes a complete Chinese language switch, including guides, notifications, dialogs and state-aware management briefs.
+When a development deviation threatens a GMP production window, customers and WuXi need to understand the options, obtain the right authorization and confirm resources before options expire. This synthetic HBT-101 demo shows that decision workflow as an extension of DaVinci’s existing capabilities. It does not claim that DaVinci lacks these features.
+
+## Five-minute tour
+
+Start on the project dashboard and choose **Start 5-minute tour**. This tour uses option A.
+
+1. **Emma — understand and organize:** open the risk, compare A/B, select A, generate and confirm editable task briefs.
+2. **Elena — authorize:** explicitly enter the next act. Labelled preset records cover Ben’s acceptance, Elena’s designation and both positive reviews. As Emma, generate, preview and attach a frozen management brief; then switch to Elena, read it and sign.
+3. **Alex — return the result:** explicitly enter the next act. Labelled records cover resource coordination and Mei’s hold confirmation. Alex returns the receipt; Emma’s dashboard shows the result, hold expiry and remaining assessment.
+
+The two act transitions move forward to existing scenario times. They preserve actual task edits, attachments and signatures. Guide buttons only change role and focus; they do not submit actions. Option B remains available in the full workflow; its next-act button is disabled. A transition whose start time has passed explains that the tour must be restarted. Restarting is an explicit reset.
+
+## Exception scenarios
+
+- **QA requests more information:** enter immediately before Nina selects her review outcome; follow the existing blocked-request and resubmission flow.
+- **Budget approver on leave:** assign Ben’s preparation work and designate Elena; preparation does not confer signing authority.
+- **WuXi unable to hold / rescheduling:** obtain a quote, initiate a separate decision, authorize and formally confirm rescheduling.
+- **Before risk publication:** Alex reviews and publishes the private risk draft when evidence is ready.
+
+Exception cards and the chapter selector explicitly reset the scenario and label preset records. The original chapters, all eight roles and the complete workflow remain available.
 
 ## Open the demo
 
@@ -13,7 +32,7 @@ The interface opens in English. Use the top-right language menu to switch the wh
 
 ## Click through the customer decision
 
-Use the next-action guide to switch to the role responsible for the next unfinished action and focus its control. The guide does not start a review, assign or accept work, record an opinion, or authorize a request; complete each operation explicitly. The top-right **View as** selector remains available for manual exploration. The bottom **Demo timeline** control separately advances only the simulated clock and explains any missing prerequisite. All times in this walkthrough are New York time.
+Open **Project workspace** or choose **Continue in full workflow** to use the complete path below. Use the next-action guide to switch to the role responsible for the next unfinished action and focus its control. The guide does not start a review, assign or accept work, record an opinion, or authorize a request; complete each operation explicitly. The top-right **More roles** menu keeps the full **View as** selector available for manual exploration. The bottom **Demo timeline** control separately advances only the simulated clock and explains any missing prerequisite. All times in this walkthrough are New York time.
 
 | Step | Role and action | Visible result |
 | --- | --- | --- |
@@ -22,11 +41,11 @@ Use the next-action guide to switch to the role responsible for the next unfinis
 | 3 | Emma: Draft task briefs | A brief loading state, then three editable AI draft (simulated) instructions with scope, evidence versions, missing items and business dates. The inputs expand to show their content. No tasks yet. |
 | 4 | Edit a brief, then Confirm and create 3 tasks | Three shared tasks and role notifications. The selected request is fixed; repeated creation is unavailable. |
 | 5 | Daniel: Start review. Nina: Start review | Both reviews become In progress at the initial Monday event, preserving the frozen three-workday review interval. |
-| 6 | Advance to Nov 9, 11:00 AM. Emma: Assign preparation to Ben | Preparation assigned; budget approval is still pending. |
+| 6 | Emma, after tasks are created: Assign preparation to Ben | Preparation assigned; budget approval is still pending. |
 | 7 | Ben: Accept preparation task | The view states: Can prepare materials, but has no approval authority. Ben accepts preparation; his approval button remains disabled. |
-| 8 | Advance to Nov 10, 9:00 AM. Emma: Designate Elena | Elena owns the budget review, which still waits for technical and QA opinions. |
+| 8 | Emma, after tasks are created: Designate Elena | Elena owns the budget review, which still waits for technical and QA opinions. |
 | 9 | Advance to Nov 11, 5:00 PM. Daniel and Nina: each review or edit the example rationale, then Confirm review opinion | Two recorded opinions, visible in the request. Confirmation concerns the additional study, not GMP readiness or batch release. |
-| 10 | Advance to Nov 12, 5:00 PM. Follow the guide to Emma: generate, edit, preview and **Attach to decision request**; then switch to Elena | Elena sees only the frozen attached version, with version number, attaching person, attachment time and original data-as-of time. The signing area shows whether the attachment is current, missing or needs updating. Private drafts are never shown to her. |
+| 10 | After both reviews agree, follow the guide to Emma: generate, edit, preview and **Attach to decision request**; then switch to Elena | Elena sees only the frozen attached version, with version number, attaching person, attachment time and original data-as-of time. The signing area shows whether the attachment is current, missing or needs updating. Private drafts are never shown to her. |
 | 11 | Elena: enter or use the shortcut to fill Elena Torres, review or edit the example reason, check the acknowledgement and Authorize request | Customer authorized – awaiting WuXi confirmation. Signature, reason, amount and scope are recorded. No fees have been incurred and no window is confirmed. |
 | 12 | Switch to Alex or Mei; open Notifications and the risk page | Customer authorization received; the linked task and risk timeline share the same state. Use the guide to continue to the WuXi workflow below. |
 
@@ -34,7 +53,7 @@ An explicit reset allows a fresh B request ($40,000) or another A run. The optio
 
 ## Continue through WuXi
 
-The bottom **Jump to chapter** selector explicitly resets the scenario. It offers Before risk publication, Option selection & AI briefs, Budget approver on leave, Customer authorization, WuXi hold confirmation, and WuXi unable to hold. Chapters that need preceding actions load clearly labelled preset demo records; they do not claim those actions were just performed. The guide switches roles and focuses controls, without submitting them.
+The bottom **Jump to chapter** selector explicitly resets the scenario. It offers Before risk publication, Option selection & AI briefs, Budget approver on leave, Customer authorization, WuXi hold confirmation, WuXi unable to hold, and QA requests more information. Chapters that need preceding actions load clearly labelled preset demo records; they do not claim those actions were just performed. The guide switches roles and focuses controls, without submitting them.
 
 | Path | Clicks and result |
 | --- | --- |
@@ -45,7 +64,7 @@ The bottom **Jump to chapter** selector explicitly resets the scenario. It offer
 | Obtain a fresh decision | Emma launches the rescheduling decision. Elena reviews the returned quote, enters or fills her example signature, reviews the reason, checks the scope acknowledgement and explicitly authorizes. Until she submits, the customer decision remains pending and no fee is incurred. The earlier fallback checkbox does not bypass this approval. |
 | Formally confirm | After Elena's authorization, the guide switches to Alex for **Confirm rescheduling**. Only this action confirms the quoted replacement window and incurs the $10,000 rescheduling fee. Technical readiness and delivery remain under assessment; option B's former delivery estimate is not adopted. Emma can manually update the brief. |
 
-The six chapter entries remain available. The exception has its own preset timeline: Alex enquires Monday Nov 16 at 09:00 Shanghai; Mei quotes Tuesday Nov 17 at 15:00 Shanghai; Alex returns it at 17:00 Shanghai. Customer handling opens Tuesday at 09:00 New York; Emma initiates by 11:00, Elena authorizes by Thursday Nov 19 at 17:00, and Alex formally confirms Friday Nov 20 at 17:00 Shanghai. The next progress update is expected Monday Nov 23 at 17:00 Shanghai. No weekend duty is assumed. All are case design assumptions from PRD E01–E08. Advance time between steps; advancing never records a decision. The frozen simulation clock does not move backwards.
+The original six chapter entries remain available alongside the QA exception. The exception has its own preset timeline: Alex enquires Monday Nov 16 at 09:00 Shanghai; Mei quotes Tuesday Nov 17 at 15:00 Shanghai; Alex returns it at 17:00 Shanghai. Customer handling opens Tuesday at 09:00 New York; Emma initiates by 11:00, Elena authorizes by Thursday Nov 19 at 17:00, and Alex formally confirms Friday Nov 20 at 17:00 Shanghai. The next progress update is expected Monday Nov 23 at 17:00 Shanghai. No weekend duty is assumed. All are case design assumptions from PRD E01–E08. Advance time between steps; advancing never records a decision. The frozen simulation clock does not move backwards.
 
 Before a completed response, WuXi banners show the existing resource-response deadline. After a successful hold, the next key date is the hold expiry. Exception banners distinguish **Expected WuXi response** from **Customer action due**, alongside the actual owner and pending state. The clock, action times, separate exception timeline, notifications and briefs all use the same preset event data. Mei's explicit original-resource confirmation commits $50,000 in resource/hold fees; the failed original-resource branch does not incur those fees.
 
@@ -59,7 +78,7 @@ Generation, editing and preview remain private to Emma. After preview, **Attach 
 
 The guide offers one brief checkpoint immediately before the first Elena signature: **Generate → Preview → Attach to decision request → Switch to Elena and authorize**. It does not repeat at authorization, resource replies or rescheduling milestones. Attaching does not authorize, change any approval or resource state, charge fees, send messages or advance time. Both initial and rescheduling signing areas show missing or outdated attachments and provide a viewing link or a switch back to Emma. Plan, amount, scope or published-state changes mark the attached version **Content is out of date — awaiting Emma’s update**. Updating the private draft alone does not clear that warning; a current draft must be previewed and reattached. Existing authorization rules remain unchanged.
 
-The homepage includes overall project risk, frozen original-window milestones, role actions and shared notifications. The risk page includes evidence, known/unknown/possible impacts, role context, named updates, recorded versus pending timeline rows, and owners with the next action. Fee details and forecast phases remain expandable. Changing the customer requirement updates only the forecast gap.
+The dashboard presents project risk, current milestones and deadlines, pending counts and exception entries. The project workspace retains role actions and shared notifications. The risk page includes evidence, known/unknown/possible impacts, role context, named updates, recorded versus pending timeline rows, and owners with the next action. Fee details and forecast phases remain expandable. Changing the customer requirement updates only the forecast gap.
 
 ## Develop and verify
 
@@ -97,10 +116,12 @@ BROWSER_EXECUTABLE=/absolute/path/to/chromium \
 node scripts/test-brief-browser.mjs
 ```
 
+The new `test-tour-browser.mjs` checks both languages through the three acts, attachment/signature continuity, option-B handling and disabled styling. `test-dashboard-browser.mjs` checks local source, standalone mobile, the repository subpath, navigation, role menus and notification positioning.
+
 Browser checks cover standalone offline execution, the relative-path source entry, desktop and mobile flows, permissions, notifications, timeline state and a locally hosted repository subpath. Review screenshots go to ignored `output/`.
 
 ## Publication and private inputs
 
-The user has approved publishing this round to the same address. After the required checks, pushing `main` runs `.github/workflows/pages.yml`: validate, unit-test, build, audit and upload only `dist/` to GitHub Pages. The same repository and URL are retained. Before each push, stage only reviewed source files and run the public-input audit; never push local app snapshot refs. After deployment, `scripts/test-deployed.mjs` compares the online HTML SHA-256 with the local artifact and checks the published interface.
+After the required checks, publishing `main` runs `.github/workflows/pages.yml`: validate, unit-test, build, audit and upload only `dist/` to GitHub Pages. The same repository and URL are retained. Before each push, stage only reviewed source files and run the public-input audit; never push local app snapshot refs. After deployment, `scripts/test-deployed.mjs` compares the online HTML SHA-256 with the local artifact and checks the published interface.
 
 `reference/`, derived research, local archives and conversation exports remain private and ignored. The build and browser checks neither read nor package research inputs. A real development-conversation export is a separate private deliverable. The PRD is the specification; AGENTS.md holds the stable business and implementation rules. All people, findings, dates and prices shown in the application are synthetic case assumptions.

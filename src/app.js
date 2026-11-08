@@ -10,7 +10,12 @@
   const dialog = document.getElementById("dialog");
   let noticeTimer;
   let feesExpanded = false;
-  let activePage = location.hash.startsWith("#risk") ? "risk" : "overview";
+  const pageForHash = () => !location.hash || ["#home","#exceptions"].includes(location.hash) ? "home" : location.hash.startsWith("#risk") ? "risk" : "overview";
+  let activePage = pageForHash();
+  let tourAct = 0;
+  let tourRiskSeen = false;
+  let tourAttachmentSeen = false;
+  let tourComplete = false;
   let notificationsOpen = false;
   let draftLoading = false;
   let draftGeneration = 0;
@@ -210,16 +215,32 @@
   }
 
   function renderAdvance(state, person) {
+    if (tourAct) {
+      const next = tourAct === 1 ? 2 : 3;
+      const transition = session.tourTransitionInfo(next);
+      return global.DEMO_TOUR_VIEW.render({act:tourAct,state,text,guide:nextGuidedAction(state),transition,loading:draftLoading||briefLoading,escape,
+        clock:`<time datetime="${state.clock}">${instant(state.clock,person.timezone)} ${zoneLabel(person.timezone)}</time>`,
+        at:interpolate(text.tour.at,{time:core.formatInstant(data.events[transition.target].at,next===2?data.baseline.timezone:data.calendars.base.timezone)+" "+city(next===2?data.baseline.timezone:data.calendars.base.timezone)})
+      });
+    }
+    if (activePage === "home") return `<aside class="demo-timeline"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock,person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" selected disabled>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([id,label])=>`<option value="${id}">${label}</option>`).join("")}</select></label></div></aside>`;
     const step = session.getAdvanceInfo();
     const guide = nextGuidedAction(state);
     const guideButton = guide && guide.key !== "advancePublication";
     const stepZone = data.events[step.nextEvent]?.executionTimezone || (state.scene === "prepublication" || ["resourceReviewStart","resourceConfirmed"].includes(step.nextEvent) ? data.calendars.base.timezone : data.baseline.timezone);
-    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : step.nextEvent === "rescheduleCustomerAvailable" ? text.decision.timingRules.officeHandoff : step.nextEvent ? text.decision.timingRules.externalWait : text.decision.clockOnly}</p>${state.resetNotice ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
+    return `<aside class="demo-timeline" aria-label="${text.decision.timeline}"><div class="demo-clock"><strong>${text.decision.timeline}</strong><time datetime="${state.clock}">${instant(state.clock, person.timezone)} ${zoneLabel(person.timezone)}</time><label class="chapter-picker">${text.portal.chapter}<select id="chapter-select"><option value="" disabled selected>${text.portal.chooseChapter}</option>${Object.entries(text.portal.chapters).map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label></div><div class="demo-controls">${guideButton ? `<button class="button button-primary" id="demo-next-step" data-guide-key="${guide.key}" data-guide-role="${guide.role}"${draftLoading || briefLoading ? " disabled" : ""}>${text.portal.guides[guide.key] || text.decision.guide[guide.key]}</button>` : ""}<button class="button ${guideButton ? "button-secondary" : "button-primary"}" id="advance-event"${step.done || step.blockKey ? " disabled" : ""}>${text.decision.advance}${step.nextEvent ? ` · ${instant(data.events[step.nextEvent].at, stepZone)} ${zoneLabel(stepZone)}` : ""}</button></div><p id="advance-blocker">${guide?.key === "advancePublication" ? text.portal.guides.advancePublication : step.done && !guide ? text.portal.terminal : ["completeTechnical","completeQuality"].includes(guide?.key) ? text.decision.reviewFlow.guided : guide ? text.decision.guide.hint : step.nextEvent === "rescheduleCustomerAvailable" ? text.decision.timingRules.officeHandoff : step.nextEvent ? text.decision.timingRules.externalWait : text.decision.clockOnly}</p>${state.resetNotice || state.chapterSeeded ? `<p id="chapter-notice" role="status" data-seeded="${state.chapterSeeded}">${state.chapterSeeded ? text.portal.chapterSeeded : text.portal.chapterBeginning}</p>` : ""}</aside>`;
   }
 
   function nextGuidedAction(state) {
     const d = state.decision;
     const step = (key, role, target) => ({key,role,target});
+    if (tourAct === 1) {
+      if (d?.tasksCreated) return null;
+      if (!tourRiskSeen) return step("openRisk","P01","#risk");
+      if (activePage === "risk" && !d) return step("compare","P01","#comparison");
+    }
+    if (tourAct === 2 && d?.authorization) return null;
+    if (tourAct === 3 && d?.resource.receipt?.outcome === "held") return step("finish","P01","#home");
     const scheduledStep = (key, role, target, eventRef) => Date.parse(state.clock) >= Date.parse(data.events[eventRef].at) ? step(key,role,target) : null;
     if (state.publication?.status === "draft") {
       if (!state.publication.reviewedAt) return step("editRisk","P07","#review-publication-draft");
@@ -260,6 +281,7 @@
       // One guide checkpoint before the initial signature. Later business events
       // retain manual updates and shared stale warnings, never another milestone.
       const attachment = global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state});
+      if (attachment && !global.DEMO_BRIEF.staleReasons(attachment.brief,{data,state}).length && tourAct === 2 && !tourAttachmentSeen) return step("viewAttachment","P06","#view-management-brief");
       if (attachment && !global.DEMO_BRIEF.staleReasons(attachment.brief,{data,state}).length) return step("authorize","P06",'#authorization-form input[name="signature"]');
       if (!managementBrief) return step("managementBrief","P01","#generate-management-brief");
       if (global.DEMO_BRIEF.staleReasons(managementBrief,{data,state}).length) return step("updateBrief","P01","#regenerate-management-brief");
@@ -280,6 +302,7 @@
     field.style.height = `${field.scrollHeight + border + 1}px`;
   }
   function refreshLayout() {
+    positionNotifications();
     document.querySelectorAll("[data-draft-role], .decision-form textarea, #management-brief-editor").forEach(fitDraft);
     reserveFooterSpace();
   }
@@ -293,11 +316,14 @@
   function openGuidedAction() {
     const guide = nextGuidedAction(session.getState());
     if (!guide || draftLoading || briefLoading) return;
+    clearNotice();
     session.setViewer(guide.role); decisionError = ""; notificationsOpen = false;
+    if (guide.key === "finish") { tourComplete = true; tourAct = 0; activePage = "home"; history.pushState(null,"","#home"); render(); window.scrollTo(0,0); return; }
+    if (guide.key === "openRisk") { tourRiskSeen = true; activePage = "risk"; history.pushState(null,"","#risk"); render(); window.scrollTo(0,0); return; }
     activePage = "overview";
     const briefGuide = ["managementBrief","updateBrief","previewBrief","attachBrief"].includes(guide.key);
     if (briefGuide) { briefOpen = Boolean(managementBrief); if (guide.key === "previewBrief") briefPreview = false; if (guide.key === "attachBrief") briefPreview = true; }
-    history.pushState(null,"",briefGuide ? (managementBrief ? "#management-brief" : "#decision") : guide.key === "select" ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
+    history.pushState(null,"",briefGuide ? (managementBrief ? "#management-brief" : "#decision") : ["select","compare"].includes(guide.key) ? "#comparison" : text.portal.guides[guide.key] ? "#wuxi" : "#decision");
     render();
     focusOperation(document.querySelector(guide.target));
   }
@@ -320,10 +346,15 @@
       return `<li><a href="#task-${item.taskKey}" data-notification-id="${escape(item.id)}" data-task-link="${item.taskKey}" data-notification-read="${isRead}" data-notification-kind="${item.kind}"><div class="notification-title"><strong>${escape(message.title)}</strong><span class="notification-read-state">${isRead ? t.read : t.unread}</span></div><p>${escape(interpolate(message.body, { owner: owner.name }))}</p><div class="notification-task">${escape(actionTitle(item.task))}${icon("arrow")}</div><div class="notification-meta"><span>${t.owner}: ${escape(owner.name)}</span><span data-notification-status="${item.task.status}">${badge(item.task.status)}</span></div>${item.at ? `<div class="notification-time" data-notification-received><span>${t.receivedAt}</span> <time datetime="${item.at}">${instant(item.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : `<span class="notification-sequence">${text.portal.sequenceOnly}</span>`}${timing ? `<div class="notification-time" data-notification-timing="${timing.kind}" data-timing-event="${timing.eventRef}"><span>${text.portal.taskTimingLabels[timing.kind]}</span> <time datetime="${timing.at}">${instant(timing.at, person.timezone)} ${zoneLabel(person.timezone)}</time></div>` : ""}</a></li>`;
     }).join("")}</ul>` : `<p class="notifications-empty">${t.empty}</p>`}<div class="notifications-footer"><span class="data-tag">${text.common.assumption}</span><p>${t.readBoundary}</p></div></section></div>`;
   }
+  function positionNotifications() {
+    const header = document.querySelector(".topbar");
+    if (header) document.documentElement.style.setProperty("--header-bottom", `${Math.ceil(header.getBoundingClientRect().bottom) + 6}px`);
+  }
   function updateNotifications(open, restoreFocus = false) {
     notificationsOpen = open;
     const state = session.getState();
     document.getElementById("notifications").outerHTML = renderNotifications(state, data.people[state.viewer]);
+    positionNotifications();
     if (restoreFocus) document.getElementById("notifications-toggle").focus();
   }
 
@@ -422,6 +453,7 @@
 
   function render() {
     const isRisk = activePage === "risk";
+    if (isRisk && tourAct === 1) tourRiskSeen = true;
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
     document.querySelector('meta[name="description"]').content = text.meta.description;
     document.title = isRisk ? `${text.riskDetail.title} · ${data.project.id}` : text.meta.title;
@@ -435,8 +467,8 @@
     const nextTimingInfo = view.nextTiming ? `<p>${text.portal.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : view.nextTiming.kind]}: ${instant(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone)} · ${city(view.nextTiming.timezone)}</p>` : "";
     const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.reviewBlockers.length ? note(reviewBlockerSummary(state)) + note(text.decision.reviewFlow.next) : state.decision?.version > 1 && !view.reviewsApproved ? note(text.decision.reviewFlow.recheck) : view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
     root.innerHTML = `<a class="skip-link" href="#main">${text.nav.skip}</a>
-      <header class="topbar"><div class="app-identity"><a class="brand" href="#main">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools">${language === "zh" ? info("terminology",text.common.glossaryTitle,`<dl class="info-facts">${Object.entries(text.common.glossary).map(([term,meaning])=>`<dt>${escape(term)}</dt><dd>${escape(meaning)}</dd>`).join("")}</dl>`,"end") : ""}<details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.languageCurrent}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="${language === "en"}">${text.common.languageEnglish}</button><button type="button" data-language="zh" aria-current="${language === "zh"}">${text.common.languageChinese}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="viewer-picker"><label for="viewer">${text.common.viewAs}${person.statusKey === "onLeave" ? ` · ${text.common.unavailable}` : ""}</label><select id="viewer" aria-label="${escape(text.common.viewAs)}">${Object.values(data.people).map(p => `<option value="${p.id}"${p.id === state.viewer ? " selected" : ""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div>${renderNotifications(state, person)}</div></header>
-      <main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : "overview"}">${unpublished ? renderUnpublished(state,person) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction, recordText}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
+      <header class="topbar"><div class="app-identity"><a class="brand" href="#home">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools">${language === "zh" ? info("terminology",text.common.glossaryTitle,`<dl class="info-facts">${Object.entries(text.common.glossary).map(([term,meaning])=>`<dt>${escape(term)}</dt><dd>${escape(meaning)}</dd>`).join("")}</dl>`,"end") : ""}<details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.languageCurrent}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="${language === "en"}">${text.common.languageEnglish}</button><button type="button" data-language="zh" aria-current="${language === "zh"}">${text.common.languageChinese}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="primary-roles" aria-label="${text.common.viewAs}">${["P01","P06","P07"].map(id=>`<button class="role-button" data-viewer="${id}" aria-pressed="${state.viewer===id}">${escape(data.people[id].name.split(" ")[0])}</button>`).join("")}</div><details class="more-roles"><summary>${text.tour.moreRoles}${!["P01","P06","P07"].includes(state.viewer)?` · ${escape(person.name)}`:""}</summary><div class="viewer-picker"><label for="viewer">${text.common.viewAs}</label><select id="viewer">${Object.values(data.people).map(p=>`<option value="${p.id}"${p.id===state.viewer?" selected":""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div></details>${renderNotifications(state, person)}</div></header>
+      <nav class="workspace-nav" aria-label="${text.nav.workspace}"><a href="#home"${activePage==="home"?' aria-current="page"':""}>${text.tour.home}</a><a href="#main"${activePage==="overview"?' aria-current="page"':""}>${text.tour.workspace}</a></nav><main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : activePage === "home" ? "home" : "overview"}">${unpublished ? renderUnpublished(state,person) : activePage === "home" ? global.DEMO_DASHBOARD_VIEW.render({data,state,text,core,complete:tourComplete,helpers:{escape,interpolate,instant,dateOnly,city,badge,gapMarkup,decisionStatus}}) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction, recordText}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
       <section id="priority-risk" class="priority-risk" data-open-risk aria-labelledby="risk-title"><div class="risk-fact"><h2 id="risk-title"><a href="#risk" aria-label="${text.overview.riskDetails}">${text.overview.riskTitle}</a></h2><span class="risk-status">${banner.status}</span><span id="project-status" class="risk-status" aria-label="${text.decision.projectStatus}">${text.common.atRisk}</span>${info("risk", text.overview.riskInfo, riskInfo)}<span class="data-tag assumption-tag">${text.common.assumption}</span></div><div id="decision-deadline" data-timing-kind="${banner.kind || "milestone"}" data-deadline-state="${view.rescheduleConfirmed ? "rescheduled" : view.resourceConfirmed ? "held" : view.resourceRejected || view.rescheduleRequested ? "pending" : "due"}"><span>${banner.label}</span>${banner.at ? `<time datetime="${banner.at}">${instant(banner.at,banner.zone,{weekday:"short"})} ${zoneLabel(banner.zone)}</time>` : `<strong>${text.portal.notScheduled}</strong>`}</div></section>${renderRoleAction(person, state)}
       ${renderComparison(state)}${renderActions(state, person)}${global.DEMO_DECISION_VIEW.render({data,core,state,text,draftLoading,error:decisionError,formValues,helpers:{escape,interpolate,money,instant,zoneLabel,decisionStatus,feeStatement,renderAuthorizationBrief,renderAuthorizationBasis,recordText}})}${renderWuxi(state)}${renderContext(state)}`}
       ${renderManagementBrief(state)}${renderAdvance(state,person)}
@@ -447,12 +479,18 @@
     footerObserver.observe(document.querySelector(".demo-timeline"));
   }
 
+  function clearNotice() {
+    clearTimeout(noticeTimer);
+    const notice = document.getElementById("notice");
+    notice.classList.remove("visible");
+    notice.textContent = "";
+  }
   function notify(message) {
     const notice = document.getElementById("notice");
     clearTimeout(noticeTimer);
     notice.textContent = message;
     notice.classList.add("visible");
-    noticeTimer = setTimeout(() => notice.classList.remove("visible"), 6500);
+    noticeTimer = setTimeout(clearNotice, 6500);
   }
   function openDialog(content) {
     if (notificationsOpen) updateNotifications(false);
@@ -475,7 +513,7 @@
 
   function performDecision(action, message) {
     try {
-      action(); decisionError = ""; render();
+      action(); clearNotice(); decisionError = ""; render();
       if (message) notify(message);
       return true;
     } catch (error) {
@@ -490,13 +528,17 @@
   function createBriefs(plan, fallbackSelected, publication) {
     return global.DEMO_I18N.taskBriefs({data,text,plan,fallbackSelected,publication});
   }
-  function enterChapter(id) {
-    const fixtures = {
+  function chapterFixtures() {
+    return {
       drafts:createBriefs("A",false,{certainty:"underAssessment",nextUpdateEvent:"reviewsComplete"}),
       reviewReasons:{technical:text.decision.examples.technical,quality:text.decision.examples.quality},
-      authorizationReason:interpolate(text.decision.examples.authorization,{plan:"A",amount:money(data.plans.A.total)})
+      authorizationReason:interpolate(text.decision.examples.authorization,{plan:"A",amount:money(data.plans.A.total)}),
+      resourceReason:global.DEMO_WUXI_VIEW.defaultReason({data,core,text,outcome:"held"})
     };
-    if (!performDecision(() => session.enterChapter(id,fixtures))) return;
+  }
+  function enterChapter(id) {
+    if (!performDecision(() => session.enterChapter(id,chapterFixtures()))) return;
+    tourAct = 0; tourComplete = false; tourRiskSeen = false; tourAttachmentSeen = false;
     formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false;
     notificationsOpen = false; notificationReads.clear(); dialog.close(); clearBrief(); activePage = "overview";
     history.replaceState(null,"",["prepublication","hold","unavailable"].includes(id) ? "#wuxi" : id === "selection" ? "#comparison" : "#decision");
@@ -585,6 +627,36 @@
   }
 
   document.addEventListener("click", event => {
+    if (event.target.closest("#tour-start, #tour-restart")) {
+      openDialog(`${dialogHeading(text.tour.resetTitle)}<p>${text.tour.resetBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-tour-start">${text.tour.resetConfirm}</button></div>`); return;
+    }
+    if (event.target.closest("#confirm-tour-start")) {
+      enterChapter("selection"); tourAct = 1; tourComplete = false; activePage = "home"; history.replaceState(null,"","#home"); render(); window.scrollTo(0,0); return;
+    }
+    const nextAct = event.target.closest("#tour-next-act:not(:disabled)");
+    if (nextAct) {
+      const act=Number(nextAct.dataset.nextAct);
+      if (!session.tourTransitionInfo(act).allowed) return;
+      if (performDecision(()=>session.enterTourAct(act,chapterFixtures()))) {
+        tourAct=act; notificationsOpen=false; activePage="overview"; formValues={};
+        history.pushState(null,"",act===2?"#decision":"#wuxi"); render(); focusRouteTarget();
+      }
+      return;
+    }
+    if (event.target.closest("#tour-full")) { clearNotice(); tourAct=0; activePage="overview"; history.pushState(null,"",session.getState().decision?.authorization?"#wuxi":session.getState().decision?"#decision":"#comparison"); render(); focusRouteTarget(); return; }
+    if (event.target.closest("#tour-choose-a")) { session.setViewer("P01"); performDecision(()=>session.selectPlan("A")); location.hash="comparison"; return; }
+    const task=event.target.closest("[data-dashboard-task]:not(:disabled)");
+    if(task) {
+      const group=workflow.dashboard(data,session.getState()).groups.find(item=>item.key===task.dataset.dashboardTask);
+      session.setViewer(group.role); activePage="overview"; history.pushState(null,"",group.href); render(); focusRouteTarget(); return;
+    }
+    const roleButton=event.target.closest("[data-viewer]");
+    if(roleButton) { document.getElementById("viewer").value=roleButton.dataset.viewer; document.getElementById("viewer").dispatchEvent(new Event("change",{bubbles:true})); return; }
+    const exception=event.target.closest("[data-exception]");
+    if(exception) { openDialog(`${dialogHeading(text.tour.exceptionNames[exception.dataset.exception])}<p>${text.tour.exceptionHint}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" data-enter-exception="${exception.dataset.exception}">${text.tour.exceptionReset}</button></div>`); return; }
+    const enterException=event.target.closest("[data-enter-exception]");
+    if(enterException) { enterChapter(enterException.dataset.enterException); return; }
+
     const languageButton = event.target.closest("[data-language]");
     if (languageButton) {
       const nextLanguage = languageButton.dataset.language;
@@ -594,14 +666,14 @@
       language = nextLanguage; text = global.DEMO_MESSAGES[language]; core = global.DEMO_I18N.coreFor(text);
       if (managementBrief) managementBrief = global.DEMO_BRIEF.localize(managementBrief,text);
       decisionError = errorKey ? text[errorKey.group].errors[errorKey.key] : ""; briefCopied = false;
-      clearTimeout(noticeTimer); document.getElementById("notice").classList.remove("visible");
+      clearNotice();
       render(); document.querySelector("#language-menu summary").focus(); return;
     }
     if (event.target.closest("#attach-management-brief:not(:disabled)")) { attachManagementBrief(); return; }
     if (event.target.closest("#view-management-brief")) {
       const state = session.getState();
       if (state.viewer !== "P06" || !global.DEMO_BRIEF.currentAttachment(briefAttachments,{data,state})) return;
-      briefOpen = true; render(); focusOperation(document.getElementById("management-brief")); return;
+      tourAttachmentSeen = true; briefOpen = true; render(); focusOperation(document.getElementById("management-brief")); return;
     }
     if (event.target.closest("#update-shared-brief")) {
       if (session.getState().viewer !== "P06") return;
@@ -705,7 +777,7 @@
     if (event.target.closest("[data-close]")) dialog.close();
     if (event.target.closest("#reset-demo")) openDialog(`${dialogHeading(text.common.resetTitle)}<p class="dialog-intro">${text.common.resetBody}</p><div class="dialog-actions"><button class="button button-secondary" data-close>${text.common.cancel}</button><button class="button button-primary" id="confirm-reset">${text.common.resetConfirm}</button></div>`);
     if (event.target.closest("#confirm-reset")) {
-      session.reset("customer"); clearBrief(); formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false; notificationsOpen = false; notificationReads.clear(); dialog.close(); render();
+      tourAct=0; tourComplete=false; session.reset("customer"); clearBrief(); formValues = {}; draftGeneration++; draftLoading = false; decisionError = ""; feesExpanded = false; notificationsOpen = false; notificationReads.clear(); dialog.close(); render();
       notify(text.common.resetNotice); document.getElementById("reset-demo").focus();
     }
   });
@@ -726,6 +798,7 @@
     }
     if (event.target.id === "fallback-authorization") { draftGeneration++; draftLoading = false; performDecision(() => session.setFallback(event.target.checked)); return; }
     if (event.target.id === "viewer") {
+      clearNotice();
       notificationsOpen = false; decisionError = ""; draftGeneration++; draftLoading = false;
       if (briefLoading && !managementBrief) briefOpen = false;
       briefGeneration++; briefLoading = false;
@@ -851,7 +924,8 @@
     else target.scrollIntoView({ block: "start" });
   }
   window.addEventListener("hashchange", () => {
-    const nextPage = location.hash.startsWith("#risk") ? "risk" : "overview";
+    clearNotice();
+    const nextPage = pageForHash();
     notificationsOpen = false;
     if (nextPage !== activePage) {
       activePage = nextPage;

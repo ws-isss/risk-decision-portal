@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const c={Intl,Date};
+for(const file of ['data','core','workflow','locales/en','locales/decision-en','locales/brief-en','brief']) vm.runInNewContext(readFileSync(new URL(`../src/${file}.js`,import.meta.url),'utf8'),c);
+const {DEMO_DATA:d,DEMO_CORE:core,DEMO_WORKFLOW:w,DEMO_BRIEF:brief}=c;
+const frozen=JSON.stringify(d),fixtures={drafts:{technical:'Edited technical brief',quality:'Edited quality brief',budget:'Edited budget brief'},reviewReasons:{technical:'Agree to scope',quality:'Agree to evidence'},resourceReason:'Confirmed resources within authorized scope.',authorizationReason:'Authorize quotation.'};
+const prepare=(plan='A')=>{const s=core.createSession(d);s.selectPlan(plan);s.saveDrafts(fixtures.drafts);s.confirmTasks();return s;};
+const s=prepare();s.assignSupport();s.designateApprover();const before=s.getState();
+s.enterTourAct(2,fixtures);const second=s.getState();
+assert.equal(second.clock,d.events.budgetAuthorized.at);assert.deepEqual(second.decision.drafts,before.decision.drafts);assert.equal(second.decision.createdAt,before.decision.createdAt);
+for(const id of ['tasksCreated','backupAssigned','alternateAssigned']) {assert.ok(!second.seededEventIds.includes(id));assert.deepEqual(second.decision.audit.find(a=>a.id===id),before.decision.audit.find(a=>a.id===id));}
+assert.equal(w.project(d,second).reviewsApproved,true);assert.equal(second.decision.authorization,null);
+const draft=brief.generate({data:d,core,state:second,text:c.DEMO_MESSAGES.en});draft.previewed=true;
+const attached=brief.attach({brief:draft,attachments:[],data:d,core,state:second});
+s.setViewer('P06');s.authorize({signature:d.people.P06.name,reason:'My actual authorization',acknowledged:true,briefAttachment:attached});
+const signed=s.getState().decision.authorization;
+s.enterTourAct(3,fixtures);const third=s.getState();
+assert.equal(third.clock,d.events.resourceConfirmed.at);assert.deepEqual(third.decision.authorization,signed);assert.equal(signed.basis.brief.version,attached.version);
+assert.ok(!third.seededEventIds.includes('budgetAuthorized'));assert.ok(third.seededEventIds.includes('schedulingHeld'));
+assert.equal(third.decision.resource.receipt,null);assert.equal(w.project(d,third,'P01').resourceConfirmed,false);assert.equal(w.project(d,third).committedFees,d.fees.resourceCommitment);
+s.returnResourceReceipt();assert.equal(w.project(d,s.getState(),'P01').resourceConfirmed,true);
+const b=prepare('B');assert.equal(b.tourTransitionInfo(2).reason,'planB');const bBefore=JSON.stringify(b.getState());assert.throws(()=>b.enterTourAct(2,fixtures),/TOUR_TRANSITION_BLOCKED/);assert.equal(JSON.stringify(b.getState()),bBefore);
+const late=prepare();late.advanceTo('resourceConfirmed');assert.equal(late.tourTransitionInfo(2).reason,'past');assert.throws(()=>late.enterTourAct(2,fixtures),/TOUR_TRANSITION_BLOCKED/);
+const qa=core.createSession(d);qa.enterChapter('quality',fixtures);assert.equal(qa.getState().viewer,'P03');assert.equal(qa.getState().decision.reviews.quality.status,'inProgress');assert.ok(!qa.getState().decision.reviews.quality.outcome);qa.completeReview('quality','Need evidence','needsInformation');assert.equal(qa.tourTransitionInfo(2).reason,'blocked');assert.throws(()=>qa.enterTourAct(2,fixtures),/TOUR_TRANSITION_BLOCKED/);
+assert.equal(JSON.stringify(d),frozen);
+console.log('Tour checks passed: shared chapter preparation, two forward transitions, preserved edits and signed attachment basis, preset provenance, client receipt boundary, B/late/negative-review guards and QA entry.');

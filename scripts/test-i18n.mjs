@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const context = { Intl, Date };
-const locales = ['en', 'risk-en', 'decision-en', 'wuxi-en', 'portal-en', 'brief-en', 'zh', 'risk-zh', 'decision-zh', 'wuxi-zh', 'portal-zh', 'brief-zh'];
+const locales = ['en', 'risk-en', 'decision-en', 'wuxi-en', 'portal-en', 'brief-en', 'zh', 'risk-zh', 'decision-zh', 'wuxi-zh', 'portal-zh', 'brief-zh', 'tour-en', 'tour-zh'];
 for (const file of ['src/data.js', ...locales.map(name => `src/locales/${name}.js`), 'src/core.js', 'src/workflow.js', 'src/i18n.js', 'src/wuxi-view.js']) vm.runInNewContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context);
 const { DEMO_MESSAGES: messages, DEMO_CORE: core, DEMO_I18N: i18n, DEMO_DATA: data } = context;
 const flatten = (value, path = '') => Object.fromEntries(Object.entries(value).flatMap(([key, item]) => typeof item === 'object' ? Object.entries(flatten(item, `${path}${key}.`)) : [[`${path}${key}`, item]]));

@@ -258,5 +258,33 @@
     }));
   }
 
-  global.DEMO_WORKFLOW = Object.freeze({ project, tasks, taskTiming, eventTiming, confirmations, notifications });
+  function dashboard(data, state) {
+    const view = project(data,state);
+    const d = state.decision;
+    const pendingReviews = Object.values(view.records).filter(r => ["startTechnical","startQuality"].includes(r.key) && r.created && !["approved","rejected","needsInformation"].includes(r.status));
+    const decisionPending = view.clientVisible && (!view.authorized || ["awaitingCustomerDecision","awaitingCustomerAuthorization"].includes(view.rescheduleStage));
+    const resourcePending = view.authorized && !view.resourceConfirmed && !view.rescheduleConfirmed && (!view.nextTiming || view.nextTiming.kind === "expectedResponse");
+    const decisionRole = view.rescheduleStage === "awaitingCustomerAuthorization" || view.reviewsApproved && view.approverDesignated && !view.authorized ? "P06" : "P01";
+    const timings = [];
+    const event = (key,label,zone) => ({at:data.events[key].at,label,zone});
+    if (view.nextTiming) timings.push(event(view.nextTiming.eventRef,view.rescheduleConfirmed ? "technicalReassessment" : view.nextTiming.kind,view.nextTiming.timezone));
+    else if (view.resourceConfirmed) {
+      timings.push({at:data.plans.A.holdUntil,label:"holdExpiry",zone:data.calendars.base.timezone});
+      const first=data.plans.A.stages.find(s=>s.id==="firstAnalysis");
+      timings.push({at:first.end,label:"firstResults",zone:first.executionTimezone});
+    } else {
+      if (!view.authorized) timings.push(event("latestAuthorization","authorization",data.baseline.timezone));
+      timings.push(event("resourceConfirmationDeadline","resource",data.calendars.base.timezone));
+    }
+    return {view,blockerOwner:view.reviewBlockers[0]?.owner || null,planId:d?.planId || "A",showOptions:!view.authorized,
+      forecast: view.forecastReassessmentRequired ? null : data.plans[d?.planId || "A"].forecast,
+      window:view.rescheduleConfirmed?data.plans.B.window.at:data.plans.A.window.at,timings,
+      groups:[
+        {key:"decisions",count:Number(decisionPending),blocked:view.reviewBlockers.length>0,role:decisionRole,href:!d?"#comparison":view.rescheduleStage!=="none"?"#wuxi":"#decision"},
+        {key:"reviews",count:pendingReviews.length,role:pendingReviews[0]?.owner || "P02",href:"#decision"},
+        {key:"wuxi",count:Number(resourcePending),role:"P07",href:"#wuxi"}
+      ]};
+  }
+
+  global.DEMO_WORKFLOW = Object.freeze({ project, tasks, taskTiming, eventTiming, confirmations, notifications, dashboard });
 })(globalThis);

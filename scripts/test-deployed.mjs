@@ -78,6 +78,11 @@ async function applyToBoth(pages, operation) {
   await Promise.all(pages.map(operation));
 }
 
+async function selectViewer(page, role) {
+  await page.locator('.more-roles summary').click();
+  await page.locator('#viewer').selectOption(role);
+}
+
 async function switchToChinese(page) {
   await page.locator('#language-menu summary').click();
   await page.locator('[data-language="zh"]').click();
@@ -105,9 +110,15 @@ try {
   const navigation = await online.goto(deployedUrl.href);
   assert.equal(navigation.status(), 200);
   const pages = [local, online];
+  await applyToBoth(pages, page => page.locator('#dashboard-risk').waitFor());
+  assert.equal(await online.locator('main').getAttribute('data-page'), 'home');
+  await compare(local, online, 'Initial dashboard');
+  await applyToBoth(pages, switchToChinese);
+  await compare(local, online, 'Chinese dashboard and exception entries');
+  await applyToBoth(pages, async page => { await page.locator('#language-menu summary').click(); await page.locator('[data-language="en"]').click(); });
+  await applyToBoth(pages, page => page.locator('.workspace-nav [href="#main"]').click());
   await applyToBoth(pages, page => page.locator('#risk-title').waitFor());
-  assert.equal(await online.locator('h1').innerText(), 'Project overview');
-  await compare(local, online, 'Initial overview');
+  await compare(local, online, 'Project workspace');
   await online.screenshot({ path: path.join(output, 'deployed-desktop.png'), fullPage: true });
 
   await applyToBoth(pages, page => page.locator('#toggle-costs').click());
@@ -126,11 +137,11 @@ try {
   await applyToBoth(pages, page => page.locator('.risk-detail-page').waitFor());
   assert.equal(new URL(online.url()).pathname, deployedUrl.pathname);
   for (const role of ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08']) {
-    await applyToBoth(pages, page => page.locator('#viewer').selectOption(role));
+    await applyToBoth(pages, page => selectViewer(page, role));
     assert.equal(await online.locator('#risk-role-focus').getAttribute('data-risk-role'), role);
     await compare(local, online, `Risk details for ${role}`);
   }
-  await applyToBoth(pages, page => page.locator('#viewer').selectOption('P01'));
+  await applyToBoth(pages, page => selectViewer(page, 'P01'));
   await online.screenshot({ path: path.join(output, 'deployed-risk.png'), fullPage: true });
   await applyToBoth(pages, page => page.reload());
   await applyToBoth(pages, page => page.locator('.risk-detail-page').waitFor());
@@ -153,7 +164,7 @@ try {
   await applyToBoth(pages, page => page.locator('#notifications-toggle').click());
   await applyToBoth(pages, page => page.locator('#risk-title a').click());
   for (const role of ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08']) {
-    await applyToBoth(pages, page => page.locator('#viewer').selectOption(role));
+    await applyToBoth(pages, page => selectViewer(page, role));
     await compare(local, online, `Chinese risk details and dates for ${role}`);
   }
   await online.screenshot({ path: path.join(output, 'deployed-chinese-risk.png'), fullPage: true });
@@ -163,6 +174,9 @@ try {
   const mobile = await mobileContext.newPage();
   observe(mobile, 'published mobile', true);
   assert.equal((await mobile.goto(deployedUrl.href)).status(), 200);
+  await mobile.locator('#dashboard-risk').waitFor();
+  await visibleWithinWidth(mobile, '#dashboard-risk, .dashboard-count', 'Mobile dashboard fits');
+  await mobile.locator('.workspace-nav [href="#main"]').click();
   await mobile.locator('#risk-title').waitFor();
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await visibleWithinWidth(mobile, '[data-gap], [data-task] .action-due, [data-task] [data-task-status]', 'Mobile comparison, action times and statuses fit');
@@ -179,7 +193,7 @@ try {
   await mobile.locator('.risk-detail-page').waitFor();
   assert.equal(new URL(mobile.url()).pathname, deployedUrl.pathname);
   await switchToChinese(mobile);
-  await visibleWithinWidth(mobile, '#language-menu, #viewer, #risk-next-steps a', 'Chinese mobile controls fit');
+  await visibleWithinWidth(mobile, '#language-menu, .more-roles, #risk-next-steps a', 'Chinese mobile controls fit');
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await mobile.locator('#risk-compare-options').click();
   await mobile.locator('#comparison').waitFor();

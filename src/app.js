@@ -104,6 +104,7 @@
   }
   function reviewBlockerSummary(state) {
     const f = text.decision.reviewFlow;
+    if (state.decision?.resubmissionIntent === "scopeChange") return f.scopeNext;
     return workflow.project(data,state).reviewBlockers.map(b => interpolate(f.summary,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})).join("; ");
   }
   function feeStatement(state) {
@@ -273,7 +274,7 @@
       return Date.parse(state.clock) >= Date.parse(data.events.materialReady.at) ? step("publishRisk","P07","#publish-risk") : step("advancePublication","P07","#advance-event");
     }
     if (!d) return step("select","P01","#comparison");
-    if (workflow.project(data,state).reviewBlockers.length) return step("resolveReviews","P01",'#review-resubmit-form textarea[name="supplement"]');
+    if (workflow.project(data,state).reviewBlockers.length) return step("resolveReviews","P01",state.decision?.resubmissionIntent === "scopeChange" ? "#scope-change-notice" : '#review-resubmit-form textarea[name="supplement"]');
     if (!d.tasksCreated) return Object.values(d.drafts).every(value => value.trim()) ? step("confirm","P01","#confirm-task-briefs") : step("draft","P01","#draft-task-briefs");
     if (d.authorization) {
       const r = d.resource;
@@ -343,6 +344,7 @@
     const guide = nextGuidedAction(session.getState());
     if (!guide || draftLoading || briefLoading) return;
     clearNotice();
+    if (guide.key === "resolveReviews" && !session.getState().decision?.resubmissionIntent) formValues.resubmissionMode = "evidence";
     if (guide.key === "qaEmmaBlocker") qualityWalk.emmaSeen = true;
     if (guide.key === "qaElenaBlocked") qualityWalk.elenaSeen = true;
     session.setViewer(guide.role); decisionError = ""; notificationsOpen = false;
@@ -428,7 +430,7 @@
 
   function nextActionCopy(state, person) {
     const d = state.decision, t = text.decision, n = t.next;
-    if (workflow.project(data,state).reviewBlockers.length) return t.reviewFlow.next;
+    if (workflow.project(data,state).reviewBlockers.length) return state.decision?.resubmissionIntent === "scopeChange" ? t.reviewFlow.scopeNext : t.reviewFlow.next;
     if (d.authorization) return decisionStatus(state);
     if (!d.tasksCreated) return person.id === "P01" ? n.create : t.blockers.createTasks;
     const reviewsDone = Object.values(d.reviews).every(r => r.status === "completed");
@@ -464,7 +466,7 @@
     const requirement = `<dl class="info-facts"><dt>${text.delivery.deliveryItem}</dt><dd id="requirement-item-display">${escape(state.deliverableOverride || text.project.released)}</dd><dt>${text.delivery.destination}</dt><dd id="requirement-destination-display">${escape(state.destinationOverride || text.project.newJerseyFormulationSite)}</dd><dt>${text.delivery.needBy}</dt><dd>${core.formatLocalDate(state.needByLocalDate)} · ${text.common.newYork}</dd></dl>${note(text.delivery.calendarNote)}`;
     const row = (key, heading, content, help = "") => `<tr data-metric="${key}"><th scope="row"><div class="metric-label">${heading}${help}</div></th>${[a,b].map(plan => `<td data-plan="${plan.id}"${key === "delivery" ? ` data-forecast="${plan.id}"` : ""}>${content(plan)}</td>`).join("")}</tr>`;
     return `<section id="comparison" class="section comparison-section" aria-labelledby="comparison-title">
-      <div class="section-heading"><h2 id="comparison-title">${text.overview.compare}</h2><div class="requirement-controls"><span>${text.overview.needDate}: <strong id="need-date-display">${core.formatLocalDate(state.needByLocalDate)}</strong></span>${info("requirement", text.overview.requirementInfo, requirement, "end")}<button class="button button-secondary" id="edit-requirement">${icon("edit")}${text.delivery.edit}</button></div></div>
+      <div class="section-heading"><h2 id="comparison-title">${text.overview.compare}</h2><div class="requirement-controls"><span>${text.overview.needDate}: <strong id="need-date-display">${core.formatLocalDate(state.needByLocalDate)}</strong></span>${info("requirement", text.overview.requirementInfo, requirement, "end")}${state.viewer === "P01" ? `<button class="button button-secondary" id="edit-requirement">${icon("edit")}${text.delivery.edit}</button>` : `<span class="decision-note">${text.delivery.readOnly}</span>`}</div></div>
       <div class="comparison-panel"><div class="table-wrap comparison-wrap"><table id="comparison-table"><thead><tr><th scope="col">${text.overview.factor}</th><th scope="col"><div>${text.overview.optionA}${info("optionA", text.overview.optionAInfo, note(text.delivery.originalCondition))}</div>${select("A")}</th><th scope="col"><div>${text.overview.optionB}${info("optionB", text.overview.optionBInfo, note(text.delivery.candidateCondition), "end")}</div>${select("B")}</th></tr></thead><tbody>
         ${row("cost", `<button id="toggle-costs" class="cost-toggle" aria-expanded="${feesExpanded}" aria-controls="cost-details" aria-label="${text.fees.toggle}">${icon("chevron")}${text.overview.cost}</button>`, plan => `<strong class="amount">${money(plan.total)}</strong>${plan.id === "A" ? `<span class="cost-difference">${interpolate(text.overview.premium, { amount: money(a.total - b.total) })}</span>` : ""}`)}
         <tr id="cost-details"${feesExpanded ? "" : " hidden"}><td colspan="3">${renderFeeBreakdown("overview-cost-detail")}</td></tr>
@@ -480,14 +482,15 @@
   }
 
   function renderContext(state) {
-    const contextView = workflow.project(data,state);
-    const reassess = contextView.forecastReassessmentRequired;
-    const milestoneWindow = contextView.rescheduleConfirmed ? data.plans.B.window.at : data.plans.A.window.at;
-    const milestoneWindowLabel = contextView.rescheduleConfirmed ? text.portal.confirmedWindow : text.decision.original;
-    const milestones = `${note(text.overview.developmentScope)}<dl class="info-facts"><dt>${text.context.gmp}</dt><dd>${dateOnly(milestoneWindow, data.calendars.base.timezone)} · ${text.common.shanghai}</dd><dt>${text.context.releasedDS}</dt><dd>${reassess ? text.portal.reassessment + " · " + text.portal.previousEstimate + " · " : ""}${core.formatLocalDate(data.plans.A.forecast.localDate)} · ${text.common.newYork} · ${text.common.estimated}</dd><dt>${text.context.ind}</dt><dd>${text.context.noDate}</dd></dl>${note(text.context.shipmentNote)}<button class="text-button" data-open-report>${text.context.study} · ${data.reports["SEC-001"].id}</button>`;
+    const outlook = workflow.outlook(data,state);
+    const milestoneWindow = outlook.window;
+    const milestoneWindowLabel = text.context[outlook.windowStatus];
+    const delivery = outlook.forecast ? core.formatLocalDate(outlook.forecast.localDate) : text.portal.reassessment;
+    const deliveryLabel = outlook.baseline ? text.context.originalBaseline : text.common.estimated;
+    const milestones = `${note(text.overview.developmentScope)}<dl class="info-facts"><dt>${text.context.gmp}</dt><dd>${dateOnly(milestoneWindow, data.calendars.base.timezone)} · ${text.common.shanghai}</dd><dt>${text.context.releasedDS}</dt><dd>${delivery} · ${text.common.newYork} · ${deliveryLabel}</dd><dt>${text.context.ind}</dt><dd>${text.context.noDate}</dd></dl>${note(text.context.shipmentNote)}<button class="text-button" data-open-report>${text.context.study} · ${data.reports["SEC-001"].id}</button>`;
     return `<section id="context" class="section context-section" aria-labelledby="context-title"><div class="section-heading"><div class="heading-with-info"><h2 id="context-title">${text.context.title}</h2>${info("program", text.overview.contextInfo, milestones)}</div></div>
       <ol class="progress-track" aria-label="${escape(text.context.milestones)}"><li class="research-complete" data-research-status="${data.project.researchStatusKey}"><span class="progress-node">${icon("check")}</span><span>R · ${text.context.research}</span><span class="current-label research-status">${text.common.researchComplete}</span></li><li aria-current="step"><span class="progress-node"></span><strong>D · ${text.context.development}</strong><span class="current-label">${text.context.current}</span></li><li><span class="progress-node"></span><span>M · ${text.context.manufacturing}</span><span class="current-label">${text.common.notStarted}</span></li></ol>
-      <div id="milestone-strip"><div><span>${text.context.gmp}</span><strong>${dateOnly(milestoneWindow, data.calendars.base.timezone)}</strong><small>${milestoneWindowLabel} · ${text.common.shanghai}</small></div><div><span>${text.context.releasedDS}</span><strong>${reassess ? text.portal.reassessment : core.formatLocalDate(data.plans.A.forecast.localDate)}</strong><small>${reassess ? text.portal.previousEstimate + " · " + core.formatLocalDate(data.plans.A.forecast.localDate) : text.common.estimated} · ${text.common.newYork}</small></div><div><span>${text.context.ind}</span><strong>${text.context.noDate}</strong></div></div>
+      <div id="milestone-strip"><div><span>${text.context.gmp}</span><strong>${dateOnly(milestoneWindow, data.calendars.base.timezone)}</strong><small>${milestoneWindowLabel} · ${text.common.shanghai}</small></div><div><span>${text.context.releasedDS}</span><strong>${delivery}</strong><small>${deliveryLabel} · ${text.common.newYork}</small></div><div><span>${text.context.ind}</span><strong>${text.context.noDate}</strong></div></div>
       <div class="table-wrap development-wrap"><table class="development-table" aria-label="${escape(text.context.developmentWorkstreams)}"><thead><tr>${data.project.developmentWorkstreams.map(stream => `<th scope="col">${text.context.workstreamNames[stream.id]}</th>`).join("")}</tr></thead><tbody><tr>${data.project.developmentWorkstreams.map(stream => `<td data-workstream="${stream.id}" data-status="${stream.statusKey}" data-label="${escape(text.context.workstreamNames[stream.id])}">${badge(stream.statusKey)}</td>`).join("")}</tr></tbody></table></div>
     </section>`;
   }
@@ -513,7 +516,7 @@
     const banner = bannerState(state);
     const finding = interpolate(text.overview.finding, { measured: data.risk.hmwPct.toFixed(1), target: data.risk.targetPct.toFixed(1) });
     const nextTimingInfo = view.nextTiming ? `<p>${text.portal.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : view.nextTiming.kind]}: ${instant(data.events[view.nextTiming.eventRef].at, view.nextTiming.timezone)} · ${city(view.nextTiming.timezone)}</p>` : "";
-    const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.reviewBlockers.length ? note(reviewBlockerSummary(state)) + note(text.decision.reviewFlow.next) : state.decision?.version > 1 && !view.reviewsApproved ? note(text.decision.reviewFlow.recheck) : view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
+    const riskInfo = note(finding) + note(text.portal.certainty[state.publication?.certainty || "underAssessment"]) + (view.reviewBlockers.length ? note(reviewBlockerSummary(state)) + note(state.decision?.resubmissionIntent === "scopeChange" ? text.decision.reviewFlow.scopeNext : text.decision.reviewFlow.next) : state.decision?.version > 1 && !view.reviewsApproved ? note(text.decision.reviewFlow.recheck) : view.nextTiming ? nextTimingInfo + (view.resourceRejected ? note(text.portal.forecastInvalid) : "") : view.resourceConfirmed ? note(text.portal.successNote) : view.resourceRejected ? note(text.portal.forecastInvalid) : `<p>${text.common.nextUpdate}: ${instant(data.events[state.decision?.authorization ? "resourceConfirmed" : state.publication?.nextUpdateEvent || "reviewsComplete"].at, person.timezone)} · ${city(person.timezone)}</p>`) + `<button class="text-button" data-open-report>${text.risk.report} · ${data.reports["SEC-001"].id}</button>`;
     root.innerHTML = `<a class="skip-link" href="#main">${text.nav.skip}</a>
       <header class="topbar"><div class="app-identity"><a class="brand" href="#home">${text.common.brand}</a><span class="project-id">${data.project.id}</span><span class="customer-name">${escape(data.project.customer)}</span></div><div class="topbar-tools">${language === "zh" ? info("terminology",text.common.glossaryTitle,`<dl class="info-facts">${Object.entries(text.common.glossary).map(([term,meaning])=>`<dt>${escape(term)}</dt><dd>${escape(meaning)}</dd>`).join("")}</dl>`,"end") : ""}<details id="language-menu" class="language-menu"><summary aria-label="${text.overview.language}">${icon("globe")}<span>${text.common.languageCurrent}</span>${icon("down")}</summary><div class="language-options"><button type="button" data-language="en" aria-current="${language === "en"}">${text.common.languageEnglish}</button><button type="button" data-language="zh" aria-current="${language === "zh"}">${text.common.languageChinese}</button></div></details><span class="data-tag demo-tag">${text.common.demo}</span><button class="icon-button" id="reset-demo" aria-label="${escape(text.common.reset)}" title="${escape(text.common.reset)}">${icon("reset")}</button><div class="primary-roles" aria-label="${text.common.viewAs}">${["P01","P06","P07"].map(id=>`<button class="role-button" data-viewer="${id}" aria-pressed="${state.viewer===id}">${escape(data.people[id].name.split(" ")[0])}</button>`).join("")}</div><details class="more-roles"><summary>${text.tour.moreRoles}${!["P01","P06","P07"].includes(state.viewer)?` · ${escape(person.name)}`:""}</summary><div class="viewer-picker"><label for="viewer">${text.common.viewAs}</label><select id="viewer">${Object.values(data.people).map(p=>`<option value="${p.id}"${p.id===state.viewer?" selected":""}>${escape(p.name)} · ${escape(text.roles[p.roleKey])}</option>`).join("")}</select></div></details>${renderNotifications(state, person)}</div></header>
       <nav class="workspace-nav" aria-label="${text.nav.workspace}"><a href="#home"${activePage==="home"?' aria-current="page"':""}>${text.tour.home}</a><a href="#main"${activePage==="overview"?' aria-current="page"':""}>${text.tour.workspace}</a></nav><main id="main" tabindex="-1" data-page="${unpublished ? "unpublished" : isRisk ? "risk" : activePage === "home" ? "home" : "overview"}">${unpublished ? renderUnpublished(state,person) : activePage === "home" ? global.DEMO_DASHBOARD_VIEW.render({data,state,text,core,complete:tourComplete,helpers:{escape,interpolate,instant,dateOnly,city,badge,gapMarkup,decisionStatus}}) : isRisk ? global.DEMO_RISK_VIEW.render({data, core, state, person, text, helpers: {escape, interpolate, icon, info, note, instant, dateOnly, city, zoneLabel, money, badge, renderFeeBreakdown, renderRoleAction, recordText}}) : `<div class="page-heading"><h1>${text.project.title}</h1><nav aria-label="${escape(text.nav.workspace)}"><a href="#comparison">${text.overview.compare}</a><a href="#actions">${text.nav.actions}</a><a href="#decision">${text.decision.title}</a><a href="#context">${text.context.title}</a></nav><div class="snapshot"><span>${text.overview.snapshot}</span> <time datetime="${state.clock}" id="snapshot-time">${instant(state.clock, person.timezone, { weekday: "short" })}</time> ${zoneLabel(person.timezone)}</div></div>
@@ -552,7 +555,8 @@
   }
   function openRequirement() {
     const state = session.getState();
-    openDialog(`${dialogHeading(text.delivery.requirementTitle)}<p class="dialog-intro">${text.delivery.requirementHint}</p><form id="requirement-form"><label for="requirement-item">${text.delivery.deliveryItem}</label><input id="requirement-item" name="item" required maxlength="120" value="${escape(state.deliverableOverride || text.project.released)}"><label for="requirement-date">${text.delivery.needDateLabel}</label><input id="requirement-date" name="date" type="date" required value="${state.needByLocalDate}"><label for="requirement-destination">${text.delivery.destination}</label><input id="requirement-destination" name="destination" required maxlength="180" value="${escape(state.destinationOverride || text.project.newJerseyFormulationSite)}"><p id="requirement-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button button-secondary" data-close>${text.common.cancel}</button><button type="submit" class="button button-primary">${text.common.save}</button></div></form>`);
+    if (state.viewer !== "P01") return;
+    openDialog(`${dialogHeading(text.delivery.requirementTitle)}<p class="dialog-intro">${text.delivery.requirementHint}</p><form id="requirement-form"><label for="requirement-item">${text.delivery.deliveryItem}</label><p id="requirement-item">${escape(text.project.released)}</p><label for="requirement-date">${text.delivery.needDateLabel}</label><input id="requirement-date" name="date" type="date" required value="${state.needByLocalDate}"><label for="requirement-destination">${text.delivery.destination}</label><p id="requirement-destination">${escape(text.project.newJerseyFormulationSite)}</p><p class="decision-note">${text.delivery.fixedScope}</p><p id="requirement-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button button-secondary" data-close>${text.common.cancel}</button><button type="submit" class="button button-primary">${text.common.save}</button></div></form>`);
   }
   function openReport() {
     const person = data.people[session.getState().viewer];
@@ -876,7 +880,13 @@
     if (form?.id === "resource-response-form" && field.name === "reason") formValues.resourceReason = field.value;
     if (form?.id === "review-technical-form") formValues[field.name === "outcome" ? "technicalOutcome" : "technicalReason"] = field.value;
     if (form?.id === "review-quality-form") formValues[field.name === "outcome" ? "qualityOutcome" : "qualityReason"] = field.value;
-    if (form?.id === "review-resubmit-form") formValues.supplement = field.value;
+    if (form?.id === "review-resubmit-form") {
+      if (field.name === "supplement") formValues.supplement = field.value;
+      if (field.name === "mode") { formValues.resubmissionMode = field.value; performDecision(() => session.setResubmissionIntent(field.value)); document.querySelector(`#review-resubmit-form [name="mode"][value="${field.value}"]`)?.focus(); }
+    }
+    if (/^review-(technical|quality)-form$/.test(form?.id || "") && field.name === "outcome") {
+      form.querySelector('[type="submit"]').disabled = !field.value || field.value === "approved" && Date.parse(session.getState().clock) < Date.parse(data.events.reviewsComplete.at);
+    }
     if (form?.id === "authorization-form") {
       if (field.name === "reason") formValues.authorizationReason = field.value;
       if (field.name === "signature") formValues.signature = field.value;
@@ -899,7 +909,7 @@
   document.addEventListener("submit", event => {
     if (event.target.id === "review-resubmit-form") {
       event.preventDefault(); const values = new FormData(event.target);
-      if (performDecision(() => session.resubmitReviews(String(values.get("supplement"))), text.decision.reviewFlow.resubmitted)) { formValues = {}; render(); }
+      if (performDecision(() => session.resubmitReviews(String(values.get("supplement")), String(values.get("mode"))), text.decision.reviewFlow.resubmitted)) { formValues = {}; render(); }
       return;
     }
     if (event.target.id === "reschedule-authorization-form") {
@@ -932,9 +942,7 @@
     const form = new FormData(event.target);
     const date = String(form.get("date"));
     if (!core.validLocalDate(date)) { document.getElementById("requirement-error").textContent = text.common.invalidDate; return; }
-    const item = String(form.get("item")).trim();
-    const destination = String(form.get("destination")).trim();
-    session.setRequirement({ needByLocalDate: date, deliverableOverride: item === text.project.released ? "" : item, destinationOverride: destination === text.project.newJerseyFormulationSite ? "" : destination });
+    if (!performDecision(() => session.setRequirement({ needByLocalDate: date }))) return;
     dialog.close(); render(); notify(text.common.savedNotice);
     document.getElementById("edit-requirement").focus();
   });

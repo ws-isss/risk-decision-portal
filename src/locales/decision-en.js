@@ -60,27 +60,27 @@
   },
   "summary": "{review}: {outcome}",
   "blocked": "Authorization blocked",
-  "blockedDetail": "{review}: {outcome}. Owner: Emma. Add supporting evidence or revise the scope, then resubmit for both reviews.",
+  "blockedDetail": "{review}: {outcome}. Owner: Emma. Add supporting evidence within the original scope, then resubmit for both reviews.",
   "next": "Emma: address the review concerns and resubmit. Both reviewers must agree to the current request before authorization.",
-  "supplement": "Additional evidence / revised scope",
-  "supplementHint": "Describe the response to the review concerns. This creates a new request version; quoted fees and production dates stay unchanged. Any changed scope is included in the new authorization basis.",
+  "supplement": "Additional evidence within original scope",
+  "supplementHint": "Describe the added evidence without changing the study scope. Resubmission creates a new request version; both reviewers must review it again.",
   "resubmit": "Resubmit as request v{version}",
   "version": "Request v{version}",
   "history": "Earlier request reviews",
   "expired": "Applies to request v{version} · superseded, no longer valid for authorization",
   "currentScope": "Current request supplement",
   "recheck": "Both Daniel and Nina must review this version again.",
-  "revisionTiming": "Re-review is a manual demo step at the current scenario time. Its real turnaround is not estimated; the original review schedule is historical.",
+  "revisionTiming": "For every request version, Agree remains subject to the original review completion time. Resubmission does not shorten review turnaround.",
   "resubmitted": "New request version created. Earlier opinions no longer authorize this version.",
   "revisedPending": "Current request awaits new technical and QA decisions.",
   "briefBlocked": "Request v{version}: {blockers}. Authorization is blocked; Emma must address the concerns and resubmit for both reviews.",
   "briefNext": "Emma owns the next update: address the concerns and resubmit; both reviewers must agree before Elena may authorize. Resource confirmation remains pending.",
   "briefPending": "Request v{version} requires new technical and QA decisions; previous opinions do not apply.",
-  "originalTiming": "Original request review timing · superseded",
+  "originalTiming": "Original review start reminder · superseded",
   "approvedBoth": "Technical and QA agree to the current request.",
   "guided": "Guided path: choose Agree, then submit your review."
 };
-  Object.assign(global.DEMO_MESSAGES.en.decision.errors, {"REVIEW_OUTCOME_REQUIRED":"Select Agree, More information required or Disagree.","REVIEWS_NOT_APPROVED":"The current request requires Agree from both technical and QA reviewers.","REVIEW_RESUBMIT_NOT_AVAILABLE":"Resubmission requires an unresolved review outcome.","SUPPLEMENT_REQUIRED":"Enter the additional evidence or revised scope before resubmitting.","REVIEW_TIMING_EXPIRED":"The planned authorization time has passed. This demo cannot confirm a revised review schedule.","ADVANCE_BLOCKED_resolveReviews":"Emma must address the review concerns and resubmit first."});
+  Object.assign(global.DEMO_MESSAGES.en.decision.errors, {"REVIEW_OUTCOME_REQUIRED":"Select Agree, More information required or Disagree.","REVIEWS_NOT_APPROVED":"The current request requires Agree from both technical and QA reviewers.","REVIEW_RESUBMIT_NOT_AVAILABLE":"Resubmission requires an unresolved review outcome.","SUPPLEMENT_REQUIRED":"Enter the additional evidence within the original scope before resubmitting.","REVIEW_TIMING_EXPIRED":"The planned authorization time has passed. This demo cannot confirm a revised review schedule.","ADVANCE_BLOCKED_resolveReviews":"Emma must address the review concerns and resubmit first."});
   global.DEMO_MESSAGES.en.decision.guide.resolveReviews = "Switch to Emma · address review concerns";
   global.DEMO_MESSAGES.en.decision.dependencyCopy.budget = "Elena designated; technical and QA both Agree to this version; final quote";
   global.DEMO_MESSAGES.en.decision.budgetBlocked = "Authorization requires both reviewers to Agree to the current request, Elena’s designation, Ben’s preparation acceptance and completion of the budget review.";
@@ -107,8 +107,8 @@
 (function (global) {
   const d = global.DEMO_MESSAGES.en.decision;
   d.qualityScenario = {
-  "briefOpening": "Authorization is blocked for request v{version}: {blockers}. Emma must obtain the missing evidence or revise the scope and resubmit for both reviews.",
-  "reason": "Additional evidence is required before I can agree to this study scope. Please provide recovery data for the scale-down model supporting EXP-001 v1, including how recovery is calculated and whether the model represents the proposed purification conditions. Emma should coordinate the missing evidence or revise the scope and resubmit for review. This is not approval to proceed.",
+  "briefOpening": "Authorization is blocked for request v{version}: {blockers}. Emma must obtain the missing evidence within the original scope and resubmit for both reviews.",
+  "reason": "Additional evidence is required before I can agree to this study scope. Please provide recovery data for the scale-down model supporting EXP-001 v1, including how recovery is calculated and whether the model represents the proposed purification conditions. Emma should coordinate the missing evidence within the original scope and resubmit for review. This is not approval to proceed.",
   "reviewHint": "QA exception: choose More information required, then submit your review. The explanation is editable; only the selected outcome controls authorization.",
   "emmaHint": "Inspect the QA blocker and Emma’s responsibility. Keep this request blocked for the demonstration; next inspect Elena’s authorization controls.",
   "elenaHint": "Elena cannot authorize: QA requires additional evidence. The request remains blocked until Emma resubmits and both reviewers agree.",
@@ -122,4 +122,30 @@
   }
 };
   Object.assign(d.guide, d.qualityScenario.guides);
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.decision.reviewFlow, {
+  "resubmissionMode": "Response to review concerns · required",
+  "chooseMode": "Choose a response…",
+  "evidence": "Add evidence within original scope",
+  "scopeChange": "Scope change required",
+  "scopeBoundary": "A scope change requires WuXi to reassess scope, quote and delivery. This step is outside this demo; authorization remains blocked.",
+  "scopeNext": "Emma: contact Alex to request WuXi reassessment of scope, quote and delivery. Authorization remains blocked.",
+  "earlyOutcomes": "After starting, More information required or Disagree may be submitted immediately."
+});
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.decision, {
+  "reviewWait": "Agree is available no earlier than"
+});
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.decision.errors, {
+  "REQUIREMENT_SCOPE_FIXED": "Only the need date can be changed. Deliverable and destination are fixed case conditions.",
+  "RESUBMISSION_MODE_REQUIRED": "Choose whether you are adding evidence within the original scope or need a scope change.",
+  "SCOPE_REASSESSMENT_REQUIRED": "Emma must contact Alex for WuXi to reassess scope, quote and delivery. This request cannot be resubmitted or authorized."
+});
 })(globalThis);

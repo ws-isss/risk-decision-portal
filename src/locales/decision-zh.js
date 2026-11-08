@@ -60,27 +60,27 @@
   },
   "summary": "{review}：{outcome}",
   "blocked": "授权受阻",
-  "blockedDetail": "{review}：{outcome}。负责人：Emma。补充证据或调整范围后，重新提交两项审阅。",
+  "blockedDetail": "{review}：{outcome}。负责人：Emma。补充证据（限原范围内）后，重新提交两项审阅。",
   "next": "Emma：处理审阅提出的问题并重新提交。两位审阅人均同意当前请求后，才能授权。",
-  "supplement": "补充说明／调整后的范围",
-  "supplementHint": "说明如何回应审阅问题。提交将生成新请求版本；报价金额和生产日期不变，调整说明纳入新版本的授权依据。",
+  "supplement": "原范围内的补充证据说明",
+  "supplementHint": "说明补充证据如何回应审阅问题，不改变小试范围。重新提交将生成新请求版本，两位审阅人须重新审阅。",
   "resubmit": "重新提交为请求 v{version}",
   "version": "请求 v{version}",
   "history": "历史请求审阅意见",
   "expired": "适用于请求 v{version}，已失效，不能用于当前授权",
   "currentScope": "当前请求补充说明",
   "recheck": "Daniel 和 Nina 都须针对本版本重新审阅。",
-  "revisionTiming": "重新审阅是当前演示时刻下的手动步骤，实际周转尚未估算；原审阅排期仅作为历史记录。",
+  "revisionTiming": "每个请求版本的“同意”均不得早于原定审阅完成时间；重新提交不会缩短审阅周期。",
   "resubmitted": "已生成新请求版本，原审阅意见不能用于本版本授权。",
   "revisedPending": "当前请求等待新的技术与 QA 审阅结果。",
   "briefBlocked": "请求 v{version}：{blockers}。当前不能授权；Emma 须处理问题并重新提交两项审阅。",
-  "briefNext": "下次更新由 Emma 负责：补充证据或调整范围后重新提交，两位审阅人同意后 Elena 才能授权。药明资源确认仍待办理。",
+  "briefNext": "下次更新由 Emma 负责：补充证据（限原范围内）后重新提交，两位审阅人同意后 Elena 才能授权。药明资源确认仍待办理。",
   "briefPending": "请求 v{version} 须取得新的技术与 QA 意见；原版本意见不再适用。",
-  "originalTiming": "原请求审阅时间 · 已失效",
+  "originalTiming": "原请求最晚开始提醒 · 已失效",
   "approvedBoth": "技术与 QA 已同意当前请求。",
   "guided": "引导路径：选择“同意”，再提交审阅意见。"
 };
-  Object.assign(global.DEMO_MESSAGES.zh.decision.errors, {"REVIEW_OUTCOME_REQUIRED":"请选择“同意”“需要补充信息”或“不同意”。","REVIEWS_NOT_APPROVED":"技术与 QA 必须均同意当前请求，才可授权。","REVIEW_RESUBMIT_NOT_AVAILABLE":"存在需要处理的审阅结果时，才可重新提交。","SUPPLEMENT_REQUIRED":"请先填写补充说明或调整后的范围。","REVIEW_TIMING_EXPIRED":"已过计划授权时刻，本演示不能确认新的审阅排期。","ADVANCE_BLOCKED_resolveReviews":"Emma 须先处理审阅问题并重新提交。"});
+  Object.assign(global.DEMO_MESSAGES.zh.decision.errors, {"REVIEW_OUTCOME_REQUIRED":"请选择“同意”“需要补充信息”或“不同意”。","REVIEWS_NOT_APPROVED":"技术与 QA 必须均同意当前请求，才可授权。","REVIEW_RESUBMIT_NOT_AVAILABLE":"存在需要处理的审阅结果时，才可重新提交。","SUPPLEMENT_REQUIRED":"请先填写补充说明（限原范围内）。","REVIEW_TIMING_EXPIRED":"已过计划授权时刻，本演示不能确认新的审阅排期。","ADVANCE_BLOCKED_resolveReviews":"Emma 须先处理审阅问题并重新提交。"});
   global.DEMO_MESSAGES.zh.decision.guide.resolveReviews = "切换到 Emma · 处理审阅问题";
   global.DEMO_MESSAGES.zh.decision.dependencyCopy.budget = "已指定 Elena；技术与 QA 均同意当前版本；最终报价";
   global.DEMO_MESSAGES.zh.decision.budgetBlocked = "授权须满足：技术与 QA 均同意当前请求、Elena 已被指定、Ben 已接手准备，并已完成预算审阅。";
@@ -107,8 +107,8 @@
 (function (global) {
   const d = global.DEMO_MESSAGES.zh.decision;
   d.qualityScenario = {
-  "briefOpening": "请求 v{version} 授权受阻：{blockers}。Emma 须补充证据或调整范围后，重新提交两项审阅。",
-  "reason": "需要补充证据后，才能同意本次小试范围。请提供支撑 EXP-001 v1 的缩小规模模型回收率数据，包括回收率的计算口径，以及该模型是否代表拟定的纯化条件。请 Emma 协调补充证据或调整范围后，重新提交审阅。本意见不批准继续执行。",
+  "briefOpening": "请求 v{version} 授权受阻：{blockers}。Emma 须补充证据（限原范围内）后，重新提交两项审阅。",
+  "reason": "需要补充证据后，才能同意本次小试范围。请提供支撑 EXP-001 v1 的缩小规模模型回收率数据，包括回收率的计算口径，以及该模型是否代表拟定的纯化条件。请 Emma 协调补充证据（限原范围内）后，重新提交审阅。本意见不批准继续执行。",
   "reviewHint": "QA 异常场景：请选择“需要补充信息”，再提交审阅意见。理由可以编辑；是否允许授权仅由所选结果决定。",
   "emmaHint": "查看 QA 卡在哪，以及 Emma 的处理责任。本次演示先保持请求受阻，下一步查看 Elena 的授权控件。",
   "elenaHint": "Elena 不能授权：QA 要求补充证据。Emma 重新提交且两位审阅人均同意之前，请求保持受阻。",
@@ -122,4 +122,30 @@
   }
 };
   Object.assign(d.guide, d.qualityScenario.guides);
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.decision.reviewFlow, {
+  "resubmissionMode": "处理方式 · 必选",
+  "chooseMode": "请选择处理方式…",
+  "evidence": "补充原范围内的证据",
+  "scopeChange": "需要改变范围",
+  "scopeBoundary": "范围变化需要药明重新评估范围、报价和交期，本演示不包含这一步。授权保持受阻。",
+  "scopeNext": "由 Emma 联系 Alex，请药明重新评估范围、报价和交期。授权保持受阻。",
+  "earlyOutcomes": "开始审阅后，可立即提交“需要补充信息”或“不同意”。"
+});
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.decision, {
+  "reviewWait": "“同意”最早可提交于"
+});
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.decision.errors, {
+  "REQUIREMENT_SCOPE_FIXED": "只能修改需求日期，交付物和地点为固定案例条件。",
+  "RESUBMISSION_MODE_REQUIRED": "请选择补充原范围内的证据，或需要改变范围。",
+  "SCOPE_REASSESSMENT_REQUIRED": "请 Emma 联系 Alex，由药明重新评估范围、报价和交期。当前请求不能重提或授权。"
+});
 })(globalThis);

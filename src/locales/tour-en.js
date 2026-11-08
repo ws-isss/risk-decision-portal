@@ -81,7 +81,7 @@
   "rescheduled": "Separately authorized rescheduling",
   "need": "Customer need date",
   "blocked": "Blocked",
-  "blockerNext": "{name}: add evidence or adjust the scope, then resubmit for review.",
+  "blockerNext": "{name}: add evidence within the original scope, then resubmit for review.",
   "scheduledUpdate": "Next scheduled update"
 };
 })(globalThis);

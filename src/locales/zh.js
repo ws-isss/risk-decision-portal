@@ -250,3 +250,21 @@
     scopeDescription: "纯化条件筛选、候选条件确认、HMW 和回收率评估及约定的分析，不含额外的方法开发。"
   };
 })(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.context, {
+  "originalBaseline": "原基线",
+  "originalWindow": "原窗口 · 工艺就绪待评估",
+  "candidateWindow": "候选窗口，待确认",
+  "confirmedWindow": "已确认 · 工艺就绪待评估",
+  "heldWindow": "窗口已暂留 · 工艺就绪待评估",
+  "windowReassessment": "历史窗口 · 待重新评估"
+});
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.delivery, {
+  "readOnly": "仅查看 · Emma 可修改需求日期",
+  "fixedScope": "交付物和地点为固定案例条件；变更须由药明重新评估范围、报价和交期。"
+});
+})(globalThis);

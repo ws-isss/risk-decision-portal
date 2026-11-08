@@ -862,3 +862,8 @@ button:disabled, .button:disabled, [aria-disabled="true"] {
   .ft-key-dates, .ft-result { display: grid; justify-content: start; }
   .ft-detail-note { font-size: 11px; }
 }
+
+.resubmission-choices { margin: 0; padding: 12px; border: 1px solid var(--strong-line); min-width: 0; }
+.resubmission-choices legend { font-size: 12px; font-weight: 600; }
+.resubmission-choices label { margin: 0; display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 13px; }
+.decision-form .resubmission-choices input[type="radio"] { height: 16px; min-height: 16px; flex: 0 0 16px; width: 16px; margin: 3px 0 0; padding: 0; accent-color: #353d47; }

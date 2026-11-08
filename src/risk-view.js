@@ -115,7 +115,7 @@
 
     function nextUpdate() {
       const owner = data.people[data.risk.nextUpdateOwnerId];
-      if (view.reviewBlockers.length || decision?.version > 1 && !view.reviewsApproved) return `<section class="review-blockers" data-update-state="reviewBlocked"><h2>${view.reviewBlockers.length ? f.blocked : f.revisedPending}</h2>${view.reviewBlockers.map(b=>`<p><strong>${copy(f.blockedDetail,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})}</strong></p><p class="preserved-text">${escape(b.reason)}</p>`).join("")}<p>${f.briefNext}</p><a class="button button-secondary" href="#decision">${text.decision.openTask}</a></section>`;
+      if (view.reviewBlockers.length || decision?.version > 1 && !view.reviewsApproved) return `<section class="review-blockers" data-update-state="reviewBlocked"><h2>${view.reviewBlockers.length ? f.blocked : f.revisedPending}</h2>${view.reviewBlockers.map(b=>`<p><strong>${copy(decision?.resubmissionIntent === "scopeChange" ? f.summary : f.blockedDetail,{review:f.roles[b.kind],outcome:f.outcomes[b.outcome]})}</strong></p><p class="preserved-text">${escape(b.reason)}</p>`).join("")}<p>${decision?.resubmissionIntent === "scopeChange" ? f.scopeNext : f.briefNext}</p><a class="button button-secondary" href="#decision">${text.decision.openTask}</a></section>`;
       if (view.nextTiming) {
         const timing = view.nextTiming;
         return `<section class="risk-update-strip" data-update-state="${rescheduleStage}" data-timing-kind="${timing.kind}" aria-labelledby="risk-update-title"><h2 id="risk-update-title">${text.wuxi.rescheduleFlow.timingLabels[view.rescheduleConfirmed ? "technicalReassessment" : timing.kind]}</h2><strong>${time(data.events[timing.eventRef].at, timing.timezone, { weekday: "short" })} ${city(timing.timezone)}</strong><span>${t.updateOwner}: ${escape(data.people[timing.ownerId].name)}</span><p>${view.rescheduleConfirmed ? t.replacementNoDelivery : rescheduleStatus()}</p></section>`;
@@ -152,7 +152,7 @@
         if (status === "conditionalForecast" && forecastReassessment) status = "historicalEstimate";
         let label = status === "recorded" && t.recordedTimelineEvents[entry.id] ? t.recordedTimelineEvents[entry.id] : t.timelineEvents[entry.id];
         if (entry.id === "budgetStart" && view.budgetReadyAt) label = record ? text.decision.timingRules.budgetRecord : text.decision.timingRules.budgetReady;
-        if (decision?.version > 1 && (entry.id === "latestReviewStart" || entry.id === "reviewsComplete" && !view.reviewsComplete)) { status = "historicalEstimate"; label = f.originalTiming; }
+        if (decision?.version > 1 && entry.id === "latestReviewStart") { status = "historicalEstimate"; label = f.originalTiming; }
         if (entry.id === "reviewsComplete" && view.reviewsComplete) label += " · " + ["technical","quality"].map(kind=>interpolate(f.summary,{review:f.roles[kind],outcome:f.outcomes[decision.reviews[kind].outcome]})).join(" / ");
         return { ...entry, at, zone, status, label, sequence: record?.sequence || 0 };
       });
@@ -198,7 +198,7 @@
     }
 
     function nextAction() {
-      if (view.reviewBlockers.length) return f.next;
+      if (view.reviewBlockers.length) return decision?.resubmissionIntent === "scopeChange" ? f.scopeNext : f.next;
       if (rescheduleStage !== "none") return t.nextActions[rescheduleStage === "confirmed" ? "rescheduleConfirmed" : rescheduleStage];
       if (resourceUnavailable) return view.resourceRejected ? t.nextActions.requestReschedule : t.nextActions.returnResponse;
       if (resourceHeld) return view.resourceConfirmed ? t.nextActions.heldStudyNext : t.nextActions.returnResponse;

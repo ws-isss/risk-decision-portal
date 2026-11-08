@@ -32,8 +32,8 @@ for(const outcome of ['rejected','needsInformation']) {
   const b=brief.generate({data,core,state:s.getState(),text:messages.en});b.previewed=true;
   const attachment=brief.attach({brief:b,attachments:[],data,core,state:s.getState()});
   s.setViewer('P03');assert.throws(()=>s.resubmitReviews('New evidence'),/ROLE_NOT_ALLOWED/);
-  s.setViewer('P01');assert.throws(()=>s.resubmitReviews(' '),/SUPPLEMENT_REQUIRED/);
-  const clock=s.getState().clock;s.resubmitReviews('Add quality evidence and narrow the scope to the stated samples.');
+  s.setViewer('P01');assert.throws(()=>s.resubmitReviews(' ', 'evidence'),/SUPPLEMENT_REQUIRED/);
+  const clock=s.getState().clock;s.resubmitReviews('Add quality evidence for the original study scope.', 'evidence');
   assert.equal(s.getState().clock,clock,'Revision cannot rewind or invent a new schedule');
   assert.equal(s.getState().decision.version,2);
   assert.equal(s.getState().decision.reviewHistory[0].reviews.quality.outcome,outcome);

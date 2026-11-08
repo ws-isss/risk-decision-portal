@@ -118,7 +118,7 @@
       },
       business: {
         requestKey: requestKey({ state }),
-        reviewVersion: d?.version, reviewSupplement: d?.supplement, reviewOutcomes: d ? Object.fromEntries(Object.entries(d.reviews).map(([kind,r])=>[kind,{outcome:r.outcome,reason:r.reason,requestVersion:r.requestVersion}])) : null,
+        resubmissionIntent: d?.resubmissionIntent, reviewVersion: d?.version, reviewSupplement: d?.supplement, reviewOutcomes: d ? Object.fromEntries(Object.entries(d.reviews).map(([kind,r])=>[kind,{outcome:r.outcome,reason:r.reason,requestVersion:r.requestVersion}])) : null,
         planId: d?.planId || null, fallbackSelected: Boolean(d?.fallbackSelected),
         technicalComplete: view.technicalComplete, qualityComplete: view.qualityComplete, approverDesignated: view.approverDesignated,
         authorized: view.authorized, authorization: view.authorized ? { by: d.authorization.by, at: d.authorization.at, total: d.authorization.total } : null,
@@ -152,8 +152,11 @@
     const dateOnly = (value, zone) => core.formatInstant(value, zone, { locale, year: "numeric", hour: undefined, minute: undefined });
     const quote = view.rescheduleQuoteReturned ? view.rescheduleQuote : null;
     const confirmation = view.rescheduleConfirmed ? d.resource.rescheduleRequest.confirmation : null;
+    const outlook = global.DEMO_WORKFLOW.outlook(data,state);
     const reassessing = Boolean(view.forecastReassessmentRequired || view.resourceRejected || view.rescheduleRequested);
     const values = {
+      currentWindow: `${dateOnly(outlook.window, baseZone)} ${text.common.shanghai}`,
+      currentDelivery: outlook.forecast ? `${core.formatLocalDate(outlook.forecast.localDate, {locale})} ${text.common.newYork}` : "",
       aTotal: money(data.plans.A.total), bTotal: money(data.plans.B.total),
       authorizationDue: localTime(data.events.latestAuthorization.at, customerZone),
       resourceReviewStart: interpolate(t.dualZoneTime, {
@@ -195,7 +198,7 @@
     } else {
       const template = t.results[key] || t.results.awaitingWuXiQuote;
       const fallback = view.resourceConfirmed && d.fallbackSelected ? ` ${copy(t.heldFallbackScope)}` : "";
-      currentSummary = `**${t.sections.result}:** ${copy(template)}${fallback}`;
+      currentSummary = `**${t.sections.result}:** ${copy(template)}${fallback}${outlook.forecast ? ` ${copy(t.currentOutlook)}` : ""}`;
     }
     let unknowns = reassessing ? t.unknownsUnavailable : view.resourceConfirmed ? t.unknownsHeld : t.unknowns;
     const missingPrerequisites = [
@@ -204,11 +207,11 @@
       !view.approverDesignated && t.prerequisites.approver
     ].filter(Boolean);
     const prerequisites = key === "beforeAuthorization"
-      ? blockers ? f.next : d?.version > 1 && !view.reviewsApproved ? interpolate(f.briefPending,{version:d.version}) : missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join(t.listSeparator || "; ") }) : t.prerequisitesComplete
+      ? blockers ? d.resubmissionIntent === "scopeChange" ? f.scopeNext : f.next : d?.version > 1 && !view.reviewsApproved ? interpolate(f.briefPending,{version:d.version}) : missingPrerequisites.length ? interpolate(t.prerequisitesPending, { items: missingPrerequisites.join(t.listSeparator || "; ") }) : t.prerequisitesComplete
       : "";
     let nextUpdate;
     if (blockers || d?.version > 1 && !view.reviewsApproved) {
-      nextUpdate = f.briefNext;
+      nextUpdate = d?.resubmissionIntent === "scopeChange" ? f.scopeNext : f.briefNext;
     } else if (view.nextTiming) {
       const timing = view.nextTiming;
       const template = timing.kind === "customerActionDue" ? t.nextCustomer : key === "confirmed" ? t.nextReassessment : t.nextUnavailable;

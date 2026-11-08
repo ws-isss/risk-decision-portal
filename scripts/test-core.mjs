@@ -22,6 +22,7 @@ const baseline = session.getState();
 session.setViewer('P07');
 assert.equal(session.getState().clock, baseline.clock, 'Role changes must not move time');
 assert.equal(session.getState().revision, baseline.revision, 'View changes must not mark source content changed');
+session.setViewer('P01');
 session.setRequirement({ needByLocalDate: '2027-03-10', deliverableOverride: '', destinationOverride: '' });
 assert.equal(c.calendarGap(session.getState().needByLocalDate, d.plans.A.forecast.localDate), -1);
 assert.equal(d.baseline.needByLocalDate, '2027-03-19');

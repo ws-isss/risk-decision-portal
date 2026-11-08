@@ -160,3 +160,10 @@
   errors.RESCHEDULE_DECISION_REQUIRED = "Emma 需先发起改期决策，Elena 才能授权。";
   errors.RESCHEDULE_AUTHORIZATION_REQUIRED = "Elena 需先授权改期范围，Alex 才能正式确认。";
 })(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.wuxi.rescheduleFlow, {
+  "includedFee": "已授权总额：{total}；本次释放金额：{amount}。",
+  "includedBoundary": "已含在原方案 B 授权内，非新增费用。本次签字确认改期金额的释放；仅在药明正式确认改期时产生费用。"
+});
+})(globalThis);

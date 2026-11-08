@@ -176,3 +176,9 @@
     }
   };
 })(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.zh.brief, {
+  "currentOutlook": "生产窗口：{currentWindow}；预计交付：{currentDelivery}。工艺就绪仍待评估。"
+});
+})(globalThis);

@@ -69,7 +69,7 @@ try {
   await p.locator('[data-viewer="P06"]').click();assert.equal(await p.locator('#authorize-budget').isDisabled(),true);
   await p.locator('.workspace-nav [href="#home"]').click();assert.match(await p.locator('[data-dashboard-status]').innerText(),lang==='zh'?/补充/:/information/i);
   assert.equal(await p.locator('[data-dashboard-blocker-owner]').getAttribute('data-dashboard-blocker-owner'),'P01');
-  assert.match(await p.locator('[data-dashboard-blocker-owner]').innerText(),lang==='zh'?/Emma.*补充证据或调整范围后重新提交/:/Emma.*add evidence or adjust the scope.*resubmit/);
+  assert.match(await p.locator('[data-dashboard-blocker-owner]').innerText(),lang==='zh'?/Emma.*补充原范围内的证据后重新提交/:/Emma.*add evidence within the original scope.*resubmit/);
   assert.match(await p.locator('[data-dashboard-task="decisions"]').innerText(),lang==='zh'?/受阻/:/Blocked/);
   assert.equal(await p.locator('[data-dashboard-task="decisions"] > strong').innerText(),'1');
   await p.screenshot({path:path.join(root,'output',`qa-blocked-home-${lang}.png`)});

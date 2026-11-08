@@ -252,3 +252,21 @@
     scopeDescription: "Purification-condition screening, candidate confirmation, HMW and recovery assessment, and agreed analyses; excludes additional method development."
   };
 })(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.context, {
+  "originalBaseline": "Original baseline",
+  "originalWindow": "Original window · readiness pending",
+  "candidateWindow": "Candidate window · pending confirmation",
+  "confirmedWindow": "Confirmed · readiness pending",
+  "heldWindow": "Window held · readiness pending",
+  "windowReassessment": "Historical window · reassessment required"
+});
+})(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.delivery, {
+  "readOnly": "Read only · Emma can change the need date",
+  "fixedScope": "Deliverable and destination are fixed case conditions. Changing either requires WuXi to reassess scope, quote and delivery."
+});
+})(globalThis);

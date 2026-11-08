@@ -81,7 +81,7 @@
   "rescheduled": "单独授权的改期",
   "need": "客户需求日",
   "blocked": "受阻",
-  "blockerNext": "{name}：补充证据或调整范围后重新提交审阅。",
+  "blockerNext": "{name}：补充原范围内的证据后重新提交审阅。",
   "scheduledUpdate": "下次预计更新"
 };
 })(globalThis);

@@ -160,3 +160,10 @@
   errors.RESCHEDULE_DECISION_REQUIRED = "Emma must initiate the rescheduling decision before Elena can authorize it.";
   errors.RESCHEDULE_AUTHORIZATION_REQUIRED = "Elena must authorize the rescheduling scope before Alex can formally confirm it.";
 })(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.wuxi.rescheduleFlow, {
+  "includedFee": "Already authorized total: {total}. This release: {amount}.",
+  "includedBoundary": "Included in the original option B authorization, not an additional fee. This signature confirms release for rescheduling; the fee is incurred only upon WuXi’s formal confirmation."
+});
+})(globalThis);

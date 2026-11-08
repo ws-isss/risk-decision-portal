@@ -208,7 +208,7 @@
         if (!d.approver.id) return blocked("designateApprover");
         if (!d.support.acceptedAt) return blocked("acceptSupport");
         if (Object.values(d.reviews).some(r => r.status === "notStarted")) return blocked("startReviews");
-        if (!bothReviews(d)) return d.version > 1 ? blocked("completeReviews") : wait("reviewsComplete", "completeReviews");
+        if (!bothReviews(d)) return wait("reviewsComplete", "completeReviews");
         return blocked("authorizeCustomer");
       }
       const resource = d.resource;
@@ -240,6 +240,8 @@
         return snapshot();
       },
       setRequirement(values) {
+        role("P01");
+        ensure(!values.deliverableOverride && !values.destinationOverride, "REQUIREMENT_SCOPE_FIXED");
         ensure(validLocalDate(values.needByLocalDate), "INVALID_LOCAL_DATE");
         const didChange = state.needByLocalDate !== values.needByLocalDate || state.deliverableOverride !== (values.deliverableOverride || "") || state.destinationOverride !== (values.destinationOverride || "");
         state.needByLocalDate = values.needByLocalDate;
@@ -340,20 +342,32 @@
         const r = review(kind);
         if (r.status === "completed") return snapshot();
         ensure(r.status === "inProgress", "REVIEW_NOT_STARTED");
-        if (state.decision.version === 1) atEvent("reviewsComplete");
         ensure(typeof reason === "string" && reason.trim(), "REASON_REQUIRED");
         ensure(["approved", "needsInformation", "rejected"].includes(outcome), "REVIEW_OUTCOME_REQUIRED");
+        if (outcome === "approved") atEvent("reviewsComplete");
         r.status = "completed"; r.outcome = outcome; r.requestVersion = state.decision.version; r.completedAt = state.clock; r.reason = reason.trim(); record(kind + "Completed");
         if (bothReviews(state.decision)) record("reviewsComplete");
         return changed();
       },
-      resubmitReviews(supplement) {
+      setResubmissionIntent(mode) {
         role("P01"); const d = tasksRequired();
         ensure(!d.authorization, "DECISION_LOCKED");
         ensure(reviewBlocked(d), "REVIEW_RESUBMIT_NOT_AVAILABLE");
+        ensure(["evidence", "scopeChange"].includes(mode), "RESUBMISSION_MODE_REQUIRED");
+        if (d.resubmissionIntent === mode) return snapshot();
+        d.resubmissionIntent = mode;
+        return changed();
+      },
+      resubmitReviews(supplement, mode) {
+        role("P01"); const d = tasksRequired();
+        ensure(!d.authorization, "DECISION_LOCKED");
+        ensure(reviewBlocked(d), "REVIEW_RESUBMIT_NOT_AVAILABLE");
+        ensure(["evidence", "scopeChange"].includes(mode), "RESUBMISSION_MODE_REQUIRED");
+        ensure(mode === "evidence" && d.resubmissionIntent !== "scopeChange", "SCOPE_REASSESSMENT_REQUIRED");
         ensure(typeof supplement === "string" && supplement.trim(), "SUPPLEMENT_REQUIRED");
         const reviewIds = ["decisionCreated", "tasksCreated", "technicalStarted", "qualityStarted", "technicalCompleted", "qualityCompleted", "reviewsComplete"];
         d.reviewHistory.push({ version: d.version, requestKey: mainRequestKey(d), createdAt: d.createdAt, submittedAt: d.tasksCreatedAt, supplement: d.supplement, reviews: JSON.parse(JSON.stringify(d.reviews)), audit: d.audit.filter(item => reviewIds.includes(item.id)) });
+        d.resubmissionIntent = null;
         d.version += 1; d.supplement = supplement.trim(); d.tasksCreatedAt = state.clock;
         d.reviews = Object.fromEntries(Object.entries(reviewOwners).map(([key, owner]) => [key, { owner, requestVersion: d.version, outcome: null, status: "notStarted", startedAt: null, completedAt: null, reason: "" }]));
         d.audit = d.audit.filter(item => !reviewIds.includes(item.id));

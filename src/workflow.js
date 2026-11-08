@@ -93,7 +93,7 @@
     const roleKeys = Object.fromEntries(Object.keys(data.people).map(id => [id, []]));
     const add = (task, roles) => {
       const revisedReview = d?.version > 1 && ["startTechnical", "startQuality"].includes(task.key);
-      const completionEvent = revisedReview ? null : completionEvents[task.key];
+      const completionEvent = completionEvents[task.key];
       const actualEvents = {assignBen:"backupAssigned", designateElena:"alternateAssigned", startTechnical:"technicalStarted", startQuality:"qualityStarted", budget:"budgetAuthorized", support:"supportAccepted", receipt:"resourceReviewStarted", schedule: schedulingOutcome === "held" ? "schedulingHeld" : "schedulingUnavailable", reschedule:"rescheduleRequested", rescheduleQuote:"rescheduleQuotePrepared", rescheduleQuoteReceipt:"rescheduleQuoteReturned", rescheduleDecision:"rescheduleDecisionCreated", rescheduleAuthorization:"rescheduleAuthorized", rescheduleConfirmation:"rescheduleConfirmed"};
       const actualAt = occurred(actualEvents[task.key]) ? audit.find(item => item.id === actualEvents[task.key])?.at || null : null;
       const availableAt = task.key === "reschedule" && authorized ? (resourceRejected ? resource.receipt.at : d.authorization.at) : task.key === "rescheduleQuote" && internalViewer ? r?.at : task.key === "rescheduleQuoteReceipt" && rescheduleQuoteReady ? r.quote.at : task.key === "rescheduleDecision" && rescheduleQuoteReturned ? r.quoteReceipt.at : task.key === "rescheduleAuthorization" && rescheduleDecisionCreated ? r.decision.at : task.key === "rescheduleConfirmation" && rescheduleAuthorized ? r.authorization.at : task.key === "budget" ? budgetReadyAt : ["receipt", "monitor"].includes(task.key) && authorized ? d.authorization.at : task.key === "schedule" && resourceStarted ? resource.startedAt : task.key === "support" ? d.support.assignedAt : ["startTechnical", "startQuality"].includes(task.key) && tasksCreated ? d.tasksCreatedAt : null;
@@ -258,6 +258,15 @@
     }));
   }
 
+  // One current outlook for dashboard, workspace milestones and generated briefs.
+  function outlook(data, state) {
+    const view = project(data, state), planId = state.decision?.planId || "A";
+    return { planId, baseline: !state.decision,
+      forecast: view.forecastReassessmentRequired ? null : data.plans[planId].forecast,
+      window: view.rescheduleConfirmed ? state.decision.resource.rescheduleRequest.confirmation.candidateWindow : view.rescheduleQuoteReturned ? view.rescheduleQuote.candidateWindow : data.plans[planId].window.at,
+      windowStatus: view.rescheduleConfirmed ? "confirmedWindow" : planId === "B" || view.rescheduleQuoteReturned ? "candidateWindow" : view.forecastReassessmentRequired ? "windowReassessment" : view.resourceConfirmed ? "heldWindow" : "originalWindow"
+    };
+  }
   function dashboard(data, state) {
     const view = project(data,state);
     const d = state.decision;
@@ -276,9 +285,7 @@
       if (!view.authorized) timings.push(event("latestAuthorization","authorization",data.baseline.timezone));
       timings.push(event("resourceConfirmationDeadline","resource",data.calendars.base.timezone));
     }
-    return {view,blockerOwner:view.reviewBlockers[0]?.owner || null,planId:d?.planId || "A",showOptions:!view.authorized,
-      forecast: view.forecastReassessmentRequired ? null : data.plans[d?.planId || "A"].forecast,
-      window:view.rescheduleConfirmed?data.plans.B.window.at:data.plans.A.window.at,timings,
+    return {view,blockerOwner:view.reviewBlockers[0]?.owner || null,...outlook(data,state),showOptions:!view.authorized,timings,
       groups:[
         {key:"decisions",count:Number(decisionPending),blocked:view.reviewBlockers.length>0,role:decisionRole,href:!d?"#comparison":view.rescheduleStage!=="none"?"#wuxi":"#decision"},
         {key:"reviews",count:pendingReviews.length,role:pendingReviews[0]?.owner || "P02",href:"#decision"},
@@ -286,5 +293,5 @@
       ]};
   }
 
-  global.DEMO_WORKFLOW = Object.freeze({ project, tasks, taskTiming, eventTiming, confirmations, notifications, dashboard });
+  global.DEMO_WORKFLOW = Object.freeze({ project, tasks, taskTiming, eventTiming, confirmations, notifications, dashboard, outlook });
 })(globalThis);

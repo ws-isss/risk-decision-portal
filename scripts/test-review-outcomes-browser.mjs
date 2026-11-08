@@ -9,7 +9,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE?{executablePath:process.env.BROWSER_EXECUTABLE}:{})});
 const errors=[],checks=[];
 await mkdir(path.join(root,'output'),{recursive:true});
-const role=(p,id)=>p.locator('#viewer').selectOption(id);
+const role=async(p,id)=>{await p.locator('.more-roles').evaluate(el=>el.open=true);await p.locator('#viewer').selectOption(id);};
 async function review(p,kind,outcome,reason) {
   await role(p,kind==='quality'?'P03':'P02');
   const form=p.locator(`#review-${kind}-form`);
@@ -42,7 +42,7 @@ async function run(lang,outcome,mobile=false) {
   await role(p,'P01');await p.locator('#designate-approver').click();await p.locator('#advance-event').click();
   await role(p,'P03');
   assert.equal(await p.locator('#review-quality-form [name="outcome"]').inputValue(),'','Outcome has no default');
-  await p.locator('#review-quality-form [type="submit"]').click();
+  assert.equal(await p.locator('#review-quality-form [type="submit"]').isDisabled(),true);
   assert.equal(await p.locator('[data-confirmation-key="quality"]').getAttribute('data-status'),'inProgress','No result means no recorded approval');
   await review(p,'technical','approved',lang==='zh'?'同意当前小试范围。':'The bounded technical scope is acceptable.');
   const negative=outcome==='rejected'?'Not approved. Additional quality evidence is required before this study can proceed.':'Additional quality evidence is required. Please supplement the evidence and resubmit.';
@@ -62,7 +62,8 @@ async function run(lang,outcome,mobile=false) {
   await screenshot(p,`review-${lang}-${outcome}-blocked.png`);
   if(outcome==='needsInformation') {
     await role(p,'P01');
-    await p.locator('#review-resubmit-form [name="supplement"]').fill(lang==='zh'?'补充质量证据说明，范围限定为现有样品和已确认的方法，请重新评估。':'Provide the additional quality evidence; restrict the scope to existing samples and confirmed methods. Please reassess.');
+    await p.locator('#review-resubmit-form [name="mode"][value="evidence"]').check();
+    await p.locator('#review-resubmit-form [name="supplement"]').fill(lang==='zh'?'补充质量证据说明，保留原范围、现有样品和已确认的方法，请重新评估。':'Provide the additional quality evidence; keep the original scope, samples and confirmed methods. Please reassess.');
     const before=await p.locator('.demo-clock time').getAttribute('datetime');
     await p.locator('#resubmit-reviews').click();
     assert.equal(await p.locator('.demo-clock time').getAttribute('datetime'),before,'Resubmission never rewinds the clock');

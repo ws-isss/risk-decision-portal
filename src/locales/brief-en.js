@@ -176,3 +176,9 @@
     }
   };
 })(globalThis);
+
+(function (global) {
+  Object.assign(global.DEMO_MESSAGES.en.brief, {
+  "currentOutlook": "Window: {currentWindow}; estimated delivery: {currentDelivery}. Readiness remains pending."
+});
+})(globalThis);

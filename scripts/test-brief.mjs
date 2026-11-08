@@ -64,7 +64,7 @@ for (const viewer of ['P02','P03','P04','P05','P06','P07','P08']) {
 }
 session.setViewer('P01');session.advanceTo('backupAssigned');
 assert.deepEqual(stale(brief),[],'Time alone does not create an outcome');
-session.setRequirement({needByLocalDate:'2027-03-20',deliverableOverride:'Released drug substance',destinationOverride:'Customer receiving site'});
+session.setRequirement({needByLocalDate:'2027-03-20'});
 assert.deepEqual(stale(brief),['requirement']);
 const oldText=briefModel.copyText(brief,text);
 const edited={...brief,content:brief.content+'\n\nEmma’s note: coordinate with the study team.',edited:true};
@@ -73,7 +73,7 @@ assert.equal(briefModel.copyText(brief,text),oldText,'Detecting changes preserve
 const updated=generate();
 assert.ok(updated.content.includes('9 days early'));
 assert.ok(updated.content.includes('33 days late'));
-assert.ok(updated.content.includes('Customer receiving site'));
+assert.ok(updated.content.includes(text.project[data.project.destinationKey]));
 const modifiedData=plain(data);modifiedData.reports['SEC-001'].version++;
 assert.ok(briefModel.staleReasons(brief,{data:modifiedData,state:session.getState()}).includes('sources'));
 for(const eventId of ['resourceReviewStart','rescheduleDecisionDue','rescheduleAuthorizationDue']) {
